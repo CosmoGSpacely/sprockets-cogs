@@ -1,0 +1,17 @@
+[Unit]
+Description=ICM Agentic Loop Orchestrator
+After=network.target
+
+[Service]
+Type=simple
+User=icm
+WorkingDirectory=/Artifacts
+ExecStart=/usr/bin/python3 /Artifacts/agentic_loop.py
+Restart=always
+RestartSec=10
+Environment=ICM_BASE_DIR=/Artifacts
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

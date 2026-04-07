@@ -1,0 +1,7 @@
+# Only ignore true temporary files
+*.tmp
+*.cache
+input/*.json.bak
+logs/
+*.tar.gz
+*.bak*
