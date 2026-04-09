@@ -150,13 +150,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Artifacts/Cogs/test.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of test"
+              "title": "Outline"
             }
           }
         ]
@@ -177,24 +176,43 @@
       "bases:Create new base": false
     }
   },
-  "active": "7abd0fa749d4d295",
+  "active": "de6240b4681da2e9",
   "lastOpenFiles": [
-    "icm-complete.code-workspace",
-    "Artifacts/Cogs/live-test-2.md",
-    "Artifacts/Cogs/test.md",
-    "Artifacts/Input/test.json",
-    "Artifacts/Input/processed/test.json",
-    "Artifacts/Input/processed/test_voice.json",
-    "Artifacts/Input/processed/test-voice.json",
-    "Artifacts/Input/processed/heartbeat-test.json",
-    "Artifacts/Input/processed/debug-test.json",
-    "Artifacts/Input/processed",
-    "backup/agentic_loop.py.bak.20260406-183444",
-    "backup/extractor.py.bak.20260406-183255",
-    "backup/extractor.py.bak.20260406-182826",
-    "Artifacts/Cogs/rsync-test2.md",
-    "Artifacts/Cogs/rsync-test.md",
-    "Artifacts/Cogs/symlink-test2.md",
-    "Artifacts/Cogs/symlink-test.md"
+    "git_push.sh",
+    "Artifacts/Input/archived/test_debug_times.json",
+    "Artifacts/Cogs/2026-12-01.md",
+    "Artifacts/Cogs/2026-10-15.md",
+    "Artifacts/Sprockets/253d6ed8.md",
+    "Artifacts/Sprockets/9503b2c6.md",
+    "Artifacts/Input/archived/test_debug_times.txt",
+    "Artifacts/Input/processed/test_debug_times.json",
+    "Artifacts/Input/raw/test_debug_times.txt",
+    "test_regex.py",
+    "Artifacts/Input/archived/test_verify_times.json",
+    "Artifacts/Cogs/2026-11-20.md",
+    "Artifacts/Cogs/2026-09-10.md",
+    "Artifacts/Sprockets/e93de74f.md",
+    "Artifacts/Sprockets/4252cf56.md",
+    "Artifacts/Input/archived/test_verify_times.txt",
+    "Artifacts/Input/processed/test_verify_times.json",
+    "Artifacts/Input/raw/test_verify_times.txt",
+    "test_ext_direct.py",
+    "Artifacts/Sprockets/3ef3c73c.md",
+    "Artifacts/Sprockets/5a87c7df.md",
+    "Artifacts/Cogs/2026-12-15.md",
+    "Artifacts/Cogs/2026-08-25.md",
+    "Artifacts/Cogs/2026-04-09.md",
+    "Artifacts/Sprockets/15d79c52.md",
+    "Artifacts/Sprockets/9b806564.md",
+    "Artifacts/Sprockets/e9453b6d.md",
+    "Artifacts/Sprockets/33f4437b.md",
+    "Artifacts/Sprockets/85f43b6e.md",
+    "Artifacts/Sprockets/881e5551.md",
+    "Artifacts/Sprockets/73f4e7ab.md",
+    "Artifacts/Sprockets/8f38073e.md",
+    "Artifacts/Sprockets/4892a381.md",
+    "Artifacts/Sprockets/25af1124.md",
+    "Artifacts/Cogs/2026-04-05.md",
+    "Artifacts/Cogs/2026-03-22.md"
   ]
 }

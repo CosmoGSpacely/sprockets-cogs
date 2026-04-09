@@ -1,0 +1,8 @@
+{
+    "raw_text": "I had appointments on March 15 at 9:30am and April 5 at 2:15pm.\nI have upcoming appointments on September 10 at 10am and November 20 at 3:45pm.",
+    "metadata": {
+        "received_at": "2026-04-09T15:43:38.970743",
+        "filename": "test_verify_times.txt",
+        "source": "filesystem"
+    }
+}

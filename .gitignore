@@ -5,3 +5,7 @@ input/*.json.bak
 logs/
 *.tar.gz
 *.bak*
+
+# Never track backups
+~/backups/
+backups/
