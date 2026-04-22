@@ -1,19 +1,18 @@
-# sprockets-cogs
+# sprockets-cogs — Code Repository
 
-Agentic loop for Sprockets (second-brain graph) and Cogs (calendar/diary/todo).
-Obsidian-compatible Markdown files written by a local Qwen3 model on Rosie.
+Agentic loop that processes natural-language inputs and writes Obsidian-compatible
+Markdown files to the vault at /home/cosmo/vault/.
 
-## Structure
-- agentic_loop.py  — main loop, watchdog file watcher
-- models.py        — Pydantic schemas for all node types
-- prompts.py       — system prompts and few-shot examples
-- tools.py         — date/time tool definitions for Qwen3
+## Files
+- `agentic_loop.py` — file watcher + processing pipeline
+- `models.py`       — Pydantic schemas per node type (Stage 5)
+- `prompts.py`      — Qwen3 system prompts and few-shot examples (Stage 4)
+- `tools.py`        — date/time tool definitions (Stage 4)
+- `requirements.txt`— Python dependencies
 
-## Operational directories (/home/cosmo/sc/)
-- sc/input/       — drop .input files here to trigger the loop
-- sc/processing/  — files being actively processed
-- sc/archive/     — processed inputs, audit trail
-- sc/output/      — responses waiting for source adapters
+## Operational data
+Lives in /home/cosmo/sc/ — not in this repo.
 
-## Vault
-/home/cosmo/vault/ — Obsidian vault, synced via Syncthing
+## Pipeline (two Qwen3 calls per input)
+input/ → extract_nodes() → classify_nodes() → validate_output()
+       → resolve_parents() → write_node() → append_reflection() → archive/
