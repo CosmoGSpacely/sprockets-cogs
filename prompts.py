@@ -145,9 +145,9 @@ CLASSIFY_SCHEMA = {
                                    "enum": ["cogs/daily", "sprockets/task",
                                             "sprockets/contact", "sprockets/entity",
                                             "sprockets/note"]},
-                    "item_text":  {"type": "string", "minLength": 1},
-                    "title":      {"type": "string", "minLength": 1},
-                    "date":       {"type": "string", "minLength": 10},
+                    "item_text":  {"type": "string"},
+                    "title":      {"type": "string"},
+                    "date":       {"type": "string"},
                     "status":     {"type": "string", "enum": ["active"]},
                     "confidence": {"type": "string", "enum": ["high", "low"]}
                 },
