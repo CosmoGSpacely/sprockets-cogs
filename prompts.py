@@ -86,15 +86,15 @@ EXTRACT_EXAMPLES = [
     },
     {
         "role": "user",
-        "content": "Extract all items from this text:\n\nMet Alice Nguyen from Pinnacle Labs today. Her email is alice@pinnacle.io. She wants a proposal by next Friday."
+        "content": "Extract all items from this text:\n\nMet Jordan Mack from Meridian Group today. Her email is jordan@meridiangroup.io. She wants a proposal by next Friday."
     },
     {
         "role": "assistant",
         "content": '{"items": ['
-                    '{"raw": "met Alice Nguyen from Pinnacle Labs today", "type_hint": "appointment"}, '
-                    '{"raw": "Alice Nguyen, email alice@pinnacle.io", "type_hint": "contact"}, '
-                    '{"raw": "Pinnacle Labs", "type_hint": "entity"}, '
-                    '{"raw": "send proposal to Alice Nguyen (Pinnacle Labs) by next Friday", "type_hint": "task"}]}'
+                    '{"raw": "met Jordan Mack from Meridian Group today", "type_hint": "appointment"}, '
+                    '{"raw": "Jordan Mack, email jordan@meridiangroup.io", "type_hint": "contact"}, '
+                    '{"raw": "Meridian Group", "type_hint": "entity"}, '
+                    '{"raw": "send proposal to Jordan Mack (Meridian Group) by next Friday", "type_hint": "task"}]}'
     },
 ]
 
@@ -147,7 +147,7 @@ CLASSIFY_SCHEMA = {
                                             "sprockets/note"]},
                     "item_text":  {"type": "string", "minLength": 1},
                     "title":      {"type": "string", "minLength": 1},
-                    "date":       {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+                    "date":       {"type": "string", "minLength": 10},
                     "status":     {"type": "string", "enum": ["active"]},
                     "confidence": {"type": "string", "enum": ["high", "low"]}
                 },
@@ -159,13 +159,13 @@ CLASSIFY_SCHEMA = {
 }
 
 CLASSIFY_EXAMPLES = [
-    # ── Example 1: appointment + errand + contact ──────────────────────────────
+    # ── Example 1: appointment + errand + contact; Friday today → next Thursday ──
     {
         "role": "user",
         "content": (
-            "Today: 2026-04-21 (Tuesday)\n\n"
+            "Today: 2026-04-24 (Friday)\n\n"
             "Extracted:\n"
-            '[{"raw": "dentist appointment Monday at 8am", "type_hint": "appointment"}, '
+            '[{"raw": "dentist appointment Thursday at 8am", "type_hint": "appointment"}, '
             '{"raw": "pick up prescription at CVS", "type_hint": "task"}, '
             '{"raw": "Frank, phone 410-555-1212", "type_hint": "contact"}]\n\n'
             "Classify each item."
@@ -175,9 +175,9 @@ CLASSIFY_EXAMPLES = [
         "role": "assistant",
         "content": (
             '{"nodes": ['
-            '{"node_type": "cogs/daily", "title": "DENTIST 8am", "item_text": "DENTIST 8am", "date": "2026-04-27", "confidence": "high"}, '
-            '{"node_type": "cogs/daily", "title": "Pick up prescription at CVS", "item_text": "Pick up prescription at CVS", "date": "2026-04-27", "confidence": "high"}, '
-            '{"node_type": "sprockets/contact", "title": "Frank", "item_text": "Frank, phone 410-555-1212", "date": "2026-04-21", "confidence": "high"}'
+            '{"node_type": "cogs/daily", "title": "DENTIST 8am", "item_text": "DENTIST 8am", "date": "2026-04-30", "confidence": "high"}, '
+            '{"node_type": "cogs/daily", "title": "Pick up prescription at CVS", "item_text": "Pick up prescription at CVS", "date": "2026-04-30", "confidence": "high"}, '
+            '{"node_type": "sprockets/contact", "title": "Frank", "item_text": "Frank, phone 410-555-1212", "date": "2026-04-24", "confidence": "high"}'
             ']}'
         )
     },
@@ -245,10 +245,10 @@ CLASSIFY_EXAMPLES = [
         "content": (
             "Today: 2026-04-23 (Thursday)\n\n"
             "Extracted:\n"
-            '[{"raw": "met Alice Nguyen from Pinnacle Labs today", "type_hint": "appointment"}, '
-            '{"raw": "Alice Nguyen, email alice@pinnacle.io", "type_hint": "contact"}, '
-            '{"raw": "Pinnacle Labs", "type_hint": "entity"}, '
-            '{"raw": "send proposal to Alice Nguyen (Pinnacle Labs) by next Friday", "type_hint": "task"}]\n\n'
+            '[{"raw": "met Jordan Mack from Meridian Group today", "type_hint": "appointment"}, '
+            '{"raw": "Jordan Mack, email jordan@meridiangroup.io", "type_hint": "contact"}, '
+            '{"raw": "Meridian Group", "type_hint": "entity"}, '
+            '{"raw": "send proposal to Jordan Mack (Meridian Group) by next Friday", "type_hint": "task"}]\n\n'
             "Classify each item."
         )
     },
@@ -256,11 +256,11 @@ CLASSIFY_EXAMPLES = [
         "role": "assistant",
         "content": (
             '{"nodes": ['
-            '{"node_type": "cogs/daily", "title": "Met Alice Nguyen (Pinnacle Labs)", "item_text": "Met Alice Nguyen (Pinnacle Labs)", "date": "2026-04-23", "confidence": "high"}, '
-            '{"node_type": "sprockets/contact", "title": "Alice Nguyen", "item_text": "Alice Nguyen, email alice@pinnacle.io", "date": "2026-04-23", "confidence": "high"}, '
-            '{"node_type": "sprockets/entity", "title": "Pinnacle Labs", "item_text": "Pinnacle Labs", "date": "2026-04-23", "confidence": "high"}, '
-            '{"node_type": "sprockets/task", "title": "Send proposal to Alice Nguyen (Pinnacle Labs)", "item_text": "Send proposal to Alice Nguyen (Pinnacle Labs)", "date": "2026-04-25", "status": "active", "confidence": "high"}, '
-            '{"node_type": "cogs/daily", "title": "Proposal for Alice (Pinnacle Labs)", "item_text": "Proposal for Alice (Pinnacle Labs)", "date": "2026-04-25", "confidence": "high"}'
+            '{"node_type": "cogs/daily", "title": "Met Jordan Mack (Meridian Group)", "item_text": "Met Jordan Mack (Meridian Group)", "date": "2026-04-23", "confidence": "high"}, '
+            '{"node_type": "sprockets/contact", "title": "Jordan Mack", "item_text": "Jordan Mack, email jordan@meridiangroup.io", "date": "2026-04-23", "confidence": "high"}, '
+            '{"node_type": "sprockets/entity", "title": "Meridian Group", "item_text": "Meridian Group", "date": "2026-04-23", "confidence": "high"}, '
+            '{"node_type": "sprockets/task", "title": "Send proposal to Jordan Mack (Meridian Group)", "item_text": "Send proposal to Jordan Mack (Meridian Group)", "date": "2026-04-25", "status": "active", "confidence": "high"}, '
+            '{"node_type": "cogs/daily", "title": "Proposal for Jordan (Meridian Group)", "item_text": "Proposal for Jordan (Meridian Group)", "date": "2026-04-25", "confidence": "high"}'
             ']}'
         )
     },
