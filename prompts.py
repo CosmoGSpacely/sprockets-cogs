@@ -147,7 +147,7 @@ CLASSIFY_SCHEMA = {
                                             "sprockets/note"]},
                     "item_text":  {"type": "string", "minLength": 1},
                     "title":      {"type": "string", "minLength": 1},
-                    "date":       {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+                    "date":       {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
                     "status":     {"type": "string", "enum": ["active"]},
                     "confidence": {"type": "string", "enum": ["high", "low"]}
                 },
