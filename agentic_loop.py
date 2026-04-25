@@ -348,7 +348,8 @@ def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
             continue
         title = node.get("title", "")
         date  = node.get("date", "")
-        if not date:
+        if not date or not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+            log.warning("ensure_cogs_companions: task %r has invalid date %r, skipping companion", title, date)
             continue
         title_words = _words(title)
         existing = cogs_by_date.get(date, [])
