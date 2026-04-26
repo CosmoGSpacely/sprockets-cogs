@@ -85,7 +85,8 @@ def _append_cogs_item(node: NodeBase) -> None:
            for state in ["- [ ]", "- [x]", "- [>]", "- [-]"]):
         log.info("Cogs item already in %s, skipping: %s", note_path.name, node.item_text)
         return
-    note_path.open("a").write(f"- [ ] {node.item_text}\n")
+    with note_path.open("a") as f:
+	f.write(f"- [ ] {node.item_text}\n")
     log.info("Appended to %s: %s", note_path.name, node.item_text)
 
 
@@ -184,7 +185,8 @@ def send_response(session_id: str, text: str) -> None:
     """
     note_path = _ensure_daily_note(datetime.now().strftime("%Y-%m-%d"))
     timestamp = datetime.now().strftime("%H:%M")
-    note_path.open("a").write(f"\n> [{timestamp}] agent: {text}\n")
+    with note_path.open("a") as f:
+	f.write(f"\n> [{timestamp}] agent: {text}\n")
     log.info("Reflection appended to %s", note_path.name)
 
 
@@ -398,8 +400,7 @@ def process_input(file_path: Path) -> None:
             write_to_review(raw, reason)
 
         if retry_triples:
-            retry_raw     = [raw_nodes[idx] for idx, _, _ in retry_triples
-                             if idx < len(raw_nodes)]
+            retry_raw     = [raw for _, raw, _ in retry_triples]
             error_context = "\n".join(f"- {reason}" for _, _, reason in retry_triples)
             log.info("Retrying classify for %d invalid node(s)", len(retry_triples))
             reclassified        = classify_nodes(retry_raw, context, error_context, use_examples=True)[:len(retry_triples)]
