@@ -103,6 +103,8 @@ EXTRACT_EXAMPLES = [
 CLASSIFY_SYSTEM = """\
 You are a classification engine. Given extracted items, assign each a node_type and fields.
 
+You may receive a "=== Today's Cogs Note ===" block. Use it to avoid duplicating items already present and to inform date choices.
+
 node_type rules:
   cogs/daily        has a specific time, OR is WFH/ONSITE/HOLIDAY, OR is a one-off day action
   sprockets/task    persistent actionable item, no time anchor

@@ -62,6 +62,12 @@ def _slugify(text: str) -> str:
     return text[:60].strip("-")
 
 
+def _truncate_context(context: str, max_chars: int = 2000) -> str:
+    if len(context) <= max_chars:
+        return context
+    return context[:max_chars] + "\n[... truncated]"
+
+
 def _ensure_daily_note(date_iso: str) -> Path:
     """Return the path to a Cogs daily note, creating it if absent."""
     dt      = datetime.strptime(date_iso, "%Y-%m-%d")
@@ -85,8 +91,7 @@ def _append_cogs_item(node: NodeBase) -> None:
            for state in ["- [ ]", "- [x]", "- [>]", "- [-]"]):
         log.info("Cogs item already in %s, skipping: %s", note_path.name, node.item_text)
         return
-    with note_path.open("a") as f:
-	f.write(f"- [ ] {node.item_text}\n")
+    note_path.open("a").write(f"- [ ] {node.item_text}\n")
     log.info("Appended to %s: %s", note_path.name, node.item_text)
 
 
@@ -185,14 +190,13 @@ def send_response(session_id: str, text: str) -> None:
     """
     note_path = _ensure_daily_note(datetime.now().strftime("%Y-%m-%d"))
     timestamp = datetime.now().strftime("%H:%M")
-    with note_path.open("a") as f:
-	f.write(f"\n> [{timestamp}] agent: {text}\n")
+    note_path.open("a").write(f"\n> [{timestamp}] agent: {text}\n")
     log.info("Reflection appended to %s", note_path.name)
 
 
 # ── Pipeline steps ─────────────────────────────────────────────────────────────
 
-def extract_nodes(content: str, context: str) -> list[dict]:
+def extract_nodes(content: str) -> list[dict]:
     """Qwen3 call 1: extract raw items from input text."""
     workdays = _week_workdays(datetime.now())
     extract_msg = (
@@ -238,6 +242,7 @@ def classify_nodes(
     user_msg = (
         f"Today: {today}\n"
         f"This week's workdays: {workdays}\n\n"
+        f"{_truncate_context(context)}\n\n"
         f"Extracted:\n{json.dumps(raw_nodes, indent=2)}\n\n"
     )
     if error_context:
@@ -385,7 +390,7 @@ def process_input(file_path: Path) -> None:
         session_id = post.get("session_id", processing_path.stem)
 
         context    = build_context()
-        raw_nodes  = extract_nodes(content, context)
+        raw_nodes  = extract_nodes(content)
         classified = classify_nodes(raw_nodes, context)
         classified = ensure_cogs_companions(classified)
 
@@ -400,7 +405,8 @@ def process_input(file_path: Path) -> None:
             write_to_review(raw, reason)
 
         if retry_triples:
-            retry_raw     = [raw for _, raw, _ in retry_triples]
+            retry_raw     = [raw_nodes[idx] for idx, _, _ in retry_triples
+                             if idx < len(raw_nodes)]
             error_context = "\n".join(f"- {reason}" for _, _, reason in retry_triples)
             log.info("Retrying classify for %d invalid node(s)", len(retry_triples))
             reclassified        = classify_nodes(retry_raw, context, error_context, use_examples=True)[:len(retry_triples)]
