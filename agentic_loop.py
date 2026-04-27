@@ -9,6 +9,7 @@ from pathlib import Path
 
 import frontmatter
 import ollama
+from rapidfuzz import fuzz
 from jinja2 import Template
 from pydantic import ValidationError
 from watchdog.events import FileSystemEventHandler
@@ -68,6 +69,22 @@ def _truncate_context(context: str, max_chars: int = 2000) -> str:
     return context[:max_chars] + "\n[... truncated]"
 
 
+def _find_duplicate(title: str, folder: Path, threshold: int = 85) -> Path | None:
+    """
+    Return the path of an existing node whose slug fuzzy-matches title, or None.
+    Compares slugified titles against existing file stems — no file reads needed.
+    Threshold 85 catches typos and minor variations without false-positiving on
+    legitimately different entities (e.g. 'Pinnacle Labs' vs 'Pinnacle CVS' → ~74%).
+    """
+    if not folder.exists():
+        return None
+    new_slug = _slugify(title)
+    for existing in folder.glob("*.md"):
+        if fuzz.ratio(new_slug, existing.stem) >= threshold:
+            return existing
+    return None
+
+
 def _ensure_daily_note(date_iso: str) -> Path:
     """Return the path to a Cogs daily note, creating it if absent."""
     dt      = datetime.strptime(date_iso, "%Y-%m-%d")
@@ -104,6 +121,11 @@ def _write_sprockets_node(node: NodeBase, folder: Path) -> None:
     slug = _slugify(node.title)
     path = folder / f"{slug}.md"
 
+    duplicate = _find_duplicate(node.title, folder)
+    if duplicate:
+        log.info("Duplicate suppressed (fuzzy match → %s): %s", duplicate.name, node.title)
+        return
+
     if path.exists():
         log.warning("Node file already exists, skipping: %s", path.name)
         return
@@ -138,14 +160,23 @@ def _week_workdays(ref: datetime) -> str:
     )
 def build_context() -> str:
     """
-    Phase 1: loads today's Cogs daily note.
+    Phase 1: extracts item_text lines already in today's Cogs daily note as a compact hint.
+    Avoids injecting raw Markdown prose into the classify call, which causes 9B model
+    context contamination (model bleeds note content into structured output fields).
     Phase 3: queries vector DB for semantically relevant nodes.
     """
     today     = datetime.now().strftime("%a %d %b %Y")
     note_path = DAILY_DIR / f"{today}.md"
-    if note_path.exists():
-        return f"=== Today's Cogs Note ===\n{note_path.read_text()}"
-    return "=== Today's Cogs Note ===\n(not yet created)"
+    if not note_path.exists():
+        return "Already in today's note: (none)"
+    items = [
+        line.strip().lstrip("-").strip().lstrip("[ ]>x-").strip()
+        for line in note_path.read_text().splitlines()
+        if line.strip().startswith("- [")
+    ]
+    if not items:
+        return "Already in today's note: (none)"
+    return "Already in today's note: " + "; ".join(items)
 
 
 def retrieve_relevant_nodes(query: str) -> list:
