@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+from entity_state import get_entities_by_tier, upsert_entity
 from models import Confidence, NodeBase, validate_node
 from prompts import (
     CLASSIFY_EXAMPLES, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM,
@@ -160,7 +161,7 @@ def _week_workdays(ref: datetime) -> str:
     )
 def build_context() -> str:
     """
-    Phase 1: extracts item_text lines already in today's Cogs daily note as a compact hint.
+    Phase 2: today's Cogs note items + hot entity hints (contacts/entities seen <=7 days).
     Avoids injecting raw Markdown prose into the classify call, which causes 9B model
     context contamination (model bleeds note content into structured output fields).
     Phase 3: queries vector DB for semantically relevant nodes.
@@ -168,15 +169,25 @@ def build_context() -> str:
     today     = datetime.now().strftime("%a %d %b %Y")
     note_path = DAILY_DIR / f"{today}.md"
     if not note_path.exists():
-        return "Already in today's note: (none)"
-    items = [
-        line.strip().lstrip("-").strip().lstrip("[ ]>x-").strip()
-        for line in note_path.read_text().splitlines()
-        if line.strip().startswith("- [")
-    ]
-    if not items:
-        return "Already in today's note: (none)"
-    return "Already in today's note: " + "; ".join(items)
+        cogs_line = "Already in today's note: (none)"
+    else:
+        items = [
+            line.strip().lstrip("-").strip().lstrip("[ ]>x-").strip()
+            for line in note_path.read_text().splitlines()
+            if line.strip().startswith("- [")
+        ]
+        cogs_line = "Already in today's note: " + ("; ".join(items) if items else "(none)")
+
+    hot       = get_entities_by_tier("hot")
+    contacts  = [e["title"] for e in hot if e["node_type"] == "sprockets/contact"]
+    entities  = [e["title"] for e in hot if e["node_type"] == "sprockets/entity"]
+
+    parts = [cogs_line]
+    if contacts:
+        parts.append("Known contacts: " + ", ".join(contacts))
+    if entities:
+        parts.append("Known entities: " + ", ".join(entities))
+    return "\n".join(parts)
 
 
 def retrieve_relevant_nodes(query: str) -> list:
@@ -189,7 +200,8 @@ def retrieve_relevant_nodes(query: str) -> list:
 
 def write_node(node: NodeBase) -> None:
     """
-    Phase 1: appends Cogs items to daily notes; writes Sprockets nodes as vault files.
+    Phase 2: appends Cogs items to daily notes; writes Sprockets nodes as vault files;
+    upserts contacts and entities into entity state (JSON working memory).
     Phase 3: also upserts embedding to vector DB.
     """
     if node.node_type == "cogs/daily":
@@ -198,6 +210,7 @@ def write_node(node: NodeBase) -> None:
         _write_sprockets_node(node, SPROCKETS_FOLDERS[node.node_type])
     else:
         log.warning("write_node: unhandled node_type %s", node.node_type)
+    upsert_entity(node)
 
 
 def write_to_review(raw: dict, reason: str) -> None:
