@@ -130,6 +130,9 @@ Date resolution: use today's date from the user message.
 "next Monday" when today is Tuesday means 6 days away, not yesterday.
 Use confidence "low" when date or type is ambiguous.
 
+parent_hint (optional): if a Sprockets node clearly belongs to a named project or area
+mentioned in the input or context, put that name here. Omit if unknown.
+
 Output at least one node per input item. Never silently drop an item.
 
 Output format: {"nodes": [...]}
@@ -150,8 +153,9 @@ CLASSIFY_SCHEMA = {
                     "item_text":  {"type": "string"},
                     "title":      {"type": "string"},
                     "date":       {"type": "string"},
-                    "status":     {"type": "string", "enum": ["active"]},
-                    "confidence": {"type": "string", "enum": ["high", "low"]}
+                    "status":      {"type": "string", "enum": ["active"]},
+                    "confidence":  {"type": "string", "enum": ["high", "low"]},
+                    "parent_hint": {"type": "string"}
                 },
                 "required": ["node_type", "confidence", "title", "item_text", "date"]
             }
