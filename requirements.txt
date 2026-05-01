@@ -14,4 +14,6 @@ python-frontmatter==1.1.0
 PyYAML==6.0.3
 typing-inspection==0.4.2
 typing_extensions==4.15.0
+networkx
+rapidfuzz
 watchdog==6.0.0

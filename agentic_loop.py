@@ -17,6 +17,7 @@ from watchdog.observers import Observer
 
 from entity_state import get_entities_by_tier, upsert_entity
 from models import Confidence, NodeBase, validate_node
+from vault_graph import build_graph, find_node_by_title
 from prompts import (
     CLASSIFY_EXAMPLES, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM,
     EXTRACT_EXAMPLES, EXTRACT_SCHEMA, EXTRACT_SYSTEM,
@@ -144,6 +145,8 @@ def _write_sprockets_node(node: NodeBase, folder: Path) -> None:
     }
     if hasattr(node, "status"):
         metadata["status"] = node.status
+    if getattr(node, "parent", ""):
+        metadata["parent"] = node.parent
 
     body = _NODE_BODY.render(node=node)
     post = frontmatter.Post(body, **metadata)
@@ -360,9 +363,26 @@ def validate_output(nodes: list[dict]) -> tuple[list[NodeBase], list[InvalidTrip
 
 def resolve_parents(nodes: list[NodeBase]) -> list[NodeBase]:
     """
-    Phase 1: pass-through stub.
-    Phase 2: networkx graph traversal.
+    Phase 2: for each Sprockets node with a parent_hint, fuzzy-match against the
+    vault graph and set node.parent to [[slug]] if a match is found above threshold.
+    Degrades gracefully — unmatched hints are silently dropped, node is written
+    without a parent rather than with a phantom link.
+    Phase 3: also walks vector DB for semantic parent candidates.
     """
+    graph = build_graph()
+    if not graph.nodes:
+        return nodes
+    for node in nodes:
+        hint = getattr(node, "parent_hint", "")
+        if not hint:
+            continue
+        match = find_node_by_title(graph, hint)
+        if match:
+            slug, _ = match
+            node.parent = f"[[{slug}]]"
+            log.info("Parent resolved: %s → [[%s]]", node.title, slug)
+        else:
+            log.debug("Parent hint unresolved (no vault match): %r", hint)
     return nodes
 
 

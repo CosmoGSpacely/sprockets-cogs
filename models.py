@@ -60,7 +60,9 @@ class _SprocketsBase(NodeBase):
     Coerces item_text → title so the model's occasional wrong field name
     is fixed gracefully rather than rejected outright.
     """
-    title: str
+    title:       str
+    parent_hint: str = ""   # model's guess at parent title; resolved to [[slug]] by resolve_parents()
+    parent:      str = ""   # resolved wikilink e.g. [[study-plan-q2]]; written to frontmatter
 
     @model_validator(mode="before")
     @classmethod
