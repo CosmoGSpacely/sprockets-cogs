@@ -381,6 +381,8 @@ def resolve_parents(nodes: list[NodeBase]) -> list[NodeBase]:
     if not graph.nodes:
         return nodes
     for node in nodes:
+        if getattr(node, "parent", ""):
+            continue
         hint = getattr(node, "parent_hint", "")
         if not hint:
             continue
