@@ -18,6 +18,10 @@ from watchdog.observers import Observer
 
 from entity_state import get_entities_by_tier, upsert_entity
 from models import Confidence, NodeBase, validate_node
+from openai_fallback import (
+    classify_nodes_with_openai_fallback,
+    openai_fallback_enabled,
+)
 from vault_graph import build_graph, find_node_by_title
 from prompts import (
     CLASSIFY_EXAMPLES, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM,
@@ -468,6 +472,37 @@ def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
             log.info("Auto-added cogs/daily for task: %s on %s", title, date)
     return result
 
+
+def route_openai_fallback_to_review(
+    raw_nodes: list[dict],
+    context: str,
+    reason: str,
+) -> bool:
+    """Route OpenAI-rescued candidates to review/, never directly to the vault."""
+    if not raw_nodes or not openai_fallback_enabled():
+        return False
+    try:
+        candidates = classify_nodes_with_openai_fallback(raw_nodes, context, reason)
+    except Exception:
+        log.exception("OpenAI fallback failed")
+        return False
+    if not candidates:
+        return False
+
+    candidates = ensure_cogs_companions(candidates)
+    valid, invalid = validate_output(candidates)
+    for node in valid:
+        write_to_review(
+            node.model_dump(mode="json"),
+            f"openai_fallback_candidate: {reason}",
+        )
+    for _, raw, invalid_reason in invalid:
+        write_to_review(
+            raw,
+            f"openai_fallback_invalid: {reason}; {invalid_reason}",
+        )
+    return True
+
 # ── Main pipeline ──────────────────────────────────────────────────────────────
 
 def process_input(file_path: Path) -> None:
@@ -487,13 +522,15 @@ def process_input(file_path: Path) -> None:
 
         valid_nodes, invalid_triples = validate_output(classified)
 
-        direct_review = [(raw, reason) for _, raw, reason in invalid_triples
-                         if "confidence: low" in reason]
         retry_triples = [(idx, raw, reason) for idx, raw, reason in invalid_triples
                          if "confidence: low" not in reason]
 
-        for raw, reason in direct_review:
-            write_to_review(raw, reason)
+        for idx, raw, reason in invalid_triples:
+            if "confidence: low" not in reason:
+                continue
+            fallback_raw = [raw_nodes[idx]] if idx < len(raw_nodes) else []
+            if not route_openai_fallback_to_review(fallback_raw, context, reason):
+                write_to_review(raw, reason)
 
         if retry_triples:
             retry_raw     = [raw_nodes[idx] for idx, _, _ in retry_triples
@@ -503,8 +540,11 @@ def process_input(file_path: Path) -> None:
             reclassified        = classify_nodes(retry_raw, context, error_context, use_examples=True)[:len(retry_triples)]
             valid_retry, failed = validate_output(reclassified)
             valid_nodes.extend(valid_retry)
-            for _, raw, reason in failed:
-                write_to_review(raw, f"retry failed: {reason}")
+            if failed and route_openai_fallback_to_review(retry_raw, context, error_context):
+                log.info("Retry failures routed through OpenAI fallback candidates")
+            else:
+                for _, raw, reason in failed:
+                    write_to_review(raw, f"retry failed: {reason}")
 
         resolved = resolve_parents(valid_nodes)
         seen: set = set()

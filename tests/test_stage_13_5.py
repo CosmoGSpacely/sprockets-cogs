@@ -137,6 +137,46 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertEqual(companion["item_text"], "Send proposal to Jordan")
         self.assertEqual(companion["date"], "2026-05-04")
 
+    def test_openai_fallback_routes_valid_candidates_to_review(self):
+        raw_nodes = [{"raw": "call Jordan", "type_hint": "task"}]
+        candidates = [
+            {
+                "node_type": "sprockets/task",
+                "title": "Call Jordan",
+                "date": "2026-05-02",
+                "status": "active",
+                "confidence": "high",
+            }
+        ]
+        written = []
+
+        with patch.object(agentic_loop, "openai_fallback_enabled", return_value=True), \
+             patch.object(agentic_loop, "classify_nodes_with_openai_fallback", return_value=candidates), \
+             patch.object(agentic_loop, "write_to_review", side_effect=lambda raw, reason: written.append((raw, reason))):
+            routed = agentic_loop.route_openai_fallback_to_review(
+                raw_nodes,
+                "Already in today's note: (none)",
+                "confidence: low",
+            )
+
+        self.assertTrue(routed)
+        self.assertEqual(len(written), 2)
+        self.assertEqual(written[0][0]["node_type"], "sprockets/task")
+        self.assertEqual(written[0][1], "openai_fallback_candidate: confidence: low")
+        self.assertEqual(written[1][0]["node_type"], "cogs/daily")
+
+    def test_openai_fallback_skips_when_disabled(self):
+        with patch.object(agentic_loop, "openai_fallback_enabled", return_value=False), \
+             patch.object(agentic_loop, "classify_nodes_with_openai_fallback") as fallback:
+            routed = agentic_loop.route_openai_fallback_to_review(
+                [{"raw": "call Jordan", "type_hint": "task"}],
+                "",
+                "retry failed",
+            )
+
+        self.assertFalse(routed)
+        fallback.assert_not_called()
+
     def test_find_duplicate_uses_fuzzy_slug_match(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
