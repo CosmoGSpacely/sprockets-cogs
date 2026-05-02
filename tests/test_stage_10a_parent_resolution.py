@@ -110,6 +110,30 @@ class Stage10AParentResolutionTests(unittest.TestCase):
             )
             self.assertIsNone(vault_graph.find_node_by_title(graph, "dentist appointment"))
 
+    def test_find_node_by_title_can_limit_parent_candidates_by_node_type(self):
+        graph = nx.DiGraph()
+        graph.add_node(
+            "jordan-mack",
+            title="Jordan Mack",
+            uuid="contact-1",
+            node_type="sprockets/contact",
+        )
+        graph.add_node(
+            "jordan-project",
+            title="Jordan Project",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+
+        self.assertEqual(
+            vault_graph.find_node_by_title(
+                graph,
+                "Jordan",
+                allowed_node_types=vault_graph.HIERARCHY_PARENT_NODE_TYPES,
+            ),
+            ("jordan-project", "project-1"),
+        )
+
     def test_resolve_parents_sets_parent_from_vault_title_match(self):
         node = validate_node({
             "node_type": "sprockets/task",
@@ -122,12 +146,33 @@ class Stage10AParentResolutionTests(unittest.TestCase):
             "sprockets-builder-roadmap",
             title="Sprockets Builder Roadmap",
             uuid="roadmap-1",
+            node_type="sprockets/project",
         )
 
         with patch.object(agentic_loop, "build_graph", return_value=graph):
             resolved = agentic_loop.resolve_parents([node])
 
         self.assertEqual(resolved[0].parent, "[[sprockets-builder-roadmap]]")
+
+    def test_resolve_parents_ignores_non_hierarchy_title_matches(self):
+        node = validate_node({
+            "node_type": "sprockets/task",
+            "title": "Call Jordan",
+            "parent_hint": "Jordan Mack",
+            "confidence": "high",
+        })
+        graph = nx.DiGraph()
+        graph.add_node(
+            "jordan-mack",
+            title="Jordan Mack",
+            uuid="contact-1",
+            node_type="sprockets/contact",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph):
+            resolved = agentic_loop.resolve_parents([node])
+
+        self.assertEqual(resolved[0].parent, "")
 
     def test_resolve_parents_leaves_unmatched_hint_unlinked(self):
         node = validate_node({

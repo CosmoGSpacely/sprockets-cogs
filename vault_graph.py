@@ -27,6 +27,11 @@ SPROCKETS_SUBDIRS = [
     "entities",
 ]
 SPROCKETS_DIRS = [VAULT_DIR / "Sprockets" / subdir for subdir in SPROCKETS_SUBDIRS]
+HIERARCHY_PARENT_NODE_TYPES = {
+    "sprockets/area",
+    "sprockets/goal",
+    "sprockets/project",
+}
 
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 
@@ -102,7 +107,12 @@ def build_graph(vault_dir: Path = VAULT_DIR) -> nx.DiGraph:
     return g
 
 
-def find_node_by_title(graph: nx.DiGraph, hint: str, threshold: int = 80) -> tuple[str, str] | None:
+def find_node_by_title(
+    graph: nx.DiGraph,
+    hint: str,
+    threshold: int = 80,
+    allowed_node_types: set[str] | None = None,
+) -> tuple[str, str] | None:
     """
     Fuzzy-match a parent_hint string against node titles in the graph.
     Returns (slug, uuid) of the best match above threshold, or None.
@@ -116,6 +126,8 @@ def find_node_by_title(graph: nx.DiGraph, hint: str, threshold: int = 80) -> tup
     best_score = 0
     hint_lower = hint.lower()
     for slug, attrs in graph.nodes(data=True):
+        if allowed_node_types is not None and attrs.get("node_type", "") not in allowed_node_types:
+            continue
         title = attrs.get("title", slug).lower()
         score = fuzz.partial_ratio(hint_lower, title)
         if score > best_score:
