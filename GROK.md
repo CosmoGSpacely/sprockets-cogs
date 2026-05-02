@@ -10,6 +10,7 @@ Markdown files to the vault at /home/cosmo/vault/.
 - `entity_state.py` — JSON working memory for recently seen contacts/entities
 - `vault_graph.py`  — NetworkX graph builder for Sprockets parent resolution
 - `review.py`       — interactive CLI for approving/discarding review items
+- `smoke_test.py`   — deterministic temp-vault smoke test with model calls stubbed
 - `tools.py`        — date/time tool definitions (Stage 4)
 - `tests/`          — focused unittest coverage for operational hardening
 - `requirements.txt`— Python dependencies
