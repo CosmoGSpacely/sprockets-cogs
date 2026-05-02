@@ -17,6 +17,12 @@ Markdown files to the vault at /home/cosmo/vault/.
 ## Operational data
 Lives in /home/cosmo/sc/ — not in this repo.
 
+Runtime paths can be overridden for tests/dry-runs with environment variables:
+`SPROCKETS_COGS_SC_ROOT`, `SPROCKETS_COGS_INPUT_DIR`,
+`SPROCKETS_COGS_PROCESSING_DIR`, `SPROCKETS_COGS_ARCHIVE_DIR`,
+`SPROCKETS_COGS_OUTPUT_DIR`, `SPROCKETS_COGS_VAULT_DIR`, and
+`SPROCKETS_COGS_ENTITY_STATE_PATH`.
+
 ## Pipeline (two Qwen3 calls per input)
 startup scan / watchdog input/ → extract_nodes() → classify_nodes() → validate_output()
        → resolve_parents() → write_node() → append_reflection() → archive/

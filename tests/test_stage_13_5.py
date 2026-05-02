@@ -1,4 +1,6 @@
 import json
+import importlib
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +12,40 @@ from models import validate_node
 
 
 class Stage135HardeningTests(unittest.TestCase):
+    def test_agentic_loop_paths_can_be_configured_from_environment(self):
+        original_env = os.environ.copy()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                os.environ["SPROCKETS_COGS_SC_ROOT"] = str(root / "sc")
+                os.environ["SPROCKETS_COGS_VAULT_DIR"] = str(root / "vault")
+                reloaded = importlib.reload(agentic_loop)
+
+                self.assertEqual(reloaded.INPUT_DIR, root / "sc" / "input")
+                self.assertEqual(reloaded.PROCESSING_DIR, root / "sc" / "processing")
+                self.assertEqual(reloaded.ARCHIVE_DIR, root / "sc" / "archive")
+                self.assertEqual(reloaded.OUTPUT_DIR, root / "sc" / "output")
+                self.assertEqual(reloaded.VAULT_DIR, root / "vault")
+                self.assertEqual(reloaded.DAILY_DIR, root / "vault" / "Cogs" / "daily")
+        finally:
+            os.environ.clear()
+            os.environ.update(original_env)
+            importlib.reload(agentic_loop)
+
+    def test_entity_state_path_can_be_configured_from_environment(self):
+        original_env = os.environ.copy()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                state_path = Path(tmp) / "state.json"
+                os.environ["SPROCKETS_COGS_ENTITY_STATE_PATH"] = str(state_path)
+                reloaded = importlib.reload(entity_state)
+
+                self.assertEqual(reloaded.STATE_PATH, state_path)
+        finally:
+            os.environ.clear()
+            os.environ.update(original_env)
+            importlib.reload(entity_state)
+
     def test_process_existing_inputs_processes_sorted_input_files_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = Path(tmp)

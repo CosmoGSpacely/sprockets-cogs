@@ -11,11 +11,15 @@ Tiers (by days since last_seen):
   cold — > 30 days
 """
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
 
-STATE_PATH = Path("/home/cosmo/sc/entity_state.json")
+SC_ROOT = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", "/home/cosmo/sc"))
+STATE_PATH = Path(
+    os.environ.get("SPROCKETS_COGS_ENTITY_STATE_PATH", str(SC_ROOT / "entity_state.json"))
+)
 
 TRACKABLE_TYPES = {"sprockets/contact", "sprockets/entity"}
 
