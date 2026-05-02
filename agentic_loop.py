@@ -399,6 +399,31 @@ def archive_input(processing_path: Path) -> None:
     log.info("Archived → %s", dest)
 
 
+def ensure_runtime_dirs() -> None:
+    """Create operational directories needed by the file-processing loop."""
+    for path in [INPUT_DIR, PROCESSING_DIR, ARCHIVE_DIR, OUTPUT_DIR]:
+        path.mkdir(parents=True, exist_ok=True)
+
+
+def process_existing_inputs(input_dir: Path = INPUT_DIR) -> int:
+    """
+    Process .input files already present when the service starts.
+    Watchdog only emits new filesystem events, so startup needs this explicit scan.
+    """
+    count = 0
+    for path in sorted(input_dir.glob("*.input")):
+        if not path.is_file():
+            continue
+        log.info("Startup scan found pending input: %s", path.name)
+        process_input(path)
+        count += 1
+    if count:
+        log.info("Startup scan processed %d pending input(s)", count)
+    else:
+        log.info("Startup scan found no pending inputs")
+    return count
+
+
 
 def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
     """Guarantee every sprockets/task has a cogs/daily companion on the same date."""
@@ -516,9 +541,11 @@ class InputHandler(FileSystemEventHandler):
 
 def main():
     log.info("Agentic loop starting. Watching: %s", INPUT_DIR)
+    ensure_runtime_dirs()
     observer = Observer()
     observer.schedule(InputHandler(), str(INPUT_DIR), recursive=False)
     observer.start()
+    process_existing_inputs()
     try:
         while True:
             time.sleep(1)
