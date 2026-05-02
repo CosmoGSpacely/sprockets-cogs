@@ -10,6 +10,7 @@ Markdown files to the vault at /home/cosmo/vault/.
 - `entity_state.py` — JSON working memory for recently seen contacts/entities
 - `vault_graph.py`  — NetworkX graph builder for Sprockets parent resolution
 - `review.py`       — interactive CLI for approving/discarding review items
+- `scripts/review`  — venv-aware wrapper for review count/list/interactive modes
 - `smoke_test.py`   — deterministic temp-vault smoke test with model calls stubbed
 - `tools.py`        — date/time tool definitions (Stage 4)
 - `tests/`          — focused unittest coverage for operational hardening
@@ -27,3 +28,8 @@ Runtime paths can be overridden for tests/dry-runs with environment variables:
 ## Pipeline (two Qwen3 calls per input)
 startup scan / watchdog input/ → extract_nodes() → classify_nodes() → validate_output()
        → resolve_parents() → write_node() → append_reflection() → archive/
+
+## Review commands
+- `scripts/review --count` — count pending review items
+- `scripts/review --list` — show pending review summaries
+- `scripts/review` or `scripts/review --interactive` — approve/discard/skip
