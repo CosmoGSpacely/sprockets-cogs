@@ -174,6 +174,27 @@ class Stage10AParentResolutionTests(unittest.TestCase):
 
         self.assertEqual(resolved[0].parent, "")
 
+    def test_resolve_parents_preserves_existing_parent(self):
+        node = validate_node({
+            "node_type": "sprockets/task",
+            "title": "Harden parent resolution",
+            "parent": "[[manual-parent]]",
+            "parent_hint": "Builder Roadmap",
+            "confidence": "high",
+        })
+        graph = nx.DiGraph()
+        graph.add_node(
+            "sprockets-builder-roadmap",
+            title="Sprockets Builder Roadmap",
+            uuid="roadmap-1",
+            node_type="sprockets/project",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph):
+            resolved = agentic_loop.resolve_parents([node])
+
+        self.assertEqual(resolved[0].parent, "[[manual-parent]]")
+
     def test_resolve_parents_leaves_unmatched_hint_unlinked(self):
         node = validate_node({
             "node_type": "sprockets/task",
