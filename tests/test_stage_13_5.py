@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import agentic_loop
 import entity_state
+import review
 from models import validate_node
 
 
@@ -163,6 +164,47 @@ class Stage135HardeningTests(unittest.TestCase):
             content = files[0].read_text()
             self.assertIn("**Reason:** confidence: low", content)
             self.assertIn(json.dumps(raw, indent=2), content)
+
+    def test_list_pending_summarizes_review_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            raw = {
+                "node_type": "sprockets/task",
+                "title": "Ambiguous task",
+                "item_text": "Ambiguous task",
+                "date": "2026-05-02",
+                "confidence": "low",
+            }
+            (review_dir / "pending.md").write_text(
+                "---\nnode_type: review\nreviewed: false\n---\n\n"
+                "**Reason:** confidence: low\n\n"
+                f"```json\n{json.dumps(raw, indent=2)}\n```\n"
+            )
+
+            items = review.list_pending(review_dir)
+
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["file"], "pending.md")
+            self.assertEqual(items[0]["reason"], "confidence: low")
+            self.assertEqual(items[0]["node_type"], "sprockets/task")
+            self.assertEqual(items[0]["title"], "Ambiguous task")
+            self.assertTrue(items[0]["parseable"])
+
+    def test_list_pending_marks_unparseable_review_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            (review_dir / "broken.md").write_text(
+                "---\nnode_type: review\nreviewed: false\n---\n\n"
+                "**Reason:** retry failed\n\n"
+                "```json\nnot json\n```\n"
+            )
+
+            items = review.list_pending(review_dir)
+
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["file"], "broken.md")
+            self.assertEqual(items[0]["reason"], "retry failed")
+            self.assertFalse(items[0]["parseable"])
 
     def test_entity_state_tracks_hot_contact(self):
         with tempfile.TemporaryDirectory() as tmp:

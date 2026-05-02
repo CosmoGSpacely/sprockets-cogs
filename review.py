@@ -13,6 +13,7 @@ For each file in vault/review/, shows the reason and node data, then prompts:
 import json
 import re
 import shutil
+import sys
 from pathlib import Path
 
 import frontmatter
@@ -21,6 +22,10 @@ from models import validate_node
 from agentic_loop import ARCHIVE_DIR, REVIEW_DIR, write_node
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _review_files(review_dir: Path = REVIEW_DIR) -> list[Path]:
+    return sorted(review_dir.glob("*.md"))
+
 
 def _extract_json(content: str) -> dict | None:
     """Extract the first JSON code block from a review file's Markdown body."""
@@ -31,6 +36,51 @@ def _extract_json(content: str) -> dict | None:
         return json.loads(match.group(1))
     except json.JSONDecodeError:
         return None
+
+
+def _extract_reason(content: str) -> str:
+    reason_match = re.search(r"\*\*Reason:\*\* (.+)", content)
+    return reason_match.group(1).strip() if reason_match else "(unknown)"
+
+
+def summarize_review_file(path: Path) -> dict:
+    post = frontmatter.load(str(path))
+    raw = _extract_json(post.content)
+    return {
+        "file": path.name,
+        "reason": _extract_reason(post.content),
+        "node_type": raw.get("node_type", "?") if raw else "?",
+        "title": raw.get("title", "?") if raw else "?",
+        "item_text": raw.get("item_text", "?") if raw else "?",
+        "date": raw.get("date", "?") if raw else "?",
+        "confidence": raw.get("confidence", "?") if raw else "?",
+        "parseable": raw is not None,
+    }
+
+
+def list_pending(review_dir: Path = REVIEW_DIR) -> list[dict]:
+    return [summarize_review_file(path) for path in _review_files(review_dir)]
+
+
+def print_pending_count(review_dir: Path = REVIEW_DIR) -> None:
+    count = len(_review_files(review_dir))
+    print(f"{count} item(s) waiting in {review_dir}")
+
+
+def print_pending_list(review_dir: Path = REVIEW_DIR) -> None:
+    items = list_pending(review_dir)
+    if not items:
+        print("Nothing in review/. All clear.")
+        return
+    for item in items:
+        parse_note = "" if item["parseable"] else " [UNPARSEABLE]"
+        print(f"{item['file']}{parse_note}")
+        print(f"  reason:     {item['reason']}")
+        print(f"  node_type:  {item['node_type']}")
+        print(f"  title:      {item['title']}")
+        print(f"  item_text:  {item['item_text']}")
+        print(f"  date:       {item['date']}")
+        print(f"  confidence: {item['confidence']}")
 
 
 def _archive(path: Path, approved: bool) -> None:
@@ -52,7 +102,7 @@ def _prompt_choice() -> str:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def review_all() -> None:
-    files = sorted(REVIEW_DIR.glob("*.md"))
+    files = _review_files()
     if not files:
         print("Nothing in review/. All clear.")
         return
@@ -64,12 +114,9 @@ def review_all() -> None:
     approved = discarded = skipped = 0
 
     for path in files:
-        post = frontmatter.load(str(path))
-
-        reason_match = re.search(r"\*\*Reason:\*\* (.+)", post.content)
-        reason = reason_match.group(1).strip() if reason_match else "(unknown)"
-
-        raw = _extract_json(post.content)
+        summary = summarize_review_file(path)
+        reason = summary["reason"]
+        raw = _extract_json(frontmatter.load(str(path)).content)
         if not raw:
             print(f"[UNPARSEABLE] {path.name} — could not extract JSON, skipping.\n")
             skipped += 1
@@ -113,4 +160,13 @@ def review_all() -> None:
 
 
 if __name__ == "__main__":
-    review_all()
+    args = sys.argv[1:]
+    if args == ["--count"]:
+        print_pending_count()
+    elif args == ["--list"]:
+        print_pending_list()
+    elif args in ([], ["--interactive"]):
+        review_all()
+    else:
+        print("Usage: python review.py [--count | --list | --interactive]")
+        raise SystemExit(2)
