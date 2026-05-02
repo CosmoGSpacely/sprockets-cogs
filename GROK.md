@@ -11,6 +11,8 @@ Markdown files to the vault at /home/cosmo/vault/.
 - `vault_graph.py`  — NetworkX graph builder for Sprockets parent resolution
 - `review.py`       — interactive CLI for approving/discarding review items
 - `scripts/review`  — venv-aware wrapper for review count/list/interactive modes
+- `scripts/smoke`   — venv-aware wrapper for deterministic temp-vault smoke test
+- `scripts/check`   — operational sanity check: tests + smoke + review count
 - `smoke_test.py`   — deterministic temp-vault smoke test with model calls stubbed
 - `tools.py`        — date/time tool definitions (Stage 4)
 - `tests/`          — focused unittest coverage for operational hardening
@@ -33,3 +35,10 @@ startup scan / watchdog input/ → extract_nodes() → classify_nodes() → vali
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
 - `scripts/review` or `scripts/review --interactive` — approve/discard/skip
+
+## Operational checks
+- `scripts/check` — run unit tests, temp-vault smoke test, and review count
+- `scripts/smoke` — run only the temp-vault smoke test
+- `systemctl --user restart sprockets-cogs.service` — restart the watcher service
+- `systemctl --user status sprockets-cogs.service` — inspect service state
+- `journalctl --user -u sprockets-cogs.service -n 100` — inspect recent logs
