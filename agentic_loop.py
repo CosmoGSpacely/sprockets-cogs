@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import shutil
 import time
@@ -27,11 +28,12 @@ from prompts import (
 MODEL = "qwen3.5:9b-32k-cosmo"
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-INPUT_DIR      = Path("/home/cosmo/sc/input")
-PROCESSING_DIR = Path("/home/cosmo/sc/processing")
-ARCHIVE_DIR    = Path("/home/cosmo/sc/archive")
-OUTPUT_DIR     = Path("/home/cosmo/sc/output")
-VAULT_DIR      = Path("/home/cosmo/vault")
+SC_ROOT        = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", "/home/cosmo/sc"))
+INPUT_DIR      = Path(os.environ.get("SPROCKETS_COGS_INPUT_DIR", str(SC_ROOT / "input")))
+PROCESSING_DIR = Path(os.environ.get("SPROCKETS_COGS_PROCESSING_DIR", str(SC_ROOT / "processing")))
+ARCHIVE_DIR    = Path(os.environ.get("SPROCKETS_COGS_ARCHIVE_DIR", str(SC_ROOT / "archive")))
+OUTPUT_DIR     = Path(os.environ.get("SPROCKETS_COGS_OUTPUT_DIR", str(SC_ROOT / "output")))
+VAULT_DIR      = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", "/home/cosmo/vault"))
 
 DAILY_DIR      = VAULT_DIR / "Cogs" / "daily"
 REVIEW_DIR     = VAULT_DIR / "review"
