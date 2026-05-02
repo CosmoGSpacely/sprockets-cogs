@@ -116,7 +116,8 @@ def _append_cogs_item(node: NodeBase) -> None:
            for state in ["- [ ]", "- [x]", "- [>]", "- [-]"]):
         log.info("Cogs item already in %s, skipping: %s", note_path.name, node.item_text)
         return
-    note_path.open("a").write(f"- [ ] {node.item_text}\n")
+    with note_path.open("a") as f:
+        f.write(f"- [ ] {node.item_text}\n")
     log.info("Appended to %s: %s", note_path.name, node.item_text)
 
 
@@ -225,7 +226,7 @@ def write_node(node: NodeBase) -> None:
 def write_to_review(raw: dict, reason: str) -> None:
     """Write a node that failed validation or has low confidence to review/."""
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
-    ts   = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:18]
+    ts   = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     slug = raw.get("node_type", "unknown").replace("/", "-")
     path = REVIEW_DIR / f"{ts}-{slug}.md"
     path.write_text(
@@ -243,7 +244,8 @@ def send_response(session_id: str, text: str) -> None:
     """
     note_path = _ensure_daily_note(datetime.now().strftime("%Y-%m-%d"))
     timestamp = datetime.now().strftime("%H:%M")
-    note_path.open("a").write(f"\n> [{timestamp}] agent: {text}\n")
+    with note_path.open("a") as f:
+        f.write(f"\n> [{timestamp}] agent: {text}\n")
     log.info("Reflection appended to %s", note_path.name)
 
 
@@ -465,7 +467,7 @@ def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
                 "title":      title,
                 "item_text":  title,
                 "date":       date,
-                "confidence": "high",
+                "confidence": node.get("confidence", "high"),
             }
             result.append(companion)
             cogs_by_date.setdefault(date, []).append(title)
@@ -529,7 +531,7 @@ def process_input(file_path: Path) -> None:
             if "confidence: low" not in reason:
                 continue
             fallback_raw = [raw_nodes[idx]] if idx < len(raw_nodes) else []
-            if not route_openai_fallback_to_review(fallback_raw, context, reason):
+            if fallback_raw and not route_openai_fallback_to_review(fallback_raw, context, reason):
                 write_to_review(raw, reason)
 
         if retry_triples:

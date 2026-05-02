@@ -177,6 +177,59 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertFalse(routed)
         fallback.assert_not_called()
 
+    def test_process_input_routes_low_confidence_through_fallback_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "input"
+            processing_dir = root / "processing"
+            archive_dir = root / "archive"
+            review_dir = root / "review"
+            daily_dir = root / "daily"
+            input_dir.mkdir()
+            input_path = input_dir / "low.input"
+            input_path.write_text("---\nsession_id: low-test\n---\n\nCall Jordan.\n")
+
+            raw_nodes = [{"raw": "Call Jordan", "type_hint": "task"}]
+            low_classified = [
+                {
+                    "node_type": "sprockets/task",
+                    "title": "Call Jordan",
+                    "date": "2026-05-02",
+                    "status": "active",
+                    "confidence": "low",
+                }
+            ]
+            fallback_classified = [
+                {
+                    "node_type": "sprockets/task",
+                    "title": "Call Jordan",
+                    "date": "2026-05-02",
+                    "status": "active",
+                    "confidence": "high",
+                }
+            ]
+
+            with patch.object(agentic_loop, "INPUT_DIR", input_dir), \
+                 patch.object(agentic_loop, "PROCESSING_DIR", processing_dir), \
+                 patch.object(agentic_loop, "ARCHIVE_DIR", archive_dir), \
+                 patch.object(agentic_loop, "REVIEW_DIR", review_dir), \
+                 patch.object(agentic_loop, "DAILY_DIR", daily_dir), \
+                 patch.object(agentic_loop, "extract_nodes", return_value=raw_nodes), \
+                 patch.object(agentic_loop, "classify_nodes", return_value=low_classified), \
+                 patch.object(agentic_loop, "openai_fallback_enabled", return_value=True), \
+                 patch.object(agentic_loop, "classify_nodes_with_openai_fallback", return_value=fallback_classified):
+                agentic_loop.ensure_runtime_dirs()
+                agentic_loop.process_input(input_path)
+
+            review_files = sorted(review_dir.glob("*.md"))
+            self.assertEqual(len(review_files), 2)
+            review_text = "\n".join(path.read_text() for path in review_files)
+            self.assertIn("openai_fallback_candidate: confidence: low", review_text)
+            self.assertIn('"node_type": "sprockets/task"', review_text)
+            self.assertIn('"node_type": "cogs/daily"', review_text)
+            self.assertTrue((archive_dir / "low.input").exists())
+            self.assertIn("Processed 0 node(s)", (daily_dir / "Sat 02 May 2026.md").read_text())
+
     def test_find_duplicate_uses_fuzzy_slug_match(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
@@ -204,6 +257,22 @@ class Stage135HardeningTests(unittest.TestCase):
             content = files[0].read_text()
             self.assertIn("**Reason:** confidence: low", content)
             self.assertIn(json.dumps(raw, indent=2), content)
+
+    def test_write_to_review_avoids_same_second_filename_collisions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            raw = {
+                "node_type": "cogs/daily",
+                "item_text": "Call Jordan",
+                "date": "2026-05-02",
+                "confidence": "low",
+            }
+
+            with patch.object(agentic_loop, "REVIEW_DIR", review_dir):
+                agentic_loop.write_to_review(raw, "one")
+                agentic_loop.write_to_review(raw, "two")
+
+            self.assertEqual(len(list(review_dir.glob("*.md"))), 2)
 
     def test_list_pending_summarizes_review_files(self):
         with tempfile.TemporaryDirectory() as tmp:
