@@ -22,7 +22,7 @@ from openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
 )
-from vault_graph import build_graph, find_node_by_title
+from vault_graph import HIERARCHY_PARENT_NODE_TYPES, build_graph, find_node_by_title
 from prompts import (
     CLASSIFY_EXAMPLES, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM,
     EXTRACT_EXAMPLES, EXTRACT_SCHEMA, EXTRACT_SYSTEM,
@@ -384,7 +384,11 @@ def resolve_parents(nodes: list[NodeBase]) -> list[NodeBase]:
         hint = getattr(node, "parent_hint", "")
         if not hint:
             continue
-        match = find_node_by_title(graph, hint)
+        match = find_node_by_title(
+            graph,
+            hint,
+            allowed_node_types=HIERARCHY_PARENT_NODE_TYPES,
+        )
         if match:
             slug, _ = match
             node.parent = f"[[{slug}]]"
