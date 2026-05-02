@@ -9,14 +9,14 @@ Markdown files to the vault at /home/cosmo/vault/.
 - `prompts.py`      — Qwen3 system prompts and few-shot examples (Stage 4)
 - `openai_fallback.py` — review-first OpenAI fallback using Responses API structured output
 - `entity_state.py` — JSON working memory for recently seen contacts/entities
-- `vault_graph.py`  — NetworkX graph builder for Sprockets parent resolution
+- `vault_graph.py`  — NetworkX graph builder for testable Sprockets parent resolution
 - `review.py`       — interactive CLI for approving/discarding review items
 - `scripts/review`  — venv-aware wrapper for review count/list/interactive modes
 - `scripts/smoke`   — venv-aware wrapper for deterministic temp-vault smoke test
 - `scripts/check`   — operational sanity check: tests + smoke + review count
 - `smoke_test.py`   — deterministic temp-vault smoke test with model calls stubbed
 - `tools.py`        — date/time tool definitions (Stage 4)
-- `tests/`          — focused unittest coverage for operational hardening
+- `tests/`          — focused unittest coverage for parent resolution and operational hardening
 - `requirements.txt`— Python dependencies
 
 ## Operational data
