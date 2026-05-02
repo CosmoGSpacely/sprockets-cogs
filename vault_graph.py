@@ -1,13 +1,14 @@
 """
 vault_graph.py — Build a networkx directed graph from the Sprockets vault.
 
-Nodes: slug (filesystem stem) with attrs {title, node_type, uuid, parent_raw}
+Nodes: slug (filesystem stem) with attrs {title, node_type, uuid, parent_raw, parent_value}
 Edges: child slug → parent slug (follows `parent` frontmatter wikilink)
 
 Used by resolve_parents() to match parent_hint values from the classifier
 against real nodes in the vault. Degrades gracefully — if the vault has no
 area/goal/project nodes yet, the graph is empty and all hints go unresolved.
 """
+import os
 import re
 from pathlib import Path
 
@@ -15,26 +16,63 @@ import frontmatter
 import networkx as nx
 from rapidfuzz import fuzz
 
-VAULT_DIR = Path("/home/cosmo/vault")
-
-SPROCKETS_DIRS = [
-    VAULT_DIR / "Sprockets" / "areas",
-    VAULT_DIR / "Sprockets" / "goals",
-    VAULT_DIR / "Sprockets" / "projects",
-    VAULT_DIR / "Sprockets" / "tasks",
-    VAULT_DIR / "Sprockets" / "notes",
-    VAULT_DIR / "Sprockets" / "contacts",
-    VAULT_DIR / "Sprockets" / "entities",
+VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", "/home/cosmo/vault"))
+SPROCKETS_SUBDIRS = [
+    "areas",
+    "goals",
+    "projects",
+    "tasks",
+    "notes",
+    "contacts",
+    "entities",
 ]
+SPROCKETS_DIRS = [VAULT_DIR / "Sprockets" / subdir for subdir in SPROCKETS_SUBDIRS]
 
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 
 
-def build_graph() -> nx.DiGraph:
+def sprockets_dirs(vault_dir: Path = VAULT_DIR) -> list[Path]:
+    """Return the Sprockets folders that participate in parent resolution."""
+    return [vault_dir / "Sprockets" / subdir for subdir in SPROCKETS_SUBDIRS]
+
+
+def _wikilink_target(raw: object) -> str | None:
+    """Extract the target slug from an Obsidian wikilink, ignoring aliases/headings."""
+    if isinstance(raw, (list, tuple)):
+        for item in raw:
+            target = _wikilink_target(item)
+            if target:
+                return target
+        return None
+    if not isinstance(raw, str):
+        return None
+    m = _WIKILINK_RE.search(raw)
+    if not m:
+        clean = raw.split("|", 1)[0].split("#", 1)[0].strip()
+        return clean or None
+    target = m.group(1).split("|", 1)[0].split("#", 1)[0].strip()
+    return target or None
+
+
+def _parent_value(post: frontmatter.Post) -> object:
+    parent = post.get("parent", "")
+    if parent is None:
+        return ""
+    return parent
+
+
+def _parent_raw(post: frontmatter.Post) -> str:
+    parent = _parent_value(post)
+    if isinstance(parent, (list, tuple)):
+        return ", ".join(str(item) for item in parent)
+    return str(parent)
+
+
+def build_graph(vault_dir: Path = VAULT_DIR) -> nx.DiGraph:
     """Scan all Sprockets .md files and return a directed graph (child → parent edges)."""
     g = nx.DiGraph()
 
-    for folder in SPROCKETS_DIRS:
+    for folder in sprockets_dirs(vault_dir):
         if not folder.exists():
             continue
         for path in folder.glob("*.md"):
@@ -48,19 +86,18 @@ def build_graph() -> nx.DiGraph:
                 title=post.get("title", slug),
                 node_type=post.get("node_type", ""),
                 uuid=post.get("uuid", ""),
-                parent_raw=str(post.get("parent", "")),
+                parent_raw=_parent_raw(post),
+                parent_value=_parent_value(post),
             )
 
     # Second pass: add edges after all nodes exist
     for slug, attrs in list(g.nodes(data=True)):
-        parent_raw = attrs.get("parent_raw", "")
-        if not parent_raw:
+        parent_value = attrs.get("parent_value", "")
+        if not parent_value:
             continue
-        m = _WIKILINK_RE.search(parent_raw)
-        if m:
-            parent_slug = m.group(1)
-            if g.has_node(parent_slug):
-                g.add_edge(slug, parent_slug)
+        parent_slug = _wikilink_target(parent_value)
+        if parent_slug and g.has_node(parent_slug):
+            g.add_edge(slug, parent_slug)
 
     return g
 
