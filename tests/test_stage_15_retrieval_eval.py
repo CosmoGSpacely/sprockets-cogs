@@ -10,6 +10,7 @@ from retrieval_eval import (
     RetrievalNode,
     evaluate_retriever,
     evaluate_target_presence,
+    hybrid_retrieve,
     lexical_retrieve,
     load_retrieval_nodes,
     retrieval_node_counts,
@@ -116,6 +117,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
     def test_select_cases_uses_real_vault_cases_for_lexical_vault_auto(self):
         self.assertEqual(select_cases("auto", "lexical-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "embedding-vault"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("auto", "hybrid-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "current"), stage_15_cases())
         self.assertEqual(select_cases("fixture", "lexical-vault"), stage_15_cases())
         self.assertEqual(select_cases("real-vault", "current"), stage_15_real_vault_cases())
@@ -274,6 +276,45 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         }
         self.assertIn("semantic_gap", failed_categories)
 
+    def test_hybrid_retriever_merges_lexical_and_embedding_results(self):
+        memory = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+            text="Memory retrieval and embeddings.",
+        )
+        production = RetrievalNode(
+            node_id="projects/learn-how-to-bring-a-project-to-production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("learn-how-to-bring-a-project-to-production.md"),
+        )
+        contact = RetrievalNode(
+            node_id="contacts/tom-reilly",
+            title="Tom Reilly",
+            node_type="sprockets/contact",
+            path=Path("tom-reilly.md"),
+        )
+
+        results = hybrid_retrieve(
+            "memory retrieval beyond my laptop",
+            (memory, production, contact),
+            lambda _query: [production, contact],
+            limit=3,
+        )
+
+        self.assertEqual([node.node_id for node in results], [
+            "projects/learn-how-to-bring-a-project-to-production",
+            "projects/phase-3-memory-enhancement",
+            "contacts/tom-reilly",
+        ])
+
+    def test_hybrid_retriever_returns_empty_for_non_positive_limit(self):
+        results = hybrid_retrieve("memory", (), lambda _query: [], limit=0)
+
+        self.assertEqual(results, [])
+
     def test_cli_lexical_vault_mode_loads_nodes_from_configured_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -344,6 +385,50 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
 
         printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
         self.assertIn("- retriever: embedding-vault", printed)
+        self.assertIn("- case-set: real-vault", printed)
+        self.assertIn("- vault: ", printed)
+        self.assertIn("- nodes: 1", printed)
+        self.assertIn("- sprockets/project: 1", printed)
+        mock_build_index.assert_called_once()
+        self.assertTrue(mock_retrieve_by_embedding.called)
+
+    def test_cli_hybrid_vault_mode_uses_embedding_index_and_hybrid_retrieval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "projects",
+                "learn-how-to-bring-a-project-to-production",
+                "node_type: sprockets/project\n"
+                "title: Learn how to bring a project to production\n",
+                "Deployment readiness notes.",
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+                    mock_build_index.return_value = ("embedded-index",)
+                    mock_retrieve_by_embedding.return_value = [
+                        RetrievalNode(
+                            node_id="projects/learn-how-to-bring-a-project-to-production",
+                            title="Learn how to bring a project to production",
+                            node_type="sprockets/project",
+                            path=vault / "Sprockets" / "projects" / "learn-how-to-bring-a-project-to-production.md",
+                        )
+                    ]
+
+                    with patch("sys.argv", [
+                        "retrieval_eval",
+                        "--retriever",
+                        "hybrid-vault",
+                        "--vault-dir",
+                        str(vault),
+                        "--list-nodes",
+                    ]):
+                        with patch("builtins.print") as mock_print:
+                            retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- retriever: hybrid-vault", printed)
         self.assertIn("- case-set: real-vault", printed)
         self.assertIn("- vault: ", printed)
         self.assertIn("- nodes: 1", printed)
