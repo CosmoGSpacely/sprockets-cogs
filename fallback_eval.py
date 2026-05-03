@@ -155,7 +155,7 @@ def _select_cases(case_name: str = "") -> list[FallbackEvalCase]:
 def _evaluate_case(case: FallbackEvalCase, candidates: list[dict]) -> FallbackEvalResult:
     valid_count, validation_errors = _validate_candidates(candidates)
     passed, score_issues = _score_case(case, candidates)
-    issues = [*validation_errors, *score_issues]
+    issues = score_issues if score_issues else validation_errors
     return FallbackEvalResult(
         case_name=case.name,
         candidate_count=len(candidates),
