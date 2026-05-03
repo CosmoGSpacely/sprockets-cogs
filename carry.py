@@ -244,6 +244,37 @@ def preview_plan_document(plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def preview_apply_plan_document(plan: dict[str, Any]) -> str:
+    """Describe the exact vault edits a valid carry plan would make. No writes."""
+    issues = validate_plan_document(plan)
+    if issues:
+        return "Carry plan is invalid:\n" + "\n".join(f"- {issue}" for issue in issues)
+
+    items = plan["items"]
+    if not items:
+        return "No carry actions to apply."
+
+    lines = [f"{len(items)} carry action(s) would be applied"]
+    for index, item in enumerate(items, start=1):
+        source = item["source"]
+        source_ref = f"{source['date']} {Path(source['path']).name}:{source['line']}"
+        action = item["action"]
+        item_text = item["item_text"]
+        if action == "carry":
+            lines.append(f"[{index}] mark [>] in {source_ref}: {item_text}")
+            lines.append(f"    append [ ] to {item['destination_date']}: {item_text}")
+        elif action == "schedule":
+            lines.append(f"[{index}] mark [>] in {source_ref}: {item_text}")
+            lines.append(f"    schedule [ ] on {item['destination_date']}: {item_text}")
+        elif action == "drop":
+            lines.append(f"[{index}] mark [-] in {source_ref}: {item_text}")
+        elif action == "done":
+            lines.append(f"[{index}] mark [x] in {source_ref}: {item_text}")
+        else:
+            lines.append(f"[{index}] skip unchanged {source_ref}: {item_text}")
+    return "\n".join(lines)
+
+
 def validate_decision(decision: CarryDecision) -> None:
     if decision.action not in VALID_ACTIONS:
         raise ValueError(f"Unknown carry action: {decision.action!r}")
@@ -312,6 +343,11 @@ def main() -> None:
         default=None,
         help="Preview an editable JSON carry plan file. No vault writes.",
     )
+    parser.add_argument(
+        "--preview-apply",
+        default=None,
+        help="Preview exact edits from a JSON carry plan file. No vault writes.",
+    )
     args = parser.parse_args()
 
     if args.validate_plan:
@@ -324,6 +360,8 @@ def main() -> None:
         print("Carry plan is valid.")
     elif args.preview_plan:
         print(preview_plan_document(load_plan_document(Path(args.preview_plan))))
+    elif args.preview_apply:
+        print(preview_apply_plan_document(load_plan_document(Path(args.preview_apply))))
     elif args.list:
         candidates = scan_daily_notes(through_date=args.through)
         print_candidates(candidates)
