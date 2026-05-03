@@ -111,6 +111,7 @@ def find_node_by_title(
     graph: nx.DiGraph,
     hint: str,
     threshold: int = 80,
+    ambiguity_margin: int = 5,
     allowed_node_types: set[str] | None = None,
 ) -> tuple[str, str] | None:
     """
@@ -122,18 +123,27 @@ def find_node_by_title(
     """
     if not hint or not graph.nodes:
         return None
-    best_slug = None
-    best_score = 0
+    scored: list[tuple[int, str]] = []
     hint_lower = hint.lower()
     for slug, attrs in graph.nodes(data=True):
         if allowed_node_types is not None and attrs.get("node_type", "") not in allowed_node_types:
             continue
         title = attrs.get("title", slug).lower()
+        if title == hint_lower:
+            uid = attrs.get("uuid", "")
+            return slug, uid
         score = fuzz.partial_ratio(hint_lower, title)
-        if score > best_score:
-            best_score = score
-            best_slug = slug
-    if best_score >= threshold and best_slug is not None:
+        scored.append((score, slug))
+    if not scored:
+        return None
+
+    scored.sort(reverse=True)
+    best_score, best_slug = scored[0]
+    if best_score >= threshold:
+        if len(scored) > 1:
+            second_score, _ = scored[1]
+            if second_score >= threshold and best_score - second_score < ambiguity_margin:
+                return None
         uid = graph.nodes[best_slug].get("uuid", "")
         return best_slug, uid
     return None

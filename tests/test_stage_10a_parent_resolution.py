@@ -135,6 +135,37 @@ class Stage10AParentResolutionTests(unittest.TestCase):
             ("jordan-project", "project-1"),
         )
 
+    def test_find_node_by_title_declines_ambiguous_close_matches(self):
+        graph = nx.DiGraph()
+        graph.add_node(
+            "phase-2-hardening",
+            title="Phase 2 - Hardening",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+        graph.add_node(
+            "phase-2-handoff",
+            title="Phase 2 - Handoff",
+            uuid="project-2",
+            node_type="sprockets/project",
+        )
+
+        self.assertIsNone(
+            vault_graph.find_node_by_title(
+                graph,
+                "Phase 2",
+                allowed_node_types=vault_graph.HIERARCHY_PARENT_NODE_TYPES,
+            )
+        )
+        self.assertEqual(
+            vault_graph.find_node_by_title(
+                graph,
+                "Phase 2 - Hardening",
+                allowed_node_types=vault_graph.HIERARCHY_PARENT_NODE_TYPES,
+            ),
+            ("phase-2-hardening", "project-1"),
+        )
+
     def test_resolve_parents_sets_parent_from_vault_title_match(self):
         node = validate_node({
             "node_type": "sprockets/task",
@@ -495,6 +526,70 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
             result = agentic_loop.ensure_hierarchy_tasks(raw_nodes, [])
 
         self.assertEqual(result, [])
+
+    def test_apply_explicit_hierarchy_hints_links_notes(self):
+        raw_nodes = [
+            {
+                "raw": "Reflection on Phase 2 - Hardening: code guards beat prompt hopes.",
+                "type_hint": "note",
+            }
+        ]
+        classified = [
+            {
+                "node_type": "sprockets/note",
+                "title": "Code guards beat prompt hopes",
+                "item_text": "code guards beat prompt hopes",
+                "date": "2026-05-03",
+                "confidence": "high",
+            }
+        ]
+        graph = nx.DiGraph()
+        graph.add_node(
+            "phase-2-hardening",
+            title="Phase 2 - Hardening",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph):
+            result = agentic_loop.apply_explicit_hierarchy_hints(raw_nodes, classified)
+
+        self.assertEqual(result[0]["parent_hint"], "Phase 2 - Hardening")
+
+    def test_apply_explicit_hierarchy_hints_does_not_use_partial_project_names(self):
+        raw_nodes = [
+            {
+                "raw": "Reflection on Phase 2: this remains too broad.",
+                "type_hint": "note",
+            }
+        ]
+        classified = [
+            {
+                "node_type": "sprockets/note",
+                "title": "Phase 2 reflection",
+                "item_text": "this remains too broad",
+                "date": "2026-05-03",
+                "confidence": "high",
+            }
+        ]
+        graph = nx.DiGraph()
+        graph.add_node(
+            "phase-2-hardening",
+            title="Phase 2 - Hardening",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+        graph.add_node(
+            "phase-2-handoff",
+            title="Phase 2 - Handoff",
+            uuid="project-2",
+            node_type="sprockets/project",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph):
+            result = agentic_loop.apply_explicit_hierarchy_hints(raw_nodes, classified)
+
+        self.assertNotIn("parent_hint", result[0])
 
 
 if __name__ == "__main__":

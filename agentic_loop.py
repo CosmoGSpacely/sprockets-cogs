@@ -595,6 +595,50 @@ def ensure_hierarchy_tasks(raw_nodes: list[dict], classified: list[dict]) -> lis
     return result
 
 
+def apply_explicit_hierarchy_hints(raw_nodes: list[dict], classified: list[dict]) -> list[dict]:
+    """
+    Attach parent_hint to Sprockets tasks/notes when raw text names an existing
+    hierarchy target exactly. This is intentionally exact-match only; fuzzy
+    ambiguity is handled later by resolve_parents().
+    """
+    graph = build_graph()
+    hierarchy_targets = [
+        attrs.get("title", slug)
+        for slug, attrs in graph.nodes(data=True)
+        if attrs.get("node_type", "") in HIERARCHY_PARENT_NODE_TYPES
+    ]
+    hierarchy_targets = sorted(
+        [title for title in hierarchy_targets if title],
+        key=len,
+        reverse=True,
+    )
+    if not hierarchy_targets:
+        return classified
+
+    raw_text_by_type = {
+        raw.get("type_hint"): raw.get("raw", "").lower()
+        for raw in raw_nodes
+    }
+    result = list(classified)
+    for node in result:
+        if node.get("parent_hint"):
+            continue
+        if node.get("node_type") not in {"sprockets/task", "sprockets/note"}:
+            continue
+        type_hint = "note" if node.get("node_type") == "sprockets/note" else "task"
+        raw_text = raw_text_by_type.get(type_hint, "")
+        title_text = f"{node.get('title', '')} {node.get('item_text', '')}".lower()
+        haystack = f"{raw_text} {title_text}"
+        parent_title = next(
+            (title for title in hierarchy_targets if title.lower() in haystack),
+            "",
+        )
+        if parent_title:
+            node["parent_hint"] = parent_title
+            log.info("Applied hierarchy parent_hint for %s: %s", node.get("title", ""), parent_title)
+    return result
+
+
 def route_openai_fallback_to_review(
     raw_nodes: list[dict],
     context: str,
@@ -640,6 +684,7 @@ def process_input(file_path: Path) -> None:
         context    = build_context()
         raw_nodes  = extract_nodes(content)
         classified = classify_nodes(raw_nodes, context)
+        classified = apply_explicit_hierarchy_hints(raw_nodes, classified)
         classified = ensure_hierarchy_tasks(raw_nodes, classified)
         classified = ensure_cogs_companions(classified)
 
