@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import agentic_loop
 import entity_state
+import fallback_eval
 import openai_fallback
 import review
 from models import validate_node
@@ -218,6 +219,84 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertIn("429", summary)
         self.assertIn("insufficient_quota", summary)
         self.assertIn("You exceeded your current quota", summary)
+
+    def test_fallback_eval_scores_expected_candidates(self):
+        case = fallback_eval.CASES[2]
+        candidates = [
+            {
+                "node_type": "sprockets/note",
+                "title": "Review-first fallback",
+                "item_text": "review-first fallback keeps the vault safer",
+                "date": "2026-05-03",
+                "status": "active",
+                "confidence": "high",
+                "parent_hint": "Phase 2 - Hardening",
+            }
+        ]
+
+        passed, issues = fallback_eval._score_case(case, candidates)
+
+        self.assertTrue(passed)
+        self.assertEqual(issues, [])
+
+    def test_fallback_eval_flags_missing_task_companion(self):
+        case = fallback_eval.CASES[0]
+        candidates = [
+            {
+                "node_type": "sprockets/task",
+                "title": "Call Jordan",
+                "item_text": "Call Jordan",
+                "date": "2026-05-07",
+                "status": "active",
+                "confidence": "high",
+                "parent_hint": "",
+            }
+        ]
+
+        passed, issues = fallback_eval._score_case(case, candidates)
+
+        self.assertFalse(passed)
+        self.assertIn("sprockets/task candidate missing cogs/daily companion", issues)
+
+    def test_fallback_eval_selects_named_case(self):
+        selected = fallback_eval._select_cases("specific-two-day-setting")
+
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0].name, "specific-two-day-setting")
+
+    def test_fallback_eval_rejects_unknown_case(self):
+        with self.assertRaises(SystemExit):
+            fallback_eval._select_cases("not-a-case")
+
+    def test_fallback_eval_result_summarizes_valid_candidates(self):
+        case = fallback_eval.CASES[0]
+        candidates = [
+            {
+                "node_type": "sprockets/task",
+                "title": "Call Jordan",
+                "item_text": "Call Jordan",
+                "date": "2026-05-07",
+                "status": "active",
+                "confidence": "high",
+                "parent_hint": "",
+            },
+            {
+                "node_type": "cogs/daily",
+                "title": "Call Jordan",
+                "item_text": "Call Jordan",
+                "date": "2026-05-07",
+                "status": "active",
+                "confidence": "high",
+                "parent_hint": "",
+            },
+        ]
+
+        result = fallback_eval._evaluate_case(case, candidates)
+
+        self.assertEqual(result.case_name, "relative-date-task")
+        self.assertEqual(result.candidate_count, 2)
+        self.assertEqual(result.valid_count, 2)
+        self.assertTrue(result.passed)
 
     def test_openai_fallback_skips_when_disabled(self):
         with patch.object(agentic_loop, "openai_fallback_enabled", return_value=False), \
