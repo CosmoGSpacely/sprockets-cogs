@@ -100,6 +100,9 @@ def run_live_openai() -> None:
             case.context,
             case.reason,
         )
+        if not candidates:
+            print("No candidates returned. OpenAI fallback may be unavailable, out of quota, or declined.")
+            continue
         valid_count, errors = _validate_candidates(candidates)
         print(json.dumps(candidates, indent=2))
         print(f"valid candidates: {valid_count}/{len(candidates)}")

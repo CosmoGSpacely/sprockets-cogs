@@ -202,6 +202,23 @@ class Stage135HardeningTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "OpenAI fallback refused"):
             openai_fallback._response_text(Response())
 
+    def test_openai_error_summary_includes_quota_code_without_traceback_noise(self):
+        class QuotaError(Exception):
+            status_code = 429
+            body = {
+                "error": {
+                    "message": "You exceeded your current quota",
+                    "type": "insufficient_quota",
+                    "code": "insufficient_quota",
+                }
+            }
+
+        summary = openai_fallback._openai_error_summary(QuotaError("nope"))
+
+        self.assertIn("429", summary)
+        self.assertIn("insufficient_quota", summary)
+        self.assertIn("You exceeded your current quota", summary)
+
     def test_openai_fallback_skips_when_disabled(self):
         with patch.object(agentic_loop, "openai_fallback_enabled", return_value=False), \
              patch.object(agentic_loop, "classify_nodes_with_openai_fallback") as fallback:
