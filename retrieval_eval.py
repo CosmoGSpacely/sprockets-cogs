@@ -130,6 +130,15 @@ def evaluate_retriever(
     return RetrievalSuiteResult(tuple(results))
 
 
+def retrieval_node_counts(nodes: Iterable[RetrievalNode]) -> dict[str, int]:
+    """Return node counts by node_type for scan summaries."""
+
+    counts: dict[str, int] = {}
+    for node in nodes:
+        counts[node.node_type] = counts.get(node.node_type, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def _tokens(text: str) -> set[str]:
     return {token for token in _TOKEN_RE.findall(text.lower()) if token not in _STOPWORDS}
 
@@ -410,30 +419,56 @@ def main() -> None:
     )
     parser.add_argument(
         "--retriever",
-        choices=("current", "lexical-fixture"),
+        choices=("current", "lexical-fixture", "lexical-vault"),
         default="current",
         help="Retriever to evaluate. Defaults to the current production stub.",
+    )
+    parser.add_argument(
+        "--vault-dir",
+        type=Path,
+        default=Path("/home/cosmo/vault"),
+        help="Vault directory for lexical-vault mode. Defaults to /home/cosmo/vault.",
+    )
+    parser.add_argument(
+        "--list-nodes",
+        action="store_true",
+        help="Print a read-only retrieval-node inventory for lexical-vault mode.",
     )
     args = parser.parse_args()
 
     if args.retriever == "lexical-fixture":
         fixture_nodes = stage_15_fixture_nodes()
         retriever = lambda query: lexical_retrieve(query, fixture_nodes)
+        scan_nodes = fixture_nodes
+    elif args.retriever == "lexical-vault":
+        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
+        retriever = lambda query: lexical_retrieve(query, scan_nodes)
     else:
         import agentic_loop
 
         retriever = agentic_loop.retrieve_relevant_nodes
+        scan_nodes = ()
 
     result = evaluate_retriever(stage_15_cases(), retriever)
 
     print("Stage 15 retrieval readiness")
     print(f"- retriever: {args.retriever}")
+    if args.retriever == "lexical-vault":
+        print(f"- vault: {args.vault_dir}")
+    if scan_nodes:
+        print(f"- nodes: {len(scan_nodes)}")
     print(f"- passed: {result.passed_count}/{result.total_count}")
     print(f"- status: {'pass' if result.passed else 'baseline'}")
+    if args.list_nodes and scan_nodes:
+        print("\nNode inventory")
+        for node_type, count in retrieval_node_counts(scan_nodes).items():
+            print(f"- {node_type or '(unknown)'}: {count}")
     for case_result in result.results:
         marker = "pass" if case_result.passed else "miss"
         print(f"\n{case_result.case.name}: {marker}")
         print(f"- category: {case_result.case.category}")
+        if case_result.retrieved_ids:
+            print("- retrieved: " + ", ".join(case_result.retrieved_ids))
         if case_result.missing_ids:
             print("- missing: " + ", ".join(sorted(case_result.missing_ids)))
         if case_result.forbidden_ids:
