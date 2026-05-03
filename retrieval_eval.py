@@ -514,7 +514,7 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
         return stage_15_cases()
     if case_set == "real-vault":
         return stage_15_real_vault_cases()
-    if retriever_name == "lexical-vault":
+    if retriever_name in {"lexical-vault", "embedding-vault"}:
         return stage_15_real_vault_cases()
     return stage_15_cases()
 
@@ -532,7 +532,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--retriever",
-        choices=("current", "lexical-fixture", "lexical-vault"),
+        choices=("current", "lexical-fixture", "lexical-vault", "embedding-vault"),
         default="current",
         help="Retriever to evaluate. Defaults to the current production stub.",
     )
@@ -540,18 +540,18 @@ def main() -> None:
         "--vault-dir",
         type=Path,
         default=Path("/home/cosmo/vault"),
-        help="Vault directory for lexical-vault mode. Defaults to /home/cosmo/vault.",
+        help="Vault directory for vault-backed retrievers. Defaults to /home/cosmo/vault.",
     )
     parser.add_argument(
         "--case-set",
         choices=("auto", "fixture", "real-vault"),
         default="auto",
-        help="Benchmark cases to run. Auto uses real-vault cases for lexical-vault and fixture cases otherwise.",
+        help="Benchmark cases to run. Auto uses real-vault cases for vault-backed retrievers and fixture cases otherwise.",
     )
     parser.add_argument(
         "--list-nodes",
         action="store_true",
-        help="Print a read-only retrieval-node inventory for lexical-vault mode.",
+        help="Print a read-only retrieval-node inventory for vault-backed retrievers.",
     )
     parser.add_argument(
         "--show-targets",
@@ -567,6 +567,12 @@ def main() -> None:
     elif args.retriever == "lexical-vault":
         scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
         retriever = lambda query: lexical_retrieve(query, scan_nodes)
+    elif args.retriever == "embedding-vault":
+        from embeddings import build_embedding_index, retrieve_by_embedding
+
+        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
+        index = build_embedding_index(scan_nodes)
+        retriever = lambda query: retrieve_by_embedding(query, index)
     else:
         import agentic_loop
 
@@ -578,8 +584,8 @@ def main() -> None:
 
     print("Stage 15 retrieval readiness")
     print(f"- retriever: {args.retriever}")
-    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever == 'lexical-vault' else 'fixture')}")
-    if args.retriever == "lexical-vault":
+    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in {'lexical-vault', 'embedding-vault'} else 'fixture')}")
+    if args.retriever in {"lexical-vault", "embedding-vault"}:
         print(f"- vault: {args.vault_dir}")
     if scan_nodes:
         print(f"- nodes: {len(scan_nodes)}")

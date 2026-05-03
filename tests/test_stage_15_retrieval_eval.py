@@ -115,6 +115,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
 
     def test_select_cases_uses_real_vault_cases_for_lexical_vault_auto(self):
         self.assertEqual(select_cases("auto", "lexical-vault"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("auto", "embedding-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "current"), stage_15_cases())
         self.assertEqual(select_cases("fixture", "lexical-vault"), stage_15_cases())
         self.assertEqual(select_cases("real-vault", "current"), stage_15_real_vault_cases())
@@ -305,6 +306,50 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- sprockets/contact: 1", printed)
         self.assertIn("Target inventory", printed)
         self.assertIn("contacts/tom-reilly", printed)
+
+    def test_cli_embedding_vault_mode_uses_embedding_index_without_production_wiring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "projects",
+                "learn-how-to-bring-a-project-to-production",
+                "node_type: sprockets/project\n"
+                "title: Learn how to bring a project to production\n",
+                "Deployment readiness notes.",
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+                    mock_build_index.return_value = ("embedded-index",)
+                    mock_retrieve_by_embedding.return_value = [
+                        RetrievalNode(
+                            node_id="projects/learn-how-to-bring-a-project-to-production",
+                            title="Learn how to bring a project to production",
+                            node_type="sprockets/project",
+                            path=vault / "Sprockets" / "projects" / "learn-how-to-bring-a-project-to-production.md",
+                        )
+                    ]
+
+                    with patch("sys.argv", [
+                        "retrieval_eval",
+                        "--retriever",
+                        "embedding-vault",
+                        "--vault-dir",
+                        str(vault),
+                        "--list-nodes",
+                    ]):
+                        with patch("builtins.print") as mock_print:
+                            retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- retriever: embedding-vault", printed)
+        self.assertIn("- case-set: real-vault", printed)
+        self.assertIn("- vault: ", printed)
+        self.assertIn("- nodes: 1", printed)
+        self.assertIn("- sprockets/project: 1", printed)
+        mock_build_index.assert_called_once()
+        self.assertTrue(mock_retrieve_by_embedding.called)
 
 
 if __name__ == "__main__":
