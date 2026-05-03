@@ -248,6 +248,33 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             self.assertIn("drop", preview)
             self.assertIn("Archive receipt", preview)
 
+    def test_preview_apply_plan_document_describes_exact_edits_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            original = (
+                note.read_text()
+                + "- [ ] Call Jordan\n"
+                  "- [ ] Archive receipt\n"
+                  "- [ ] Finish report\n"
+            )
+            note.write_text(original)
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+            plan["items"][1]["action"] = "drop"
+            plan["items"][1]["destination_date"] = ""
+            plan["items"][2]["action"] = "done"
+            plan["items"][2]["destination_date"] = ""
+
+            preview = carry.preview_apply_plan_document(plan)
+
+            self.assertIn("3 carry action", preview)
+            self.assertIn("mark [>] in 2026-05-01", preview)
+            self.assertIn("append [ ] to 2026-05-04: Call Jordan", preview)
+            self.assertIn("mark [-] in 2026-05-01", preview)
+            self.assertIn("mark [x] in 2026-05-01", preview)
+            self.assertEqual(note.read_text(), original)
+
 
 if __name__ == "__main__":
     unittest.main()
