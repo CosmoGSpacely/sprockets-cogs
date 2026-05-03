@@ -107,6 +107,52 @@ def build_graph(vault_dir: Path = VAULT_DIR) -> nx.DiGraph:
     return g
 
 
+def _scored_title_matches(
+    graph: nx.DiGraph,
+    hint: str,
+    allowed_node_types: set[str] | None = None,
+) -> list[tuple[int, str]]:
+    if not hint or not graph.nodes:
+        return []
+    scored: list[tuple[int, str]] = []
+    hint_lower = hint.lower()
+    for slug, attrs in graph.nodes(data=True):
+        if allowed_node_types is not None and attrs.get("node_type", "") not in allowed_node_types:
+            continue
+        title = attrs.get("title", slug).lower()
+        if title == hint_lower:
+            return [(100, slug)]
+        score = fuzz.partial_ratio(hint_lower, title)
+        scored.append((score, slug))
+
+    scored.sort(reverse=True)
+    return scored
+
+
+def ambiguous_title_matches(
+    graph: nx.DiGraph,
+    hint: str,
+    threshold: int = 80,
+    ambiguity_margin: int = 5,
+    allowed_node_types: set[str] | None = None,
+) -> list[tuple[str, str, int]]:
+    """Return close competing title matches for a non-exact hint."""
+    scored = _scored_title_matches(graph, hint, allowed_node_types)
+    if len(scored) < 2:
+        return []
+    best_score, best_slug = scored[0]
+    second_score, _ = scored[1]
+    if best_score < threshold or second_score < threshold:
+        return []
+    if best_score - second_score >= ambiguity_margin:
+        return []
+    return [
+        (slug, graph.nodes[slug].get("title", slug), score)
+        for score, slug in scored
+        if score >= threshold and best_score - score < ambiguity_margin
+    ]
+
+
 def find_node_by_title(
     graph: nx.DiGraph,
     hint: str,
@@ -121,29 +167,20 @@ def find_node_by_title(
     Threshold 80 is looser than the dedup threshold (85) — parent hints
     are often partial titles, not exact matches.
     """
-    if not hint or not graph.nodes:
-        return None
-    scored: list[tuple[int, str]] = []
-    hint_lower = hint.lower()
-    for slug, attrs in graph.nodes(data=True):
-        if allowed_node_types is not None and attrs.get("node_type", "") not in allowed_node_types:
-            continue
-        title = attrs.get("title", slug).lower()
-        if title == hint_lower:
-            uid = attrs.get("uuid", "")
-            return slug, uid
-        score = fuzz.partial_ratio(hint_lower, title)
-        scored.append((score, slug))
+    scored = _scored_title_matches(graph, hint, allowed_node_types)
     if not scored:
         return None
 
-    scored.sort(reverse=True)
     best_score, best_slug = scored[0]
-    if best_score >= threshold:
-        if len(scored) > 1:
-            second_score, _ = scored[1]
-            if second_score >= threshold and best_score - second_score < ambiguity_margin:
-                return None
+    if best_score == 100 or best_score >= threshold:
+        if ambiguous_title_matches(
+            graph,
+            hint,
+            threshold,
+            ambiguity_margin,
+            allowed_node_types,
+        ):
+            return None
         uid = graph.nodes[best_slug].get("uuid", "")
         return best_slug, uid
     return None

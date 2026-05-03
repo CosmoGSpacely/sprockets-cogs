@@ -22,7 +22,12 @@ from openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
 )
-from vault_graph import HIERARCHY_PARENT_NODE_TYPES, build_graph, find_node_by_title
+from vault_graph import (
+    HIERARCHY_PARENT_NODE_TYPES,
+    ambiguous_title_matches,
+    build_graph,
+    find_node_by_title,
+)
 from prompts import (
     CLASSIFY_EXAMPLES, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM,
     EXTRACT_EXAMPLES, EXTRACT_SCHEMA, EXTRACT_SYSTEM,
@@ -639,6 +644,40 @@ def apply_explicit_hierarchy_hints(raw_nodes: list[dict], classified: list[dict]
     return result
 
 
+def route_ambiguous_hierarchy_parent_hints_to_review(nodes: list[NodeBase]) -> list[NodeBase]:
+    """
+    Route valid nodes with ambiguous hierarchy parent_hint values to review/.
+    Ambiguous is better than wrong: these nodes should wait for human choice
+    instead of being written unlinked or attached to a guess.
+    """
+    graph = build_graph()
+    if not graph.nodes:
+        return nodes
+
+    keep: list[NodeBase] = []
+    for node in nodes:
+        hint = getattr(node, "parent_hint", "")
+        if not hint or getattr(node, "parent", ""):
+            keep.append(node)
+            continue
+        matches = ambiguous_title_matches(
+            graph,
+            hint,
+            allowed_node_types=HIERARCHY_PARENT_NODE_TYPES,
+        )
+        if not matches:
+            keep.append(node)
+            continue
+
+        match_titles = ", ".join(title for _, title, _ in matches)
+        write_to_review(
+            node.model_dump(mode="json"),
+            f"ambiguous hierarchy parent_hint: {hint!r} matched {match_titles}",
+        )
+        log.warning("Routed ambiguous hierarchy parent_hint to review: %s", hint)
+    return keep
+
+
 def route_openai_fallback_to_review(
     raw_nodes: list[dict],
     context: str,
@@ -714,6 +753,7 @@ def process_input(file_path: Path) -> None:
                 for _, raw, reason in failed:
                     write_to_review(raw, f"retry failed: {reason}")
 
+        valid_nodes = route_ambiguous_hierarchy_parent_hints_to_review(valid_nodes)
         resolved = resolve_parents(valid_nodes)
         seen: set = set()
         for node in resolved:
