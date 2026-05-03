@@ -436,6 +436,89 @@ def stage_15_cases() -> tuple[RetrievalCase, ...]:
     )
 
 
+def stage_15_real_vault_cases() -> tuple[RetrievalCase, ...]:
+    """Return readiness cases grounded in the current real vault contents."""
+
+    return (
+        RetrievalCase(
+            name="named-contact-followup",
+            category="named_entity",
+            query="Call Tom Reilly at GlobalTech about the invoice.",
+            expected_ids=frozenset({
+                "contacts/tom-reilly",
+                "entities/globaltech",
+            }),
+            avoid_ids=frozenset({
+                "contacts/sandra-cho",
+                "entities/vertex-industries",
+            }),
+            reason="Named people and organizations should retrieve the right contact/entity context.",
+        ),
+        RetrievalCase(
+            name="project-scoped-task",
+            category="project_scope",
+            query="Add a task for the Phase 3 memory work to evaluate retrieval quality.",
+            expected_ids=frozenset({"projects/phase-3-memory-enhancement"}),
+            avoid_ids=frozenset({"projects/phase-2-hardening"}),
+            reason="Project-scoped work should retrieve the active memory project, not the completed hardening phase.",
+        ),
+        RetrievalCase(
+            name="hierarchy-parent-hint",
+            category="hierarchy",
+            query="This belongs under Build Sprockets-Cogs, probably the memory phase.",
+            expected_ids=frozenset({
+                "goals/build-sprockets-cogs",
+                "projects/phase-3-memory-enhancement",
+            }),
+            reason="Hierarchy context should include both the goal and the relevant project.",
+        ),
+        RetrievalCase(
+            name="recent-cogs-history",
+            category="recent_cogs",
+            query="Continue the note from today about hierarchy context tests.",
+            expected_ids=frozenset({"daily/2026-05-03"}),
+            avoid_ids=frozenset({"daily/2026-04-23"}),
+            reason="Recent daily context should be available without reviving older daily notes.",
+        ),
+        RetrievalCase(
+            name="stale-note-rejection",
+            category="staleness",
+            query="Use the weekly review template idea for review planning.",
+            expected_ids=frozenset({"notes/idea-build-a-weekly-review-template"}),
+            avoid_ids=frozenset({"notes/reflection-on-phase-2---hierarchy"}),
+            reason="Retrieval should prefer the current review-template note over unrelated hierarchy reflections.",
+        ),
+        RetrievalCase(
+            name="contamination-resistance",
+            category="contamination",
+            query="Capture a reflection on Phase 2 hierarchy work.",
+            expected_ids=frozenset({"notes/reflection-on-phase-2---hierarchy"}),
+            avoid_ids=frozenset({"tasks/add-hierarchy-context-tests-for-phase-2---hardening"}),
+            reason="Retrieval should find the reflection note without pulling task text in as prose to copy.",
+        ),
+        RetrievalCase(
+            name="semantic-language-gap",
+            category="semantic_gap",
+            query="What should I study so this can run beyond my laptop?",
+            expected_ids=frozenset({"projects/learn-how-to-bring-a-project-to-production"}),
+            avoid_ids=frozenset({"notes/follow-up-with-ben-hartley"}),
+            reason="This real-vault case should remain difficult for lexical retrieval and useful for embeddings.",
+        ),
+    )
+
+
+def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...]:
+    """Choose fixture or real-vault cases for a benchmark run."""
+
+    if case_set == "fixture":
+        return stage_15_cases()
+    if case_set == "real-vault":
+        return stage_15_real_vault_cases()
+    if retriever_name == "lexical-vault":
+        return stage_15_real_vault_cases()
+    return stage_15_cases()
+
+
 def main() -> None:
     """Print the current retrieval baseline without failing the build."""
 
@@ -458,6 +541,12 @@ def main() -> None:
         type=Path,
         default=Path("/home/cosmo/vault"),
         help="Vault directory for lexical-vault mode. Defaults to /home/cosmo/vault.",
+    )
+    parser.add_argument(
+        "--case-set",
+        choices=("auto", "fixture", "real-vault"),
+        default="auto",
+        help="Benchmark cases to run. Auto uses real-vault cases for lexical-vault and fixture cases otherwise.",
     )
     parser.add_argument(
         "--list-nodes",
@@ -484,10 +573,12 @@ def main() -> None:
         retriever = agentic_loop.retrieve_relevant_nodes
         scan_nodes = ()
 
-    result = evaluate_retriever(stage_15_cases(), retriever)
+    cases = select_cases(args.case_set, args.retriever)
+    result = evaluate_retriever(cases, retriever)
 
     print("Stage 15 retrieval readiness")
     print(f"- retriever: {args.retriever}")
+    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever == 'lexical-vault' else 'fixture')}")
     if args.retriever == "lexical-vault":
         print(f"- vault: {args.vault_dir}")
     if scan_nodes:
@@ -500,7 +591,7 @@ def main() -> None:
             print(f"- {node_type or '(unknown)'}: {count}")
     if args.show_targets and scan_nodes:
         print("\nTarget inventory")
-        for status in evaluate_target_presence(stage_15_cases(), scan_nodes):
+        for status in evaluate_target_presence(cases, scan_nodes):
             print(f"\n{status.case.name}")
             if status.present_expected_ids:
                 print("- present expected: " + ", ".join(sorted(status.present_expected_ids)))
