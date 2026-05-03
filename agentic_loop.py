@@ -32,6 +32,7 @@ from prompts import (
     CLASSIFY_EXAMPLES, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM,
     EXTRACT_EXAMPLES, EXTRACT_SCHEMA, EXTRACT_SYSTEM,
 )
+from vault import append_cogs_item_text, ensure_daily_note
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 MODEL = "qwen3.5:9b-32k-cosmo"
@@ -100,29 +101,19 @@ def _find_duplicate(title: str, folder: Path, threshold: int = 85) -> Path | Non
 
 def _ensure_daily_note(date_iso: str) -> Path:
     """Return the path to a Cogs daily note, creating it if absent."""
-    dt      = datetime.strptime(date_iso, "%Y-%m-%d")
-    heading = dt.strftime("%a %d %b %Y")
-    path    = DAILY_DIR / f"{heading}.md"
-    if not path.exists():
-        DAILY_DIR.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            f"---\nnode_type: cogs/daily\ndate: {date_iso}\ntags: [cogs/daily]\n---\n\n"
-            f"# {heading}\n\n"
-        )
-        log.info("Created daily note: %s", path.name)
+    path = ensure_daily_note(date_iso, DAILY_DIR)
+    if path.exists():
+        log.debug("Daily note ready: %s", path.name)
     return path
 
 
 def _append_cogs_item(node: NodeBase) -> None:
     """Append a Cogs daily item to the correct daily note."""
-    note_path = _ensure_daily_note(node.date)
-    existing = note_path.read_text()
-    if any(f"{state} {node.item_text}" in existing
-           for state in ["- [ ]", "- [x]", "- [>]", "- [-]"]):
+    note_path = ensure_daily_note(node.date, DAILY_DIR)
+    appended = append_cogs_item_text(node.date, node.item_text, DAILY_DIR)
+    if not appended:
         log.info("Cogs item already in %s, skipping: %s", note_path.name, node.item_text)
         return
-    with note_path.open("a") as f:
-        f.write(f"- [ ] {node.item_text}\n")
     log.info("Appended to %s: %s", note_path.name, node.item_text)
 
 
