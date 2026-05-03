@@ -377,6 +377,125 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
                 issues,
             )
 
+    def test_build_hierarchy_context_lists_frontmatter_titles_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "areas",
+                "learn-agentic-ai",
+                "node_type: sprockets/area\n"
+                "uuid: area-1\n"
+                "title: Learn Agentic AI\n",
+            ).write_text(
+                "---\n"
+                "node_type: sprockets/area\n"
+                "uuid: area-1\n"
+                "title: Learn Agentic AI\n"
+                "---\n\n"
+                "Private reflection text should not enter classifier context.\n"
+            )
+            write_node(
+                vault,
+                "goals",
+                "build-sprockets-cogs",
+                "node_type: sprockets/goal\n"
+                "uuid: goal-1\n"
+                "title: Build Sprockets-Cogs\n"
+                "parent: [[learn-agentic-ai]]\n",
+            )
+            write_node(
+                vault,
+                "projects",
+                "phase-2-hardening",
+                "node_type: sprockets/project\n"
+                "uuid: project-1\n"
+                "title: Phase 2 - Hardening\n"
+                "parent: [[build-sprockets-cogs]]\n",
+            )
+
+            with patch.object(agentic_loop, "build_graph", return_value=vault_graph.build_graph(vault)):
+                lines = agentic_loop._build_hierarchy_context()
+
+            self.assertEqual(
+                lines,
+                [
+                    "Area: Learn Agentic AI",
+                    "Goal: Build Sprockets-Cogs (under Learn Agentic AI)",
+                    "Project: Phase 2 - Hardening (under Build Sprockets-Cogs)",
+                ],
+            )
+            self.assertNotIn("Private reflection", "\n".join(lines))
+
+    def test_build_context_includes_known_hierarchy_parent_targets(self):
+        with patch.object(agentic_loop, "DAILY_DIR", Path("/tmp/no-such-daily-dir")), \
+             patch.object(agentic_loop, "get_entities_by_tier", return_value=[]), \
+             patch.object(
+                 agentic_loop,
+                 "_build_hierarchy_context",
+                 return_value=["Project: Phase 2 - Hardening (under Build Sprockets-Cogs)"],
+             ):
+            context = agentic_loop.build_context()
+
+        self.assertIn("Already in today's note: (none)", context)
+        self.assertIn("Known hierarchy parent targets:", context)
+        self.assertIn("Project: Phase 2 - Hardening", context)
+
+    def test_ensure_hierarchy_tasks_adds_project_scoped_task(self):
+        raw_nodes = [
+            {
+                "raw": "Need to write live verification notes for Phase 2 - Hardening",
+                "type_hint": "task",
+            }
+        ]
+        classified = [
+            {
+                "node_type": "cogs/daily",
+                "title": "2 verification notes for Phase 2 - Hardening",
+                "item_text": "2 verification notes for Phase 2 - Hardening",
+                "date": "2026-04-22",
+                "confidence": "high",
+            }
+        ]
+        graph = nx.DiGraph()
+        graph.add_node(
+            "phase-2-hardening",
+            title="Phase 2 - Hardening",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph), \
+             patch.object(agentic_loop, "datetime") as fake_datetime:
+            fake_datetime.now.return_value.strftime.return_value = "2026-05-03"
+            result = agentic_loop.ensure_hierarchy_tasks(raw_nodes, classified)
+
+        self.assertEqual(len(result), 2)
+        task = result[1]
+        self.assertEqual(task["node_type"], "sprockets/task")
+        self.assertEqual(task["title"], "Write live verification notes for Phase 2 - Hardening")
+        self.assertEqual(task["parent_hint"], "Phase 2 - Hardening")
+
+    def test_ensure_hierarchy_tasks_does_not_invent_missing_parent(self):
+        raw_nodes = [
+            {
+                "raw": "Need to write notes for Missing Project",
+                "type_hint": "task",
+            }
+        ]
+        graph = nx.DiGraph()
+        graph.add_node(
+            "phase-2-hardening",
+            title="Phase 2 - Hardening",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph):
+            result = agentic_loop.ensure_hierarchy_tasks(raw_nodes, [])
+
+        self.assertEqual(result, [])
+
 
 if __name__ == "__main__":
     unittest.main()
