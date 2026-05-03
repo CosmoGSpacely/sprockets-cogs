@@ -217,6 +217,40 @@ def lexical_retrieve(
     return [node for score, _, node in ranked if score >= cutoff][:limit]
 
 
+def _rank_fusion(
+    ranked_groups: Iterable[Iterable[RetrievalNode]],
+    limit: int = 5,
+) -> list[RetrievalNode]:
+    """Merge ranked retrieval results with deterministic reciprocal-rank fusion."""
+
+    if limit < 1:
+        return []
+
+    by_id: dict[str, RetrievalNode] = {}
+    scores: dict[str, float] = {}
+    for group in ranked_groups:
+        for rank, node in enumerate(group, start=1):
+            by_id.setdefault(node.node_id, node)
+            scores[node.node_id] = scores.get(node.node_id, 0.0) + (1.0 / rank)
+
+    ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
+    return [by_id[node_id] for node_id, _ in ranked[:limit]]
+
+
+def hybrid_retrieve(
+    query: str,
+    nodes: Iterable[RetrievalNode],
+    embedding_retriever: Callable[[str], Iterable[RetrievalNode]],
+    limit: int = 5,
+) -> list[RetrievalNode]:
+    """Combine lexical and embedding retrieval without production wiring."""
+
+    node_tuple = tuple(nodes)
+    lexical_results = lexical_retrieve(query, node_tuple, limit=limit)
+    embedding_results = tuple(embedding_retriever(query))
+    return _rank_fusion((lexical_results, embedding_results), limit=limit)
+
+
 def _daily_node_id(path: Path) -> str:
     try:
         date = datetime.strptime(path.stem, "%a %d %b %Y").strftime("%Y-%m-%d")
@@ -514,7 +548,7 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
         return stage_15_cases()
     if case_set == "real-vault":
         return stage_15_real_vault_cases()
-    if retriever_name in {"lexical-vault", "embedding-vault"}:
+    if retriever_name in {"lexical-vault", "embedding-vault", "hybrid-vault"}:
         return stage_15_real_vault_cases()
     return stage_15_cases()
 
@@ -532,7 +566,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--retriever",
-        choices=("current", "lexical-fixture", "lexical-vault", "embedding-vault"),
+        choices=("current", "lexical-fixture", "lexical-vault", "embedding-vault", "hybrid-vault"),
         default="current",
         help="Retriever to evaluate. Defaults to the current production stub.",
     )
@@ -573,6 +607,16 @@ def main() -> None:
         scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
         index = build_embedding_index(scan_nodes)
         retriever = lambda query: retrieve_by_embedding(query, index)
+    elif args.retriever == "hybrid-vault":
+        from embeddings import build_embedding_index, retrieve_by_embedding
+
+        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
+        index = build_embedding_index(scan_nodes)
+        retriever = lambda query: hybrid_retrieve(
+            query,
+            scan_nodes,
+            lambda embedding_query: retrieve_by_embedding(embedding_query, index),
+        )
     else:
         import agentic_loop
 
@@ -584,8 +628,8 @@ def main() -> None:
 
     print("Stage 15 retrieval readiness")
     print(f"- retriever: {args.retriever}")
-    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in {'lexical-vault', 'embedding-vault'} else 'fixture')}")
-    if args.retriever in {"lexical-vault", "embedding-vault"}:
+    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in {'lexical-vault', 'embedding-vault', 'hybrid-vault'} else 'fixture')}")
+    if args.retriever in {"lexical-vault", "embedding-vault", "hybrid-vault"}:
         print(f"- vault: {args.vault_dir}")
     if scan_nodes:
         print(f"- nodes: {len(scan_nodes)}")
