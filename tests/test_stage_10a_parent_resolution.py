@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import agentic_loop
+import inspect_hierarchy
 import networkx as nx
 import vault_graph
 from models import validate_node
@@ -223,6 +224,158 @@ class Stage10AParentResolutionTests(unittest.TestCase):
             resolved = agentic_loop.resolve_parents([node])
 
         self.assertEqual(resolved[0].parent, "")
+
+
+class Stage10BHierarchyReadinessTests(unittest.TestCase):
+    def test_existing_hierarchy_chain_is_graph_visible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "areas",
+                "career",
+                "node_type: sprockets/area\n"
+                "uuid: area-1\n"
+                "title: Career\n",
+            )
+            write_node(
+                vault,
+                "goals",
+                "bar-exam",
+                "node_type: sprockets/goal\n"
+                "uuid: goal-1\n"
+                "title: Pass the bar exam\n"
+                "parent: [[career]]\n",
+            )
+            write_node(
+                vault,
+                "projects",
+                "study-plan-q2",
+                "node_type: sprockets/project\n"
+                "uuid: project-1\n"
+                "title: Study plan Q2\n"
+                "parent: [[bar-exam]]\n",
+            )
+            write_node(
+                vault,
+                "tasks",
+                "read-chapters-4-6",
+                "node_type: sprockets/task\n"
+                "uuid: task-1\n"
+                "title: Read chapters 4-6\n"
+                "parent: [[study-plan-q2]]\n",
+            )
+
+            graph = vault_graph.build_graph(vault)
+
+            self.assertEqual(graph.nodes["career"]["node_type"], "sprockets/area")
+            self.assertEqual(graph.nodes["bar-exam"]["node_type"], "sprockets/goal")
+            self.assertEqual(graph.nodes["study-plan-q2"]["node_type"], "sprockets/project")
+            self.assertTrue(graph.has_edge("bar-exam", "career"))
+            self.assertTrue(graph.has_edge("study-plan-q2", "bar-exam"))
+            self.assertTrue(graph.has_edge("read-chapters-4-6", "study-plan-q2"))
+
+    def test_task_parent_hint_resolves_to_existing_project(self):
+        node = validate_node({
+            "node_type": "sprockets/task",
+            "title": "Read chapters 4-6",
+            "parent_hint": "Study plan Q2",
+            "confidence": "high",
+        })
+        graph = nx.DiGraph()
+        graph.add_node(
+            "study-plan-q2",
+            title="Study plan Q2",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph):
+            resolved = agentic_loop.resolve_parents([node])
+
+        self.assertEqual(resolved[0].parent, "[[study-plan-q2]]")
+
+    def test_project_can_link_directly_under_area_when_no_goal_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "areas",
+                "career",
+                "node_type: sprockets/area\n"
+                "uuid: area-1\n"
+                "title: Career\n",
+            )
+            write_node(
+                vault,
+                "projects",
+                "portfolio-refresh",
+                "node_type: sprockets/project\n"
+                "uuid: project-1\n"
+                "title: Portfolio refresh\n"
+                "parent: [[career]]\n",
+            )
+
+            graph = vault_graph.build_graph(vault)
+
+            self.assertTrue(graph.has_edge("portfolio-refresh", "career"))
+
+    def test_missing_hierarchy_target_leaves_node_unlinked(self):
+        node = validate_node({
+            "node_type": "sprockets/task",
+            "title": "Draft proposal",
+            "parent_hint": "Nonexistent client project",
+            "confidence": "high",
+        })
+        graph = nx.DiGraph()
+        graph.add_node(
+            "operations",
+            title="Operations",
+            uuid="area-1",
+            node_type="sprockets/area",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph):
+            resolved = agentic_loop.resolve_parents([node])
+
+        self.assertEqual(resolved[0].parent, "")
+
+    def test_hierarchy_inspection_reports_empty_hierarchy_without_issues(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            lines, issues = inspect_hierarchy.inspect_hierarchy(vault)
+
+            self.assertIn("No hierarchy nodes found.", lines)
+            self.assertEqual(issues, [])
+
+    def test_hierarchy_inspection_flags_invalid_parent_type(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "projects",
+                "study-plan-q2",
+                "node_type: sprockets/project\n"
+                "uuid: project-1\n"
+                "title: Study plan Q2\n",
+            )
+            write_node(
+                vault,
+                "goals",
+                "bar-exam",
+                "node_type: sprockets/goal\n"
+                "uuid: goal-1\n"
+                "title: Pass the bar exam\n"
+                "parent: [[study-plan-q2]]\n",
+            )
+
+            _, issues = inspect_hierarchy.inspect_hierarchy(vault)
+
+            self.assertIn("study-plan-q2: sprockets/project has no parent", issues)
+            self.assertIn(
+                "bar-exam: sprockets/goal parent study-plan-q2 has invalid type sprockets/project",
+                issues,
+            )
 
 
 if __name__ == "__main__":

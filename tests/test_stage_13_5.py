@@ -228,7 +228,9 @@ class Stage135HardeningTests(unittest.TestCase):
             self.assertIn('"node_type": "sprockets/task"', review_text)
             self.assertIn('"node_type": "cogs/daily"', review_text)
             self.assertTrue((archive_dir / "low.input").exists())
-            self.assertIn("Processed 0 node(s)", (daily_dir / "Sat 02 May 2026.md").read_text())
+            daily_files = list(daily_dir.glob("*.md"))
+            self.assertEqual(len(daily_files), 1)
+            self.assertIn("Processed 0 node(s)", daily_files[0].read_text())
 
     def test_find_duplicate_uses_fuzzy_slug_match(self):
         with tempfile.TemporaryDirectory() as tmp:
