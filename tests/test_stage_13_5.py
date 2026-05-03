@@ -188,7 +188,23 @@ class Stage135HardeningTests(unittest.TestCase):
 
         self.assertIn("Reason: confidence: low", message)
         self.assertIn("review candidate", message)
+        self.assertIn("never leave item_text empty", message)
         self.assertIn("Call Jordan", message)
+
+    def test_openai_fallback_normalizes_daily_item_text_from_title(self):
+        nodes = openai_fallback._normalize_fallback_nodes([
+            {
+                "node_type": "cogs/daily",
+                "title": "WFH",
+                "item_text": "",
+                "date": "2026-05-04",
+                "status": "active",
+                "confidence": "high",
+                "parent_hint": "",
+            }
+        ])
+
+        self.assertEqual(nodes[0]["item_text"], "WFH")
 
     def test_openai_fallback_response_text_raises_on_refusal(self):
         class Content:
@@ -299,6 +315,27 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertEqual(result.candidate_count, 2)
         self.assertEqual(result.valid_count, 2)
         self.assertTrue(result.passed)
+
+    def test_fallback_eval_does_not_duplicate_validation_issues(self):
+        case = fallback_eval.CASES[1]
+        candidates = [
+            {
+                "node_type": "cogs/daily",
+                "title": "WFH",
+                "item_text": "",
+                "date": "2026-05-04",
+                "status": "active",
+                "confidence": "high",
+                "parent_hint": "",
+            }
+        ]
+
+        result = fallback_eval._evaluate_case(case, candidates)
+
+        self.assertEqual(
+            len([issue for issue in result.issues if "item_text cannot be empty" in issue]),
+            1,
+        )
 
     def test_fallback_eval_prints_promotion_criteria(self):
         stream = StringIO()

@@ -17,6 +17,8 @@ OPENAI_FALLBACK_SYSTEM = (
     + "\nOpenAI fallback policy:\n"
       "- Return candidate nodes only; they will be routed to human review.\n"
       "- Fill every schema field. Use an empty string when a field does not apply.\n"
+      "- For cogs/daily candidates, title and item_text must both be non-empty.\n"
+      "- For WFH/ONSITE/HOLIDAY settings, use the setting label as item_text, e.g. \"WFH\".\n"
       "- Use status \"active\" for every node; non-task status is ignored locally.\n"
       "- Use parent_hint only for an exact known hierarchy parent target, otherwise empty string.\n"
 )
@@ -81,8 +83,30 @@ def _fallback_user_message(raw_nodes: list[dict], context: str, reason: str) -> 
         f"Reason: {reason}\n\n"
         f"Context:\n{context}\n\n"
         f"Extracted items:\n{json.dumps(raw_nodes, indent=2)}\n\n"
-        "Classify each item as a review candidate. Return JSON only."
+        "Classify each item as a review candidate. For cogs/daily, never leave "
+        "item_text empty; copy title into item_text if needed. Return JSON only."
     )
+
+
+def _normalize_fallback_nodes(nodes: list[dict]) -> list[dict]:
+    """
+    Repair tiny schema-compliant-but-invalid gaps before local validation.
+    OpenAI strict outputs may satisfy JSON Schema while still leaving semantic fields
+    empty; candidates remain review-first after this normalization.
+    """
+    normalized: list[dict] = []
+    for node in nodes:
+        fixed = dict(node)
+        node_type = fixed.get("node_type", "")
+        title = str(fixed.get("title", "") or "").strip()
+        item_text = str(fixed.get("item_text", "") or "").strip()
+        if node_type == "cogs/daily":
+            if not item_text and title:
+                fixed["item_text"] = title
+            elif not title and item_text:
+                fixed["title"] = item_text
+        normalized.append(fixed)
+    return normalized
 
 
 def classify_nodes_with_openai_fallback(
@@ -133,5 +157,6 @@ def classify_nodes_with_openai_fallback(
         return []
 
     nodes = result.get("nodes", []) if isinstance(result, dict) else []
+    nodes = _normalize_fallback_nodes(nodes)
     log.info("OpenAI fallback classified %d node candidate(s)", len(nodes))
     return nodes
