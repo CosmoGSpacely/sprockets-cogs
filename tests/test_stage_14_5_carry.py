@@ -275,6 +275,45 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             self.assertIn("mark [x] in 2026-05-01", preview)
             self.assertEqual(note.read_text(), original)
 
+    def test_check_plan_sources_accepts_matching_vault_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+
+            self.assertEqual(carry.check_plan_sources(plan), [])
+
+    def test_check_plan_sources_rejects_stale_source_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+            note.write_text(note.read_text().replace("Call Jordan", "Call Taylor"))
+
+            issues = carry.check_plan_sources(plan)
+
+            self.assertEqual(len(issues), 1)
+            self.assertIn("source block changed", issues[0])
+
+    def test_preview_apply_plan_document_reports_stale_sources_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            original = note.read_text() + "- [ ] Call Jordan\n"
+            note.write_text(original)
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+            note.write_text(original.replace("- [ ]", "- [x]"))
+
+            preview = carry.preview_apply_plan_document(plan)
+
+            self.assertIn("cannot be applied", preview)
+            self.assertIn("source block changed", preview)
+
 
 if __name__ == "__main__":
     unittest.main()

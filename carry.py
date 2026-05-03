@@ -221,6 +221,38 @@ def validate_plan_document(plan: dict[str, Any]) -> list[str]:
     return issues
 
 
+def check_plan_sources(plan: dict[str, Any]) -> list[str]:
+    """Return source staleness/conflict issues for a valid carry plan."""
+    issues = validate_plan_document(plan)
+    if issues:
+        return issues
+
+    source_issues: list[str] = []
+    for index, item in enumerate(plan["items"], start=1):
+        source = item["source"]
+        path = Path(source["path"])
+        if not path.exists():
+            source_issues.append(f"items[{index}].source.path does not exist: {path}")
+            continue
+
+        try:
+            post = frontmatter.load(str(path))
+        except Exception as exc:
+            source_issues.append(f"items[{index}].source.path cannot be read: {path} ({exc})")
+            continue
+
+        body_lines = post.content.splitlines()
+        start = source["line"] - 1
+        expected_lines = item["lines"]
+        actual_lines = body_lines[start:start + len(expected_lines)]
+        if actual_lines != expected_lines:
+            source_issues.append(
+                f"items[{index}] source block changed at {path.name}:{source['line']}"
+            )
+
+    return source_issues
+
+
 def preview_plan_document(plan: dict[str, Any]) -> str:
     issues = validate_plan_document(plan)
     if issues:
@@ -246,9 +278,9 @@ def preview_plan_document(plan: dict[str, Any]) -> str:
 
 def preview_apply_plan_document(plan: dict[str, Any]) -> str:
     """Describe the exact vault edits a valid carry plan would make. No writes."""
-    issues = validate_plan_document(plan)
+    issues = check_plan_sources(plan)
     if issues:
-        return "Carry plan is invalid:\n" + "\n".join(f"- {issue}" for issue in issues)
+        return "Carry plan cannot be applied:\n" + "\n".join(f"- {issue}" for issue in issues)
 
     items = plan["items"]
     if not items:
@@ -348,6 +380,11 @@ def main() -> None:
         default=None,
         help="Preview exact edits from a JSON carry plan file. No vault writes.",
     )
+    parser.add_argument(
+        "--check-plan",
+        default=None,
+        help="Check that source blocks in a JSON carry plan still match the vault. No vault writes.",
+    )
     args = parser.parse_args()
 
     if args.validate_plan:
@@ -362,6 +399,14 @@ def main() -> None:
         print(preview_plan_document(load_plan_document(Path(args.preview_plan))))
     elif args.preview_apply:
         print(preview_apply_plan_document(load_plan_document(Path(args.preview_apply))))
+    elif args.check_plan:
+        issues = check_plan_sources(load_plan_document(Path(args.check_plan)))
+        if issues:
+            print("Carry plan source check failed:")
+            for issue in issues:
+                print(f"- {issue}")
+            raise SystemExit(1)
+        print("Carry plan sources match the vault.")
     elif args.list:
         candidates = scan_daily_notes(through_date=args.through)
         print_candidates(candidates)
