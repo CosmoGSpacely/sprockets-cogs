@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import agentic_loop
 import entity_state
+import openai_fallback
 import review
 from models import validate_node
 
@@ -165,6 +166,42 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertEqual(written[0][1], "openai_fallback_candidate: confidence: low")
         self.assertEqual(written[1][0]["node_type"], "cogs/daily")
 
+    def test_openai_fallback_schema_is_strict_responses_api_shape(self):
+        schema = openai_fallback._openai_classify_schema()
+        node_schema = schema["properties"]["nodes"]["items"]
+
+        self.assertFalse(schema["additionalProperties"])
+        self.assertFalse(node_schema["additionalProperties"])
+        self.assertEqual(set(node_schema["required"]), set(node_schema["properties"]))
+        self.assertIn("status", node_schema["required"])
+        self.assertIn("parent_hint", node_schema["required"])
+
+    def test_openai_fallback_user_message_marks_candidates_for_review(self):
+        message = openai_fallback._fallback_user_message(
+            [{"raw": "Call Jordan", "type_hint": "task"}],
+            "Already in today's note: (none)",
+            "confidence: low",
+        )
+
+        self.assertIn("Reason: confidence: low", message)
+        self.assertIn("review candidate", message)
+        self.assertIn("Call Jordan", message)
+
+    def test_openai_fallback_response_text_raises_on_refusal(self):
+        class Content:
+            refusal = "Cannot comply"
+            text = ""
+
+        class Item:
+            content = [Content()]
+
+        class Response:
+            output_text = ""
+            output = [Item()]
+
+        with self.assertRaisesRegex(ValueError, "OpenAI fallback refused"):
+            openai_fallback._response_text(Response())
+
     def test_openai_fallback_skips_when_disabled(self):
         with patch.object(agentic_loop, "openai_fallback_enabled", return_value=False), \
              patch.object(agentic_loop, "classify_nodes_with_openai_fallback") as fallback:
@@ -297,9 +334,31 @@ class Stage135HardeningTests(unittest.TestCase):
             self.assertEqual(len(items), 1)
             self.assertEqual(items[0]["file"], "pending.md")
             self.assertEqual(items[0]["reason"], "confidence: low")
+            self.assertEqual(items[0]["source"], "local low confidence")
             self.assertEqual(items[0]["node_type"], "sprockets/task")
             self.assertEqual(items[0]["title"], "Ambiguous task")
             self.assertTrue(items[0]["parseable"])
+
+    def test_list_pending_identifies_openai_fallback_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            raw = {
+                "node_type": "sprockets/task",
+                "title": "Call Jordan",
+                "item_text": "Call Jordan",
+                "date": "2026-05-02",
+                "confidence": "high",
+            }
+            (review_dir / "openai.md").write_text(
+                "---\nnode_type: review\nreviewed: false\n---\n\n"
+                "**Reason:** openai_fallback_candidate: confidence: low\n\n"
+                f"```json\n{json.dumps(raw, indent=2)}\n```\n"
+            )
+
+            items = review.list_pending(review_dir)
+
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["source"], "openai fallback candidate")
 
     def test_list_pending_marks_unparseable_review_files(self):
         with tempfile.TemporaryDirectory() as tmp:

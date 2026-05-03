@@ -46,9 +46,11 @@ def _extract_reason(content: str) -> str:
 def summarize_review_file(path: Path) -> dict:
     post = frontmatter.load(str(path))
     raw = _extract_json(post.content)
+    reason = _extract_reason(post.content)
     return {
         "file": path.name,
-        "reason": _extract_reason(post.content),
+        "reason": reason,
+        "source": _source_from_reason(reason),
         "node_type": raw.get("node_type", "?") if raw else "?",
         "title": raw.get("title", "?") if raw else "?",
         "item_text": raw.get("item_text", "?") if raw else "?",
@@ -75,6 +77,7 @@ def print_pending_list(review_dir: Path = REVIEW_DIR) -> None:
     for item in items:
         parse_note = "" if item["parseable"] else " [UNPARSEABLE]"
         print(f"{item['file']}{parse_note}")
+        print(f"  source:     {item['source']}")
         print(f"  reason:     {item['reason']}")
         print(f"  node_type:  {item['node_type']}")
         print(f"  title:      {item['title']}")
@@ -97,6 +100,20 @@ def _prompt_choice() -> str:
         if choice in ("a", "d", "s"):
             return choice
         print("  Enter a, d, or s.")
+
+
+def _source_from_reason(reason: str) -> str:
+    if reason.startswith("openai_fallback_candidate"):
+        return "openai fallback candidate"
+    if reason.startswith("openai_fallback_invalid"):
+        return "openai fallback invalid"
+    if reason.startswith("ambiguous hierarchy parent_hint"):
+        return "hierarchy ambiguity"
+    if "confidence: low" in reason:
+        return "local low confidence"
+    if reason.startswith("retry failed"):
+        return "local retry failure"
+    return "local review"
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
