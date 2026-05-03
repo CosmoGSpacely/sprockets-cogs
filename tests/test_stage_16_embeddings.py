@@ -17,12 +17,20 @@ class Stage16EmbeddingTests(unittest.TestCase):
 
         self.assertEqual(reloaded.DEFAULT_EMBED_MODEL, "nomic-embed-text")
         self.assertEqual(reloaded.EMBED_MODEL, "nomic-embed-text")
+        self.assertEqual(reloaded.DEFAULT_EMBED_KEEP_ALIVE, "24h")
+        self.assertEqual(reloaded.EMBED_KEEP_ALIVE, "24h")
 
     def test_embed_model_can_be_overridden_by_environment(self):
         with patch.dict(os.environ, {"SPROCKETS_COGS_EMBED_MODEL": "test-embed-model"}):
             reloaded = importlib.reload(embeddings)
 
         self.assertEqual(reloaded.EMBED_MODEL, "test-embed-model")
+
+    def test_embed_keep_alive_can_be_overridden_by_environment(self):
+        with patch.dict(os.environ, {"SPROCKETS_COGS_EMBED_KEEP_ALIVE": "1h"}):
+            reloaded = importlib.reload(embeddings)
+
+        self.assertEqual(reloaded.EMBED_KEEP_ALIVE, "1h")
 
     @patch("embeddings.ollama.embed")
     def test_embed_text_returns_single_numeric_vector(self, mock_embed):
@@ -31,7 +39,11 @@ class Stage16EmbeddingTests(unittest.TestCase):
         vector = embeddings.embed_text("memory probe")
 
         self.assertEqual(vector, [1.0, 2.5, -3.0])
-        mock_embed.assert_called_once_with(model="nomic-embed-text", input="memory probe")
+        mock_embed.assert_called_once_with(
+            model="nomic-embed-text",
+            input="memory probe",
+            keep_alive="24h",
+        )
 
     @patch("embeddings.ollama.embed")
     def test_embed_text_accepts_explicit_model(self, mock_embed):
@@ -39,7 +51,11 @@ class Stage16EmbeddingTests(unittest.TestCase):
 
         embeddings.embed_text("memory probe", model="alternate-model")
 
-        mock_embed.assert_called_once_with(model="alternate-model", input="memory probe")
+        mock_embed.assert_called_once_with(
+            model="alternate-model",
+            input="memory probe",
+            keep_alive="24h",
+        )
 
     def test_embed_text_rejects_empty_text(self):
         with self.assertRaisesRegex(ValueError, "text cannot be empty"):

@@ -13,6 +13,8 @@ from retrieval_eval import RetrievalNode
 
 DEFAULT_EMBED_MODEL = "nomic-embed-text"
 EMBED_MODEL = os.environ.get("SPROCKETS_COGS_EMBED_MODEL", DEFAULT_EMBED_MODEL)
+DEFAULT_EMBED_KEEP_ALIVE = "24h"
+EMBED_KEEP_ALIVE = os.environ.get("SPROCKETS_COGS_EMBED_KEEP_ALIVE", DEFAULT_EMBED_KEEP_ALIVE)
 
 
 class EmbeddingError(RuntimeError):
@@ -54,7 +56,11 @@ def embed_text(text: str, model: str | None = None) -> list[float]:
         raise ValueError("text cannot be empty")
 
     try:
-        response = ollama.embed(model=model or EMBED_MODEL, input=text)
+        response = ollama.embed(
+            model=model or EMBED_MODEL,
+            input=text,
+            keep_alive=EMBED_KEEP_ALIVE,
+        )
     except Exception as exc:
         raise EmbeddingError(f"embedding request failed: {exc}") from exc
     embeddings = _response_value(response, "embeddings")
