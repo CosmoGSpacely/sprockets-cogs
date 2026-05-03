@@ -17,7 +17,7 @@ from typing import Any
 
 import frontmatter
 
-from vault import CogsBlock, parse_cogs_blocks
+from vault import CogsBlock, append_cogs_item_text, mark_block_state, parse_cogs_blocks
 
 
 VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", "/home/cosmo/vault"))
@@ -307,6 +307,61 @@ def preview_apply_plan_document(plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _find_current_block(content: str, item: dict[str, Any]) -> CogsBlock:
+    source = item["source"]
+    expected_lines = item["lines"]
+    start_line = source["line"] - 1
+    for block in parse_cogs_blocks(content, states={" "}):
+        if block.start_line == start_line and list(block.lines) == expected_lines:
+            return block
+    raise ValueError(f"source block changed at {Path(source['path']).name}:{source['line']}")
+
+
+def apply_plan_document(plan: dict[str, Any]) -> list[str]:
+    """Apply a validated carry plan to the vault."""
+    issues = check_plan_sources(plan)
+    if issues:
+        raise ValueError("Carry plan cannot be applied:\n" + "\n".join(issues))
+
+    results: list[str] = []
+    for index, item in enumerate(plan["items"], start=1):
+        source = item["source"]
+        source_path = Path(source["path"])
+        post = frontmatter.load(str(source_path))
+        content = post.content
+        action = item["action"]
+        item_text = item["item_text"]
+
+        if action == "skip":
+            results.append(f"[{index}] skipped {source_path.name}:{source['line']}: {item_text}")
+            continue
+
+        block = _find_current_block(content, item)
+        if action in {"carry", "schedule"}:
+            post.content = mark_block_state(content, block, ">")
+            source_path.write_text(frontmatter.dumps(post))
+            appended = append_cogs_item_text(
+                item["destination_date"],
+                item_text,
+                source_path.parent,
+            )
+            verb = "appended" if appended else "already existed"
+            results.append(
+                f"[{index}] carried {source_path.name}:{source['line']} -> "
+                f"{item['destination_date']} ({verb}): {item_text}"
+            )
+        elif action == "drop":
+            post.content = mark_block_state(content, block, "-")
+            source_path.write_text(frontmatter.dumps(post))
+            results.append(f"[{index}] dropped {source_path.name}:{source['line']}: {item_text}")
+        elif action == "done":
+            post.content = mark_block_state(content, block, "x")
+            source_path.write_text(frontmatter.dumps(post))
+            results.append(f"[{index}] done {source_path.name}:{source['line']}: {item_text}")
+
+    return results
+
+
 def validate_decision(decision: CarryDecision) -> None:
     if decision.action not in VALID_ACTIONS:
         raise ValueError(f"Unknown carry action: {decision.action!r}")
@@ -385,6 +440,11 @@ def main() -> None:
         default=None,
         help="Check that source blocks in a JSON carry plan still match the vault. No vault writes.",
     )
+    parser.add_argument(
+        "--apply",
+        default=None,
+        help="Apply a JSON carry plan to the vault after validation and source checks.",
+    )
     args = parser.parse_args()
 
     if args.validate_plan:
@@ -407,6 +467,13 @@ def main() -> None:
                 print(f"- {issue}")
             raise SystemExit(1)
         print("Carry plan sources match the vault.")
+    elif args.apply:
+        try:
+            results = apply_plan_document(load_plan_document(Path(args.apply)))
+        except ValueError as exc:
+            print(exc)
+            raise SystemExit(1) from exc
+        print("\n".join(results) if results else "No carry actions applied.")
     elif args.list:
         candidates = scan_daily_notes(through_date=args.through)
         print_candidates(candidates)

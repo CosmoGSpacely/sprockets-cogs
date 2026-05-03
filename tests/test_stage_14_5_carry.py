@@ -314,6 +314,67 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             self.assertIn("cannot be applied", preview)
             self.assertIn("source block changed", preview)
 
+    def test_apply_plan_document_carries_and_appends_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            source = vault.ensure_daily_note("2026-05-01", daily_dir)
+            source.write_text(source.read_text() + "- [ ] Call Jordan\n")
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+
+            results = carry.apply_plan_document(plan)
+
+            destination = vault.daily_note_path("2026-05-04", daily_dir)
+            self.assertIn("carried", results[0])
+            self.assertIn("- [>] Call Jordan", source.read_text())
+            self.assertIn("- [ ] Call Jordan", destination.read_text())
+
+    def test_apply_plan_document_marks_drop_done_and_skip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            source = vault.ensure_daily_note("2026-05-01", daily_dir)
+            source.write_text(
+                source.read_text()
+                + "- [ ] Archive receipt\n"
+                  "- [ ] Finish report\n"
+                  "- [ ] Leave this alone\n"
+            )
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+            plan["items"][0]["action"] = "drop"
+            plan["items"][0]["destination_date"] = ""
+            plan["items"][1]["action"] = "done"
+            plan["items"][1]["destination_date"] = ""
+            plan["items"][2]["action"] = "skip"
+            plan["items"][2]["destination_date"] = ""
+
+            results = carry.apply_plan_document(plan)
+
+            source_text = source.read_text()
+            self.assertIn("dropped", results[0])
+            self.assertIn("done", results[1])
+            self.assertIn("skipped", results[2])
+            self.assertIn("- [-] Archive receipt", source_text)
+            self.assertIn("- [x] Finish report", source_text)
+            self.assertIn("- [ ] Leave this alone", source_text)
+            self.assertFalse(vault.daily_note_path("2026-05-04", daily_dir).exists())
+
+    def test_apply_plan_document_rejects_stale_source_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            source = vault.ensure_daily_note("2026-05-01", daily_dir)
+            original = source.read_text() + "- [ ] Call Jordan\n"
+            source.write_text(original)
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+            source.write_text(original.replace("Call Jordan", "Call Taylor"))
+
+            with self.assertRaises(ValueError):
+                carry.apply_plan_document(plan)
+
+            self.assertNotIn("- [>] Call Taylor", source.read_text())
+            self.assertFalse(vault.daily_note_path("2026-05-04", daily_dir).exists())
+
 
 if __name__ == "__main__":
     unittest.main()
