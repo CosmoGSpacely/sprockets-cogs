@@ -35,7 +35,8 @@ from prompts import (
 from vault import append_cogs_item_text, ensure_daily_note
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-MODEL = "qwen3.5:9b-32k-cosmo"
+DEFAULT_MODEL = "qwen3.5:9b-32k-cosmo"
+MODEL = os.environ.get("SPROCKETS_COGS_MODEL", DEFAULT_MODEL)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SC_ROOT        = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", "/home/cosmo/sc"))
