@@ -28,6 +28,16 @@ class CarryCandidate:
     block: CogsBlock
 
 
+@dataclass(frozen=True)
+class CarryDecision:
+    candidate: CarryCandidate
+    action: str
+    destination_date: str = ""
+
+
+VALID_ACTIONS = {"carry", "cancel", "skip"}
+
+
 def _date_from_daily_note(path: Path) -> str:
     post = frontmatter.load(str(path))
     date = str(post.get("date", "") or "")
@@ -76,6 +86,49 @@ def print_candidates(candidates: list[CarryCandidate]) -> None:
             print(f"    {line}")
 
 
+def build_default_plan(
+    candidates: list[CarryCandidate],
+    destination_date: str,
+) -> list[CarryDecision]:
+    """Build a dry-run plan that carries every candidate to destination_date."""
+    datetime.strptime(destination_date, "%Y-%m-%d")
+    return [
+        CarryDecision(candidate=candidate, action="carry", destination_date=destination_date)
+        for candidate in candidates
+    ]
+
+
+def validate_decision(decision: CarryDecision) -> None:
+    if decision.action not in VALID_ACTIONS:
+        raise ValueError(f"Unknown carry action: {decision.action!r}")
+    if decision.action == "carry":
+        if not decision.destination_date:
+            raise ValueError("carry decisions require destination_date")
+        datetime.strptime(decision.destination_date, "%Y-%m-%d")
+    elif decision.destination_date:
+        raise ValueError(f"{decision.action} decisions cannot have destination_date")
+
+
+def preview_plan(decisions: list[CarryDecision]) -> str:
+    if not decisions:
+        return "No carry decisions to preview."
+
+    lines = [f"{len(decisions)} carry decision(s) pending"]
+    for i, decision in enumerate(decisions, start=1):
+        validate_decision(decision)
+        candidate = decision.candidate
+        source = f"{candidate.date} {candidate.path.name}:{candidate.block.start_line + 1}"
+        if decision.action == "carry":
+            lines.append(
+                f"[{i}] carry  {source} -> {decision.destination_date}: {candidate.block.item_text}"
+            )
+        elif decision.action == "cancel":
+            lines.append(f"[{i}] cancel {source}: {candidate.block.item_text}")
+        else:
+            lines.append(f"[{i}] skip   {source}: {candidate.block.item_text}")
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -88,10 +141,23 @@ def main() -> None:
         default=None,
         help="YYYY-MM-DD cutoff for scanned daily notes. Defaults to today.",
     )
+    parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Preview a carry-all plan. Dry-run only.",
+    )
+    parser.add_argument(
+        "--to",
+        default=datetime.now().strftime("%Y-%m-%d"),
+        help="Destination date for --plan carry decisions. Defaults to today.",
+    )
     args = parser.parse_args()
 
+    candidates = scan_daily_notes(through_date=args.through)
     if args.list:
-        print_candidates(scan_daily_notes(through_date=args.through))
+        print_candidates(candidates)
+    elif args.plan:
+        print(preview_plan(build_default_plan(candidates, args.to)))
     else:
         parser.print_help()
 
