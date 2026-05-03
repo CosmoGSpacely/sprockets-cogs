@@ -7,8 +7,10 @@ from retrieval_eval import (
     RetrievalCase,
     RetrievalNode,
     evaluate_retriever,
+    lexical_retrieve,
     load_retrieval_nodes,
     stage_15_cases,
+    stage_15_fixture_nodes,
 )
 
 
@@ -78,6 +80,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 "project_scope",
                 "hierarchy",
                 "recent_cogs",
+                "semantic_gap",
                 "staleness",
                 "contamination",
             }.issubset(categories)
@@ -132,6 +135,54 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             ("build-sprockets-cogs",),
         )
         self.assertIn("Retrieval quality notes.", by_id["projects/phase-3-memory-enhancement"].text)
+
+    def test_load_retrieval_nodes_includes_daily_notes_with_stable_date_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            daily = vault / "Cogs" / "daily" / "Sat 02 May 2026.md"
+            daily.parent.mkdir(parents=True, exist_ok=True)
+            daily.write_text("- [ ] Continue retrieval traces\n")
+
+            nodes = load_retrieval_nodes(vault)
+
+        by_id = {node.node_id: node for node in nodes}
+        self.assertEqual(by_id["daily/2026-05-02"].title, "Sat 02 May 2026")
+        self.assertEqual(by_id["daily/2026-05-02"].node_type, "cogs/daily")
+        self.assertIn("retrieval traces", by_id["daily/2026-05-02"].text)
+
+    def test_lexical_retriever_establishes_a_non_embedding_lower_bound(self):
+        nodes = stage_15_fixture_nodes()
+        result = evaluate_retriever(
+            stage_15_cases(),
+            lambda query: lexical_retrieve(query, nodes),
+        )
+
+        self.assertGreater(result.passed_count, 0)
+        self.assertGreater(result.passed_count, evaluate_retriever(stage_15_cases(), lambda _query: []).passed_count)
+
+    def test_lexical_retriever_can_recover_named_contact_without_ambiguous_contact(self):
+        nodes = stage_15_fixture_nodes()
+
+        result = evaluate_retriever(
+            [case for case in stage_15_cases() if case.name == "named-contact-followup"],
+            lambda query: lexical_retrieve(query, nodes),
+        )
+
+        self.assertTrue(result.passed)
+
+    def test_lexical_retriever_exposes_remaining_stage_15_gaps(self):
+        nodes = stage_15_fixture_nodes()
+        result = evaluate_retriever(
+            stage_15_cases(),
+            lambda query: lexical_retrieve(query, nodes),
+        )
+
+        failed_categories = {
+            case_result.case.category
+            for case_result in result.results
+            if not case_result.passed
+        }
+        self.assertIn("semantic_gap", failed_categories)
 
 
 if __name__ == "__main__":

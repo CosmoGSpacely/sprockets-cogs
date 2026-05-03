@@ -7,12 +7,33 @@ the cases future retrievers must satisfy and provides deterministic scoring.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+import re
 from typing import Callable, Iterable
 
 import frontmatter
 
 from vault_graph import build_graph, sprockets_dirs
+
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_STOPWORDS = {
+    "a",
+    "about",
+    "add",
+    "an",
+    "and",
+    "for",
+    "from",
+    "me",
+    "probably",
+    "the",
+    "this",
+    "to",
+    "under",
+    "use",
+}
 
 
 @dataclass(frozen=True)
@@ -109,8 +130,64 @@ def evaluate_retriever(
     return RetrievalSuiteResult(tuple(results))
 
 
+def _tokens(text: str) -> set[str]:
+    return {token for token in _TOKEN_RE.findall(text.lower()) if token not in _STOPWORDS}
+
+
+def _node_search_text(node: RetrievalNode) -> str:
+    return " ".join(
+        (
+            node.node_id,
+            node.title,
+            node.node_type,
+            " ".join(node.parent_slugs),
+            node.text,
+        )
+    )
+
+
+def lexical_retrieve(
+    query: str,
+    nodes: Iterable[RetrievalNode],
+    limit: int = 5,
+    min_score: int = 1,
+    min_best_ratio: float = 0.8,
+) -> list[RetrievalNode]:
+    """Rank nodes with a deterministic lexical baseline.
+
+    This is deliberately modest. It is useful as a lower-bound comparator for
+    future embedding retrieval, not as the final Phase 3 memory strategy.
+    """
+
+    query_tokens = _tokens(query)
+    ranked: list[tuple[int, str, RetrievalNode]] = []
+    for node in nodes:
+        title_overlap = len(query_tokens & _tokens(node.title))
+        id_overlap = len(query_tokens & _tokens(node.node_id.replace("/", " ")))
+        parent_overlap = len(query_tokens & _tokens(" ".join(node.parent_slugs)))
+        body_overlap = len(query_tokens & _tokens(node.text))
+        score = title_overlap * 4 + id_overlap * 3 + parent_overlap * 2 + body_overlap
+        if score >= min_score:
+            ranked.append((score, node.node_id, node))
+
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    if not ranked:
+        return []
+    best_score = ranked[0][0]
+    cutoff = max(min_score, best_score * min_best_ratio)
+    return [node for score, _, node in ranked if score >= cutoff][:limit]
+
+
+def _daily_node_id(path: Path) -> str:
+    try:
+        date = datetime.strptime(path.stem, "%a %d %b %Y").strftime("%Y-%m-%d")
+    except ValueError:
+        date = path.stem
+    return f"daily/{date}"
+
+
 def load_retrieval_nodes(vault_dir: Path) -> list[RetrievalNode]:
-    """Load compact retrieval candidates from Sprockets frontmatter and bodies."""
+    """Load compact retrieval candidates from Sprockets nodes and daily notes."""
 
     graph = build_graph(vault_dir)
     nodes: list[RetrievalNode] = []
@@ -133,7 +210,121 @@ def load_retrieval_nodes(vault_dir: Path) -> list[RetrievalNode]:
                     text=post.content.strip(),
                 )
             )
+
+    daily_dir = vault_dir / "Cogs" / "daily"
+    if daily_dir.exists():
+        for path in sorted(daily_dir.glob("*.md")):
+            nodes.append(
+                RetrievalNode(
+                    node_id=_daily_node_id(path),
+                    title=path.stem,
+                    node_type="cogs/daily",
+                    path=path,
+                    text=path.read_text().strip(),
+                )
+            )
     return nodes
+
+
+def stage_15_fixture_nodes() -> tuple[RetrievalNode, ...]:
+    """Return in-memory nodes that match the built-in readiness cases."""
+
+    return (
+        RetrievalNode(
+            node_id="contacts/jordan-mack",
+            title="Jordan Mack",
+            node_type="sprockets/contact",
+            path=Path("contacts/jordan-mack.md"),
+            text="Proposal follow-up contact for current product feedback.",
+        ),
+        RetrievalNode(
+            node_id="contacts/jordan-lee",
+            title="Jordan Lee",
+            node_type="sprockets/contact",
+            path=Path("contacts/jordan-lee.md"),
+            text="Unrelated contact for legal filings.",
+        ),
+        RetrievalNode(
+            node_id="goals/build-sprockets-cogs",
+            title="Build Sprockets-Cogs",
+            node_type="sprockets/goal",
+            path=Path("goals/build-sprockets-cogs.md"),
+            text="Goal covering the agentic personal operating system.",
+        ),
+        RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("projects/phase-3-memory-enhancement.md"),
+            parent_slugs=("build-sprockets-cogs",),
+            text="Evaluate retrieval quality before embedding or memory index work.",
+        ),
+        RetrievalNode(
+            node_id="projects/phase-2-hardening",
+            title="Phase 2 - Hardening",
+            node_type="sprockets/project",
+            path=Path("projects/phase-2-hardening.md"),
+            parent_slugs=("build-sprockets-cogs",),
+            text="Completed service hardening and review routing phase.",
+        ),
+        RetrievalNode(
+            node_id="daily/2026-05-02",
+            title="Sat 02 May 2026",
+            node_type="cogs/daily",
+            path=Path("daily/Sat 02 May 2026.md"),
+            text="Yesterday note about retrieval traces and memory benchmark setup.",
+        ),
+        RetrievalNode(
+            node_id="daily/2026-04-01",
+            title="Wed 01 Apr 2026",
+            node_type="cogs/daily",
+            path=Path("daily/Wed 01 Apr 2026.md"),
+            text="Old retrieval traces scratch note from a stale experiment.",
+        ),
+        RetrievalNode(
+            node_id="notes/openai-fallback-review-first",
+            title="OpenAI fallback review-first",
+            node_type="sprockets/note",
+            path=Path("notes/openai-fallback-review-first.md"),
+            text="Current fallback provider routes candidates to review before vault writes.",
+        ),
+        RetrievalNode(
+            node_id="notes/anthropic-fallback-plan",
+            title="Anthropic fallback plan",
+            node_type="sprockets/note",
+            path=Path("notes/anthropic-fallback-plan.md"),
+            text="Obsolete fallback provider plan from before OpenAI review routing.",
+        ),
+        RetrievalNode(
+            node_id="notes/dataview-dashboard",
+            title="Dataview dashboard",
+            node_type="sprockets/note",
+            path=Path("notes/dataview-dashboard.md"),
+            text="Compact Dataview dashboard idea for current task review.",
+        ),
+        RetrievalNode(
+            node_id="notes/old-dashboard-verbatim-draft",
+            title="Old dashboard verbatim draft",
+            node_type="sprockets/note",
+            path=Path("notes/old-dashboard-verbatim-draft.md"),
+            text="Old verbose dashboard prose that should not contaminate fresh captures.",
+        ),
+        RetrievalNode(
+            node_id="projects/learn-how-to-bring-a-project-to-production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("projects/learn-how-to-bring-a-project-to-production.md"),
+            parent_slugs=("acquire-necessary-skills",),
+            text="Deployment, release operations, service monitoring, backups, and production readiness.",
+        ),
+        RetrievalNode(
+            node_id="notes/laptop-setup",
+            title="Laptop setup",
+            node_type="sprockets/note",
+            path=Path("notes/laptop-setup.md"),
+            text="Local workstation setup details for development only.",
+        ),
+    )
 
 
 def stage_15_cases() -> tuple[RetrievalCase, ...]:
@@ -195,6 +386,14 @@ def stage_15_cases() -> tuple[RetrievalCase, ...]:
             avoid_ids=frozenset({"notes/old-dashboard-verbatim-draft"}),
             reason="Relevant memory should guide classification without copying old prose into new output.",
         ),
+        RetrievalCase(
+            name="semantic-language-gap",
+            category="semantic_gap",
+            query="What should I study so this can run beyond my laptop?",
+            expected_ids=frozenset({"projects/learn-how-to-bring-a-project-to-production"}),
+            avoid_ids=frozenset({"notes/laptop-setup"}),
+            reason="The harness should include at least one case that keyword matching alone is unlikely to solve.",
+        ),
     )
 
 
@@ -203,19 +402,32 @@ def main() -> None:
 
     import argparse
 
-    import agentic_loop
-
     parser = argparse.ArgumentParser(description="Run the Stage 15 retrieval readiness benchmark.")
     parser.add_argument(
         "--strict",
         action="store_true",
         help="Exit non-zero unless every retrieval case passes.",
     )
+    parser.add_argument(
+        "--retriever",
+        choices=("current", "lexical-fixture"),
+        default="current",
+        help="Retriever to evaluate. Defaults to the current production stub.",
+    )
     args = parser.parse_args()
 
-    result = evaluate_retriever(stage_15_cases(), agentic_loop.retrieve_relevant_nodes)
+    if args.retriever == "lexical-fixture":
+        fixture_nodes = stage_15_fixture_nodes()
+        retriever = lambda query: lexical_retrieve(query, fixture_nodes)
+    else:
+        import agentic_loop
+
+        retriever = agentic_loop.retrieve_relevant_nodes
+
+    result = evaluate_retriever(stage_15_cases(), retriever)
 
     print("Stage 15 retrieval readiness")
+    print(f"- retriever: {args.retriever}")
     print(f"- passed: {result.passed_count}/{result.total_count}")
     print(f"- status: {'pass' if result.passed else 'baseline'}")
     for case_result in result.results:
