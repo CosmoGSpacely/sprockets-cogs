@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
+from dataclasses import dataclass
+from math import sqrt
 
 import ollama
 
@@ -15,6 +17,14 @@ EMBED_MODEL = os.environ.get("SPROCKETS_COGS_EMBED_MODEL", DEFAULT_EMBED_MODEL)
 
 class EmbeddingError(RuntimeError):
     """Raised when an embedding response cannot be used safely."""
+
+
+@dataclass(frozen=True)
+class EmbeddedNode:
+    """A retrieval node paired with the vector generated from its stable text."""
+
+    node: RetrievalNode
+    vector: tuple[float, ...]
 
 
 def _response_value(response: object, key: str) -> object:
@@ -75,3 +85,50 @@ def embed_node(node: RetrievalNode, model: str | None = None) -> list[float]:
     """Embed one retrieval node using its stable node text."""
 
     return embed_text(node_embedding_text(node), model=model)
+
+
+def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    if len(left) != len(right):
+        raise EmbeddingError(
+            f"embedding dimensions do not match: {len(left)} != {len(right)}"
+        )
+
+    left_norm = sqrt(sum(value * value for value in left))
+    right_norm = sqrt(sum(value * value for value in right))
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+
+    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right))
+    return dot_product / (left_norm * right_norm)
+
+
+def build_embedding_index(
+    nodes: Sequence[RetrievalNode],
+    model: str | None = None,
+) -> tuple[EmbeddedNode, ...]:
+    """Build a small in-memory embedding index for retrieval experiments."""
+
+    return tuple(
+        EmbeddedNode(node=node, vector=tuple(embed_node(node, model=model)))
+        for node in nodes
+    )
+
+
+def retrieve_by_embedding(
+    query: str,
+    index: Sequence[EmbeddedNode],
+    limit: int = 5,
+    model: str | None = None,
+) -> list[RetrievalNode]:
+    """Return index nodes ranked by cosine similarity to the query embedding."""
+
+    if limit < 1:
+        return []
+
+    query_vector = embed_text(query, model=model)
+    ranked = [
+        (_cosine_similarity(query_vector, item.vector), item.node.node_id, item.node)
+        for item in index
+    ]
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return [node for _, _, node in ranked[:limit]]
