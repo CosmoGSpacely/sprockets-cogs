@@ -169,11 +169,59 @@ def _week_workdays(ref: datetime) -> str:
     return "  ".join(
         (monday + timedelta(days=i)).strftime("%a %Y-%m-%d") for i in range(5)
     )
+
+
+def _build_hierarchy_context(max_nodes: int = 30) -> list[str]:
+    """
+    Return compact area/goal/project labels for parent_hint selection.
+    Reads frontmatter only through vault_graph; note bodies stay out of model context.
+    """
+    graph = build_graph()
+    if not graph.nodes:
+        return []
+
+    type_labels = {
+        "sprockets/area": "Area",
+        "sprockets/goal": "Goal",
+        "sprockets/project": "Project",
+    }
+    sort_order = {
+        "sprockets/area": 0,
+        "sprockets/goal": 1,
+        "sprockets/project": 2,
+    }
+    hierarchy_nodes = [
+        (slug, attrs)
+        for slug, attrs in graph.nodes(data=True)
+        if attrs.get("node_type", "") in HIERARCHY_PARENT_NODE_TYPES
+    ]
+    hierarchy_nodes.sort(
+        key=lambda item: (
+            sort_order.get(item[1].get("node_type", ""), 99),
+            item[1].get("title", item[0]).lower(),
+        )
+    )
+
+    lines: list[str] = []
+    for slug, attrs in hierarchy_nodes[:max_nodes]:
+        node_type = attrs.get("node_type", "")
+        title = attrs.get("title", slug)
+        parents = list(graph.successors(slug))
+        if parents:
+            parent_title = graph.nodes[parents[0]].get("title", parents[0])
+            lines.append(f"{type_labels[node_type]}: {title} (under {parent_title})")
+        else:
+            lines.append(f"{type_labels[node_type]}: {title}")
+    return lines
+
+
 def build_context() -> str:
     """
     Phase 2: today's Cogs note items + hot entity hints (contacts/entities seen <=7 days).
     Avoids injecting raw Markdown prose into the classify call, which causes 9B model
     context contamination (model bleeds note content into structured output fields).
+    Stage 10B: adds compact hierarchy titles from frontmatter only so parent_hint can
+    target existing area/goal/project nodes without creating new hierarchy nodes.
     Phase 3: queries vector DB for semantically relevant nodes.
     """
     today     = datetime.now().strftime("%a %d %b %Y")
@@ -197,6 +245,9 @@ def build_context() -> str:
         parts.append("Known contacts: " + ", ".join(contacts))
     if entities:
         parts.append("Known entities: " + ", ".join(entities))
+    hierarchy_context = _build_hierarchy_context()
+    if hierarchy_context:
+        parts.append("Known hierarchy parent targets:\n" + "\n".join(hierarchy_context))
     return "\n".join(parts)
 
 
@@ -481,6 +532,69 @@ def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
     return result
 
 
+def ensure_hierarchy_tasks(raw_nodes: list[dict], classified: list[dict]) -> list[dict]:
+    """
+    Guarantee project-scoped raw tasks become Sprockets tasks.
+    The local model sometimes treats "Need to..." as a daily-only item. If the raw
+    task names an existing area/goal/project title, preserve the structural task and
+    let resolve_parents link it through the normal hierarchy-only path.
+    """
+    graph = build_graph()
+    hierarchy_targets = [
+        attrs.get("title", slug)
+        for slug, attrs in graph.nodes(data=True)
+        if attrs.get("node_type", "") in HIERARCHY_PARENT_NODE_TYPES
+    ]
+    hierarchy_targets = sorted(
+        [title for title in hierarchy_targets if title],
+        key=len,
+        reverse=True,
+    )
+    if not hierarchy_targets:
+        return classified
+
+    result = list(classified)
+    existing_task_titles = [
+        node.get("title", "").lower()
+        for node in classified
+        if node.get("node_type") == "sprockets/task"
+    ]
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    for raw in raw_nodes:
+        if raw.get("type_hint") != "task":
+            continue
+        raw_text = raw.get("raw", "").strip()
+        raw_lower = raw_text.lower()
+        if not raw_text:
+            continue
+        if any(title and title in raw_lower for title in existing_task_titles):
+            continue
+
+        parent_title = next(
+            (title for title in hierarchy_targets if title.lower() in raw_lower),
+            "",
+        )
+        if not parent_title:
+            continue
+
+        title = re.sub(r"^(need to|remember to|todo:?)\s+", "", raw_text, flags=re.IGNORECASE).strip()
+        title = title[:1].upper() + title[1:] if title else raw_text
+        result.append({
+            "node_type": "sprockets/task",
+            "title": title,
+            "item_text": title,
+            "date": today,
+            "status": "active",
+            "confidence": "high",
+            "parent_hint": parent_title,
+        })
+        existing_task_titles.append(title.lower())
+        log.info("Auto-added hierarchy task for %s: %s", parent_title, title)
+
+    return result
+
+
 def route_openai_fallback_to_review(
     raw_nodes: list[dict],
     context: str,
@@ -526,6 +640,7 @@ def process_input(file_path: Path) -> None:
         context    = build_context()
         raw_nodes  = extract_nodes(content)
         classified = classify_nodes(raw_nodes, context)
+        classified = ensure_hierarchy_tasks(raw_nodes, classified)
         classified = ensure_cogs_companions(classified)
 
         valid_nodes, invalid_triples = validate_output(classified)

@@ -130,8 +130,9 @@ Date resolution: use today's date from the user message.
 "next Monday" when today is Tuesday means 6 days away, not yesterday.
 Use confidence "low" when date or type is ambiguous.
 
-parent_hint (optional): if a Sprockets node clearly belongs to a named project or area
-mentioned in the input or context, put that name here. Omit if unknown.
+parent_hint (optional): if a Sprockets node clearly belongs to a known hierarchy
+parent target from context, put that exact area/goal/project title here. Omit if unknown.
+Never invent a new area, goal, or project name for parent_hint.
 
 Output at least one node per input item. Never silently drop an item.
 
