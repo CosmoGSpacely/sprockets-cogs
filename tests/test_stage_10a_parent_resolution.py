@@ -166,6 +166,16 @@ class Stage10AParentResolutionTests(unittest.TestCase):
             ("phase-2-hardening", "project-1"),
         )
 
+        ambiguous = vault_graph.ambiguous_title_matches(
+            graph,
+            "Phase 2",
+            allowed_node_types=vault_graph.HIERARCHY_PARENT_NODE_TYPES,
+        )
+        self.assertCountEqual(
+            [title for _, title, _ in ambiguous],
+            ["Phase 2 - Handoff", "Phase 2 - Hardening"],
+        )
+
     def test_resolve_parents_sets_parent_from_vault_title_match(self):
         node = validate_node({
             "node_type": "sprockets/task",
@@ -590,6 +600,120 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
             result = agentic_loop.apply_explicit_hierarchy_hints(raw_nodes, classified)
 
         self.assertNotIn("parent_hint", result[0])
+
+    def test_ambiguous_hierarchy_parent_hints_route_to_review(self):
+        node = validate_node({
+            "node_type": "sprockets/note",
+            "title": "Phase 2 reflection",
+            "parent_hint": "Phase 2",
+            "confidence": "high",
+        })
+        graph = nx.DiGraph()
+        graph.add_node(
+            "phase-2-hardening",
+            title="Phase 2 - Hardening",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+        graph.add_node(
+            "phase-2-handoff",
+            title="Phase 2 - Handoff",
+            uuid="project-2",
+            node_type="sprockets/project",
+        )
+        written = []
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph), \
+             patch.object(agentic_loop, "write_to_review", side_effect=lambda raw, reason: written.append((raw, reason))):
+            result = agentic_loop.route_ambiguous_hierarchy_parent_hints_to_review([node])
+
+        self.assertEqual(result, [])
+        self.assertEqual(written[0][0]["title"], "Phase 2 reflection")
+        self.assertIn("ambiguous hierarchy parent_hint", written[0][1])
+        self.assertIn("Phase 2 - Hardening", written[0][1])
+        self.assertIn("Phase 2 - Handoff", written[0][1])
+
+    def test_unambiguous_hierarchy_parent_hints_do_not_route_to_review(self):
+        node = validate_node({
+            "node_type": "sprockets/note",
+            "title": "Hardening reflection",
+            "parent_hint": "Phase 2 - Hardening",
+            "confidence": "high",
+        })
+        graph = nx.DiGraph()
+        graph.add_node(
+            "phase-2-hardening",
+            title="Phase 2 - Hardening",
+            uuid="project-1",
+            node_type="sprockets/project",
+        )
+
+        with patch.object(agentic_loop, "build_graph", return_value=graph), \
+             patch.object(agentic_loop, "write_to_review") as write_to_review:
+            result = agentic_loop.route_ambiguous_hierarchy_parent_hints_to_review([node])
+
+        self.assertEqual(result, [node])
+        write_to_review.assert_not_called()
+
+    def test_process_input_routes_ambiguous_parent_hint_to_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "input"
+            processing_dir = root / "processing"
+            archive_dir = root / "archive"
+            review_dir = root / "review"
+            daily_dir = root / "daily"
+            input_dir.mkdir()
+            input_path = input_dir / "ambiguous.input"
+            input_path.write_text("---\nsession_id: ambiguous-test\n---\n\nReflection on Phase 2.\n")
+            graph = nx.DiGraph()
+            graph.add_node(
+                "phase-2-hardening",
+                title="Phase 2 - Hardening",
+                uuid="project-1",
+                node_type="sprockets/project",
+            )
+            graph.add_node(
+                "phase-2-handoff",
+                title="Phase 2 - Handoff",
+                uuid="project-2",
+                node_type="sprockets/project",
+            )
+            raw_nodes = [{"raw": "Reflection on Phase 2", "type_hint": "note"}]
+            classified = [
+                {
+                    "node_type": "sprockets/note",
+                    "title": "Phase 2 reflection",
+                    "item_text": "Reflection on Phase 2",
+                    "date": "2026-05-03",
+                    "confidence": "high",
+                    "parent_hint": "Phase 2",
+                }
+            ]
+
+            with patch.object(agentic_loop, "INPUT_DIR", input_dir), \
+                 patch.object(agentic_loop, "PROCESSING_DIR", processing_dir), \
+                 patch.object(agentic_loop, "ARCHIVE_DIR", archive_dir), \
+                 patch.object(agentic_loop, "REVIEW_DIR", review_dir), \
+                 patch.object(agentic_loop, "DAILY_DIR", daily_dir), \
+                 patch.object(agentic_loop, "build_context", return_value=""), \
+                 patch.object(agentic_loop, "extract_nodes", return_value=raw_nodes), \
+                 patch.object(agentic_loop, "classify_nodes", return_value=classified), \
+                 patch.object(agentic_loop, "build_graph", return_value=graph), \
+                 patch.object(agentic_loop, "write_node") as write_node:
+                agentic_loop.ensure_runtime_dirs()
+                agentic_loop.process_input(input_path)
+
+            write_node.assert_not_called()
+            self.assertTrue((archive_dir / "ambiguous.input").exists())
+            review_files = list(review_dir.glob("*.md"))
+            self.assertEqual(len(review_files), 1)
+            review_text = review_files[0].read_text()
+            self.assertIn("ambiguous hierarchy parent_hint", review_text)
+            self.assertIn('"title": "Phase 2 reflection"', review_text)
+            daily_files = list(daily_dir.glob("*.md"))
+            self.assertEqual(len(daily_files), 1)
+            self.assertIn("Processed 0 node(s)", daily_files[0].read_text())
 
 
 if __name__ == "__main__":
