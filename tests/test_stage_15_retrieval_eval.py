@@ -1,14 +1,17 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import agentic_loop
+import retrieval_eval
 from retrieval_eval import (
     RetrievalCase,
     RetrievalNode,
     evaluate_retriever,
     lexical_retrieve,
     load_retrieval_nodes,
+    retrieval_node_counts,
     stage_15_cases,
     stage_15_fixture_nodes,
 )
@@ -136,6 +139,30 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         )
         self.assertIn("Retrieval quality notes.", by_id["projects/phase-3-memory-enhancement"].text)
 
+    def test_retrieval_node_counts_summarizes_node_types(self):
+        counts = retrieval_node_counts([
+            RetrievalNode(
+                node_id="projects/one",
+                title="One",
+                node_type="sprockets/project",
+                path=Path("one.md"),
+            ),
+            RetrievalNode(
+                node_id="daily/2026-05-02",
+                title="Sat 02 May 2026",
+                node_type="cogs/daily",
+                path=Path("daily.md"),
+            ),
+            RetrievalNode(
+                node_id="projects/two",
+                title="Two",
+                node_type="sprockets/project",
+                path=Path("two.md"),
+            ),
+        ])
+
+        self.assertEqual(counts, {"cogs/daily": 1, "sprockets/project": 2})
+
     def test_load_retrieval_nodes_includes_daily_notes_with_stable_date_ids(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -183,6 +210,36 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             if not case_result.passed
         }
         self.assertIn("semantic_gap", failed_categories)
+
+    def test_cli_lexical_vault_mode_loads_nodes_from_configured_vault(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "contacts",
+                "jordan-mack",
+                "node_type: sprockets/contact\n"
+                "title: Jordan Mack\n",
+                "Proposal follow-up contact for current product feedback.",
+            )
+
+            with patch("sys.argv", [
+                "retrieval_eval",
+                "--retriever",
+                "lexical-vault",
+                "--vault-dir",
+                str(vault),
+                "--list-nodes",
+            ]):
+                with patch("builtins.print") as mock_print:
+                    retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- retriever: lexical-vault", printed)
+        self.assertIn("- vault: ", printed)
+        self.assertIn("- nodes: 1", printed)
+        self.assertIn("- sprockets/contact: 1", printed)
+        self.assertIn("contacts/jordan-mack", printed)
 
 
 if __name__ == "__main__":
