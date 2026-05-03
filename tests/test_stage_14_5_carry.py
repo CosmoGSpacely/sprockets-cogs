@@ -1,7 +1,10 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
+import carry
 import vault
 
 
@@ -72,6 +75,53 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             vault.mark_block_state("- [ ] Call Jordan\n", block, "?")
+
+    def test_scan_daily_notes_lists_open_blocks_through_cutoff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            old_note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            old_note.write_text(
+                old_note.read_text()
+                + "- [ ] WALMART\n"
+                  "  - [ ] return battery\n"
+                  "- [x] Done\n"
+            )
+            future_note = vault.ensure_daily_note("2026-05-06", daily_dir)
+            future_note.write_text(future_note.read_text() + "- [ ] Future thing\n")
+
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+
+            self.assertEqual(len(candidates), 1)
+            self.assertEqual(candidates[0].date, "2026-05-01")
+            self.assertEqual(candidates[0].block.item_text, "WALMART")
+            self.assertEqual(candidates[0].block.lines, (
+                "- [ ] WALMART",
+                "  - [ ] return battery",
+            ))
+
+    def test_print_candidates_summarizes_file_line_and_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            candidate = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")[0]
+            stream = StringIO()
+
+            with redirect_stdout(stream):
+                carry.print_candidates([candidate])
+
+            output = stream.getvalue()
+            self.assertIn("1 open Cogs carry candidate", output)
+            self.assertIn("2026-05-01", output)
+            self.assertIn("- [ ] Call Jordan", output)
+
+    def test_print_candidates_handles_empty_scan(self):
+        stream = StringIO()
+
+        with redirect_stdout(stream):
+            carry.print_candidates([])
+
+        self.assertIn("No open Cogs carry candidates found.", stream.getvalue())
 
 
 if __name__ == "__main__":
