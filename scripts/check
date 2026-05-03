@@ -5,4 +5,5 @@ cd "$(dirname "$0")/.."
 
 .venv/bin/python -m unittest discover -v
 .venv/bin/python smoke_test.py
+scripts/fallback-eval
 scripts/review --count

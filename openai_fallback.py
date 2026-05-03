@@ -12,6 +12,15 @@ log = logging.getLogger(__name__)
 
 OPENAI_FALLBACK_MODEL = os.environ.get("OPENAI_FALLBACK_MODEL", "gpt-4o-mini")
 
+OPENAI_FALLBACK_SYSTEM = (
+    CLASSIFY_SYSTEM
+    + "\nOpenAI fallback policy:\n"
+      "- Return candidate nodes only; they will be routed to human review.\n"
+      "- Fill every schema field. Use an empty string when a field does not apply.\n"
+      "- Use status \"active\" for every node; non-task status is ignored locally.\n"
+      "- Use parent_hint only for an exact known hierarchy parent target, otherwise empty string.\n"
+)
+
 
 def openai_fallback_enabled() -> bool:
     return bool(os.environ.get("OPENAI_API_KEY"))
@@ -19,6 +28,7 @@ def openai_fallback_enabled() -> bool:
 
 def _openai_classify_schema() -> dict:
     node_schema = dict(CLASSIFY_SCHEMA["properties"]["nodes"]["items"])
+    node_schema["required"] = list(node_schema["properties"].keys())
     node_schema["additionalProperties"] = False
     return {
         "type": "object",
@@ -40,10 +50,23 @@ def _response_text(response) -> str:
     parts = []
     for item in getattr(response, "output", []) or []:
         for content in getattr(item, "content", []) or []:
+            refusal = getattr(content, "refusal", "")
+            if refusal:
+                raise ValueError(f"OpenAI fallback refused: {refusal}")
             text = getattr(content, "text", "")
             if text:
                 parts.append(text)
     return "".join(parts)
+
+
+def _fallback_user_message(raw_nodes: list[dict], context: str, reason: str) -> str:
+    return (
+        "The local model could not produce trusted structured output.\n"
+        f"Reason: {reason}\n\n"
+        f"Context:\n{context}\n\n"
+        f"Extracted items:\n{json.dumps(raw_nodes, indent=2)}\n\n"
+        "Classify each item as a review candidate. Return JSON only."
+    )
 
 
 def classify_nodes_with_openai_fallback(
@@ -67,19 +90,13 @@ def classify_nodes_with_openai_fallback(
         log.warning("OpenAI fallback skipped: openai package is not installed")
         return []
 
-    user_msg = (
-        "The local model could not produce trusted structured output.\n"
-        f"Reason: {reason}\n\n"
-        f"Context:\n{context}\n\n"
-        f"Extracted items:\n{json.dumps(raw_nodes, indent=2)}\n\n"
-        "Classify each item. Return JSON only."
-    )
+    user_msg = _fallback_user_message(raw_nodes, context, reason)
 
     client = OpenAI()
     response = client.responses.create(
         model=OPENAI_FALLBACK_MODEL,
         input=[
-            {"role": "system", "content": CLASSIFY_SYSTEM},
+            {"role": "system", "content": OPENAI_FALLBACK_SYSTEM},
             {"role": "user", "content": user_msg},
         ],
         text={
