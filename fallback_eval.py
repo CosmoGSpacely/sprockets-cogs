@@ -11,7 +11,7 @@ import argparse
 import json
 from dataclasses import dataclass
 
-from models import validate_node
+from models import CogsDailyItem, SprocketsNote, SprocketsTask, validate_node
 from openai_fallback import (
     _fallback_user_message,
     _openai_classify_schema,
@@ -26,6 +26,17 @@ class FallbackEvalCase:
     reason: str
     context: str
     raw_nodes: list[dict]
+    expected_node_types: list[str]
+    required_text: list[str]
+
+
+@dataclass(frozen=True)
+class FallbackEvalResult:
+    case_name: str
+    candidate_count: int
+    valid_count: int
+    passed: bool
+    issues: list[str]
 
 
 CASES = [
@@ -34,12 +45,16 @@ CASES = [
         reason="retry failed: cogs/daily: date must be YYYY-MM-DD",
         context="Already in today's note: (none)",
         raw_nodes=[{"raw": "call Jordan next Thursday", "type_hint": "task"}],
+        expected_node_types=["sprockets/task", "cogs/daily"],
+        required_text=["Jordan"],
     ),
     FallbackEvalCase(
         name="specific-two-day-setting",
         reason="confidence: low",
         context="Already in today's note: (none)",
         raw_nodes=[{"raw": "WFH Monday and Tuesday", "type_hint": "setting"}],
+        expected_node_types=["cogs/daily", "cogs/daily"],
+        required_text=["WFH"],
     ),
     FallbackEvalCase(
         name="hierarchy-project-note",
@@ -57,6 +72,8 @@ CASES = [
                 "type_hint": "note",
             }
         ],
+        expected_node_types=["sprockets/note"],
+        required_text=["Phase 2 - Hardening"],
     ),
 ]
 
@@ -73,7 +90,81 @@ def _validate_candidates(candidates: list[dict]) -> tuple[int, list[str]]:
     return valid_count, errors
 
 
-def run_contract_check() -> None:
+def _candidate_text(candidate: dict) -> str:
+    return " ".join(
+        str(candidate.get(field, ""))
+        for field in ["title", "item_text", "parent_hint", "date"]
+    )
+
+
+def _score_case(case: FallbackEvalCase, candidates: list[dict]) -> tuple[bool, list[str]]:
+    issues: list[str] = []
+    nodes = []
+    for candidate in candidates:
+        try:
+            nodes.append(validate_node(candidate))
+        except Exception as exc:
+            issues.append(f"invalid {candidate.get('node_type', '?')}: {exc}")
+
+    actual_types = [node.node_type for node in nodes]
+    expected_counts = {
+        node_type: case.expected_node_types.count(node_type)
+        for node_type in set(case.expected_node_types)
+    }
+    for node_type, expected in expected_counts.items():
+        actual = actual_types.count(node_type)
+        if actual < expected:
+            issues.append(f"expected at least {expected} {node_type}, got {actual}")
+
+    combined = "\n".join(_candidate_text(candidate) for candidate in candidates)
+    for text in case.required_text:
+        if text.lower() not in combined.lower():
+            issues.append(f"missing required text: {text}")
+
+    for node in nodes:
+        if isinstance(node, SprocketsTask):
+            if not any(isinstance(other, CogsDailyItem) for other in nodes):
+                issues.append("sprockets/task candidate missing cogs/daily companion")
+        if isinstance(node, SprocketsNote) and case.name == "hierarchy-project-note":
+            if node.parent_hint != "Phase 2 - Hardening":
+                issues.append("hierarchy note should use exact parent_hint: Phase 2 - Hardening")
+
+    return not issues, issues
+
+
+def _select_cases(case_name: str = "") -> list[FallbackEvalCase]:
+    if not case_name:
+        return CASES
+    selected = [case for case in CASES if case.name == case_name]
+    if not selected:
+        names = ", ".join(case.name for case in CASES)
+        raise SystemExit(f"Unknown fallback eval case: {case_name}. Available: {names}")
+    return selected
+
+
+def _evaluate_case(case: FallbackEvalCase, candidates: list[dict]) -> FallbackEvalResult:
+    valid_count, validation_errors = _validate_candidates(candidates)
+    passed, score_issues = _score_case(case, candidates)
+    issues = [*validation_errors, *score_issues]
+    return FallbackEvalResult(
+        case_name=case.name,
+        candidate_count=len(candidates),
+        valid_count=valid_count,
+        passed=passed,
+        issues=issues,
+    )
+
+
+def _print_summary(results: list[FallbackEvalResult]) -> None:
+    passed = sum(1 for result in results if result.passed)
+    needs_review = len(results) - passed
+    print("\nSummary")
+    print(f"- passed: {passed}")
+    print(f"- review: {needs_review}")
+    print(f"- total:  {len(results)}")
+
+
+def run_contract_check(case_name: str = "") -> None:
     schema = _openai_classify_schema()
     node_schema = schema["properties"]["nodes"]["items"]
     print("Fallback contract")
@@ -81,19 +172,22 @@ def run_contract_check() -> None:
     print(f"- node additionalProperties: {node_schema['additionalProperties']}")
     print(f"- required node fields: {', '.join(node_schema['required'])}")
     print()
-    for case in CASES:
+    for case in _select_cases(case_name):
         message = _fallback_user_message(case.raw_nodes, case.context, case.reason)
         print(f"{case.name}")
         print(f"- reason: {case.reason}")
         print(f"- raw items: {len(case.raw_nodes)}")
+        print(f"- expected node types: {', '.join(case.expected_node_types)}")
+        print(f"- required text: {', '.join(case.required_text)}")
         print(f"- prompt chars: {len(message)}")
 
 
-def run_live_openai() -> None:
+def run_live_openai(case_name: str = "", quiet: bool = False) -> None:
     if not openai_fallback_enabled():
         raise SystemExit("OPENAI_API_KEY is not set; live fallback eval skipped.")
 
-    for case in CASES:
+    results: list[FallbackEvalResult] = []
+    for case in _select_cases(case_name):
         print(f"\n=== {case.name} ===")
         candidates = classify_nodes_with_openai_fallback(
             case.raw_nodes,
@@ -102,12 +196,26 @@ def run_live_openai() -> None:
         )
         if not candidates:
             print("No candidates returned. OpenAI fallback may be unavailable, out of quota, or declined.")
+            results.append(
+                FallbackEvalResult(
+                    case_name=case.name,
+                    candidate_count=0,
+                    valid_count=0,
+                    passed=False,
+                    issues=["no candidates returned"],
+                )
+            )
             continue
-        valid_count, errors = _validate_candidates(candidates)
-        print(json.dumps(candidates, indent=2))
-        print(f"valid candidates: {valid_count}/{len(candidates)}")
-        for error in errors:
-            print(f"invalid: {error}")
+
+        result = _evaluate_case(case, candidates)
+        results.append(result)
+        if not quiet:
+            print(json.dumps(candidates, indent=2))
+        print(f"valid candidates: {result.valid_count}/{result.candidate_count}")
+        print(f"eval result: {'pass' if result.passed else 'review'}")
+        for issue in result.issues:
+            print(f"issue: {issue}")
+    _print_summary(results)
 
 
 def main() -> None:
@@ -117,12 +225,22 @@ def main() -> None:
         action="store_true",
         help="Call the configured OpenAI fallback model. Never writes to the vault.",
     )
+    parser.add_argument(
+        "--case",
+        default="",
+        help="Run one named case instead of the full corpus.",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="In live mode, hide raw candidate JSON and print only scores.",
+    )
     args = parser.parse_args()
 
     if args.live_openai:
-        run_live_openai()
+        run_live_openai(args.case, quiet=args.quiet)
     else:
-        run_contract_check()
+        run_contract_check(args.case)
 
 
 if __name__ == "__main__":
