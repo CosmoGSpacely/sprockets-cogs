@@ -59,6 +59,22 @@ def _response_text(response) -> str:
     return "".join(parts)
 
 
+def _openai_error_summary(exc: Exception) -> str:
+    status_code = getattr(exc, "status_code", "")
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        error = body.get("error", {})
+        if isinstance(error, dict):
+            code = error.get("code") or error.get("type") or ""
+            message = error.get("message") or ""
+            parts = [str(part) for part in [status_code, code, message] if part]
+            if parts:
+                return " - ".join(parts)
+    if status_code:
+        return f"{status_code} - {exc}"
+    return str(exc)
+
+
 def _fallback_user_message(raw_nodes: list[dict], context: str, reason: str) -> str:
     return (
         "The local model could not produce trusted structured output.\n"
@@ -93,24 +109,29 @@ def classify_nodes_with_openai_fallback(
     user_msg = _fallback_user_message(raw_nodes, context, reason)
 
     client = OpenAI()
-    response = client.responses.create(
-        model=OPENAI_FALLBACK_MODEL,
-        input=[
-            {"role": "system", "content": OPENAI_FALLBACK_SYSTEM},
-            {"role": "user", "content": user_msg},
-        ],
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "sprockets_cogs_classification",
-                "schema": _openai_classify_schema(),
-                "strict": True,
-            }
-        },
-    )
+    try:
+        response = client.responses.create(
+            model=OPENAI_FALLBACK_MODEL,
+            input=[
+                {"role": "system", "content": OPENAI_FALLBACK_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "sprockets_cogs_classification",
+                    "schema": _openai_classify_schema(),
+                    "strict": True,
+                }
+            },
+        )
 
-    raw = _response_text(response)
-    result = json.loads(raw)
+        raw = _response_text(response)
+        result = json.loads(raw)
+    except Exception as exc:
+        log.warning("OpenAI fallback unavailable: %s", _openai_error_summary(exc))
+        return []
+
     nodes = result.get("nodes", []) if isinstance(result, dict) else []
     log.info("OpenAI fallback classified %d node candidate(s)", len(nodes))
     return nodes
