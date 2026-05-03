@@ -167,6 +167,87 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 carry.validate_decision(carry.CarryDecision(candidate, "skip", "2026-05-04"))
 
+    def test_build_plan_document_creates_editable_json_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+
+            self.assertEqual(plan["kind"], "sprockets-cogs/carry-plan")
+            self.assertEqual(plan["version"], 1)
+            self.assertEqual(len(plan["items"]), 1)
+            self.assertEqual(plan["items"][0]["action"], "carry")
+            self.assertEqual(plan["items"][0]["destination_date"], "2026-05-04")
+            self.assertEqual(plan["items"][0]["item_text"], "Call Jordan")
+            self.assertEqual(carry.validate_plan_document(plan), [])
+
+    def test_plan_document_round_trips_to_disk_without_vault_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp) / "daily"
+            daily_dir.mkdir()
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            original = note.read_text() + "- [ ] Call Jordan\n"
+            note.write_text(original)
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+            plan_path = Path(tmp) / "carry-plan.json"
+
+            carry.write_plan_document(plan, plan_path)
+            loaded = carry.load_plan_document(plan_path)
+
+            self.assertEqual(loaded, plan)
+            self.assertEqual(note.read_text(), original)
+
+    def test_validate_plan_document_rejects_bad_actions_and_dates(self):
+        plan = {
+            "kind": "sprockets-cogs/carry-plan",
+            "version": 1,
+            "items": [
+                {
+                    "id": "one",
+                    "action": "carry",
+                    "destination_date": "",
+                    "source": {"date": "2026-05-01", "path": "/tmp/a.md", "line": 1},
+                    "item_text": "Call Jordan",
+                    "lines": ["- [ ] Call Jordan"],
+                },
+                {
+                    "id": "two",
+                    "action": "skip",
+                    "destination_date": "2026-05-04",
+                    "source": {"date": "2026-05-01", "path": "/tmp/a.md", "line": 2},
+                    "item_text": "Skip me",
+                    "lines": ["- [ ] Skip me"],
+                },
+            ],
+        }
+
+        issues = carry.validate_plan_document(plan)
+
+        self.assertIn("items[1].destination_date is required for carry", issues)
+        self.assertIn("items[2].destination_date must be empty for skip", issues)
+
+    def test_preview_plan_document_lists_editable_decisions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Call Jordan\n- [ ] Archive receipt\n")
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+            plan["items"][1]["action"] = "drop"
+            plan["items"][1]["destination_date"] = ""
+
+            preview = carry.preview_plan_document(plan)
+
+            self.assertIn("2 carry plan item", preview)
+            self.assertIn("carry", preview)
+            self.assertIn("-> 2026-05-04", preview)
+            self.assertIn("drop", preview)
+            self.assertIn("Archive receipt", preview)
+
 
 if __name__ == "__main__":
     unittest.main()
