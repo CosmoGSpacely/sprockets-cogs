@@ -13,8 +13,10 @@ from retrieval_eval import (
     lexical_retrieve,
     load_retrieval_nodes,
     retrieval_node_counts,
+    select_cases,
     stage_15_cases,
     stage_15_fixture_nodes,
+    stage_15_real_vault_cases,
 )
 
 
@@ -91,6 +93,31 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         )
         self.assertTrue(all(case.expected_ids for case in cases))
         self.assertTrue(any(case.avoid_ids for case in cases))
+
+    def test_real_vault_cases_cover_required_memory_risks(self):
+        cases = stage_15_real_vault_cases()
+        categories = {case.category for case in cases}
+
+        self.assertEqual(len(cases), len(stage_15_cases()))
+        self.assertTrue(
+            {
+                "named_entity",
+                "project_scope",
+                "hierarchy",
+                "recent_cogs",
+                "semantic_gap",
+                "staleness",
+                "contamination",
+            }.issubset(categories)
+        )
+        self.assertTrue(all(case.expected_ids for case in cases))
+        self.assertTrue(any(case.avoid_ids for case in cases))
+
+    def test_select_cases_uses_real_vault_cases_for_lexical_vault_auto(self):
+        self.assertEqual(select_cases("auto", "lexical-vault"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("auto", "current"), stage_15_cases())
+        self.assertEqual(select_cases("fixture", "lexical-vault"), stage_15_cases())
+        self.assertEqual(select_cases("real-vault", "current"), stage_15_real_vault_cases())
 
     def test_current_empty_retriever_is_a_recorded_baseline_miss(self):
         result = evaluate_retriever(stage_15_cases(), agentic_loop.retrieve_relevant_nodes)
@@ -272,11 +299,12 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
 
         printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
         self.assertIn("- retriever: lexical-vault", printed)
+        self.assertIn("- case-set: real-vault", printed)
         self.assertIn("- vault: ", printed)
         self.assertIn("- nodes: 1", printed)
         self.assertIn("- sprockets/contact: 1", printed)
         self.assertIn("Target inventory", printed)
-        self.assertIn("contacts/jordan-mack", printed)
+        self.assertIn("contacts/tom-reilly", printed)
 
 
 if __name__ == "__main__":
