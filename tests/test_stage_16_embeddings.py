@@ -133,6 +133,115 @@ class Stage16EmbeddingTests(unittest.TestCase):
             model="test-embed-model",
         )
 
+    @patch("embeddings.embed_node")
+    def test_build_embedding_index_pairs_nodes_with_vectors(self, mock_embed_node):
+        nodes = [
+            RetrievalNode(
+                node_id="projects/phase-3-memory-enhancement",
+                title="Phase 3 - Memory Enhancement",
+                node_type="sprockets/project",
+                path="phase-3-memory-enhancement.md",
+            ),
+            RetrievalNode(
+                node_id="contacts/jordan-mack",
+                title="Jordan Mack",
+                node_type="sprockets/contact",
+                path="jordan-mack.md",
+            ),
+        ]
+        mock_embed_node.side_effect = [[1, 0], [0, 1]]
+
+        index = embeddings.build_embedding_index(nodes, model="test-embed-model")
+
+        self.assertEqual([item.node.node_id for item in index], [
+            "projects/phase-3-memory-enhancement",
+            "contacts/jordan-mack",
+        ])
+        self.assertEqual(index[0].vector, (1.0, 0.0))
+        self.assertEqual(index[1].vector, (0.0, 1.0))
+        mock_embed_node.assert_any_call(nodes[0], model="test-embed-model")
+        mock_embed_node.assert_any_call(nodes[1], model="test-embed-model")
+
+    @patch("embeddings.embed_text")
+    def test_retrieve_by_embedding_ranks_nodes_by_cosine_similarity(self, mock_embed_text):
+        mock_embed_text.return_value = [1, 0]
+        memory = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path="phase-3-memory-enhancement.md",
+        )
+        contact = RetrievalNode(
+            node_id="contacts/jordan-mack",
+            title="Jordan Mack",
+            node_type="sprockets/contact",
+            path="jordan-mack.md",
+        )
+        index = (
+            embeddings.EmbeddedNode(node=contact, vector=(0.0, 1.0)),
+            embeddings.EmbeddedNode(node=memory, vector=(0.9, 0.1)),
+        )
+
+        results = embeddings.retrieve_by_embedding(
+            "run beyond my laptop",
+            index,
+            limit=1,
+            model="test-embed-model",
+        )
+
+        self.assertEqual([node.node_id for node in results], [
+            "projects/phase-3-memory-enhancement",
+        ])
+        mock_embed_text.assert_called_once_with("run beyond my laptop", model="test-embed-model")
+
+    @patch("embeddings.embed_text")
+    def test_retrieve_by_embedding_tiebreaks_by_node_id(self, mock_embed_text):
+        mock_embed_text.return_value = [1, 0]
+        later = RetrievalNode(
+            node_id="projects/zeta",
+            title="Zeta",
+            node_type="sprockets/project",
+            path="zeta.md",
+        )
+        earlier = RetrievalNode(
+            node_id="projects/alpha",
+            title="Alpha",
+            node_type="sprockets/project",
+            path="alpha.md",
+        )
+        index = (
+            embeddings.EmbeddedNode(node=later, vector=(1.0, 0.0)),
+            embeddings.EmbeddedNode(node=earlier, vector=(1.0, 0.0)),
+        )
+
+        results = embeddings.retrieve_by_embedding("project", index)
+
+        self.assertEqual([node.node_id for node in results], [
+            "projects/alpha",
+            "projects/zeta",
+        ])
+
+    @patch("embeddings.embed_text")
+    def test_retrieve_by_embedding_rejects_dimension_mismatch(self, mock_embed_text):
+        mock_embed_text.return_value = [1, 0]
+        node = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path="phase-3-memory-enhancement.md",
+        )
+        index = (embeddings.EmbeddedNode(node=node, vector=(1.0,)),)
+
+        with self.assertRaisesRegex(embeddings.EmbeddingError, "dimensions do not match"):
+            embeddings.retrieve_by_embedding("memory", index)
+
+    @patch("embeddings.embed_text")
+    def test_retrieve_by_embedding_returns_empty_for_non_positive_limit(self, mock_embed_text):
+        results = embeddings.retrieve_by_embedding("memory", (), limit=0)
+
+        self.assertEqual(results, [])
+        mock_embed_text.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
