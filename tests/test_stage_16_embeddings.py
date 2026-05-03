@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 import embeddings
+from retrieval_eval import RetrievalNode
 
 
 class Stage16EmbeddingTests(unittest.TestCase):
@@ -71,6 +72,66 @@ class Stage16EmbeddingTests(unittest.TestCase):
 
         with self.assertRaisesRegex(embeddings.EmbeddingError, "only numbers"):
             embeddings.embed_text("memory probe")
+
+    def test_node_embedding_text_includes_stable_identity_metadata_and_body(self):
+        node = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path="phase-3-memory-enhancement.md",
+            parent_slugs=("build-sprockets-cogs",),
+            text="Improve memory retrieval.",
+        )
+
+        text = embeddings.node_embedding_text(node)
+
+        self.assertEqual(
+            text,
+            "id: projects/phase-3-memory-enhancement\n"
+            "type: sprockets/project\n"
+            "title: Phase 3 - Memory Enhancement\n"
+            "parents: build-sprockets-cogs\n"
+            "text: Improve memory retrieval.",
+        )
+
+    def test_node_embedding_text_omits_empty_optional_fields(self):
+        node = RetrievalNode(
+            node_id="contacts/jordan-mack",
+            title="Jordan Mack",
+            node_type="sprockets/contact",
+            path="jordan-mack.md",
+        )
+
+        text = embeddings.node_embedding_text(node)
+
+        self.assertEqual(
+            text,
+            "id: contacts/jordan-mack\n"
+            "type: sprockets/contact\n"
+            "title: Jordan Mack",
+        )
+
+    @patch("embeddings.embed_text")
+    def test_embed_node_embeds_stable_node_text(self, mock_embed_text):
+        mock_embed_text.return_value = [0.1, 0.2]
+        node = RetrievalNode(
+            node_id="daily/2026-05-03",
+            title="Sun 03 May 2026",
+            node_type="cogs/daily",
+            path="Sun 03 May 2026.md",
+            text="- [ ] Continue Stage 16",
+        )
+
+        vector = embeddings.embed_node(node, model="test-embed-model")
+
+        self.assertEqual(vector, [0.1, 0.2])
+        mock_embed_text.assert_called_once_with(
+            "id: daily/2026-05-03\n"
+            "type: cogs/daily\n"
+            "title: Sun 03 May 2026\n"
+            "text: - [ ] Continue Stage 16",
+            model="test-embed-model",
+        )
 
 
 if __name__ == "__main__":
