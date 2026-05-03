@@ -6,6 +6,8 @@ from collections.abc import Sequence
 
 import ollama
 
+from retrieval_eval import RetrievalNode
+
 
 DEFAULT_EMBED_MODEL = "nomic-embed-text"
 EMBED_MODEL = os.environ.get("SPROCKETS_COGS_EMBED_MODEL", DEFAULT_EMBED_MODEL)
@@ -51,3 +53,25 @@ def embed_text(text: str, model: str | None = None) -> list[float]:
     if len(embeddings) != 1:
         raise EmbeddingError(f"expected exactly one embedding, got {len(embeddings)}")
     return _validate_vector(embeddings[0])
+
+
+def node_embedding_text(node: RetrievalNode) -> str:
+    """Return stable text used to embed a vault retrieval node."""
+
+    parts = [
+        f"id: {node.node_id}",
+        f"type: {node.node_type}",
+        f"title: {node.title}",
+    ]
+    if node.parent_slugs:
+        parts.append(f"parents: {', '.join(node.parent_slugs)}")
+    body = node.text.strip()
+    if body:
+        parts.append(f"text: {body}")
+    return "\n".join(parts)
+
+
+def embed_node(node: RetrievalNode, model: str | None = None) -> list[float]:
+    """Embed one retrieval node using its stable node text."""
+
+    return embed_text(node_embedding_text(node), model=model)
