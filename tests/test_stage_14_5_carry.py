@@ -123,6 +123,50 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
 
         self.assertIn("No open Cogs carry candidates found.", stream.getvalue())
 
+    def test_build_default_plan_carries_every_candidate_to_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+
+            decisions = carry.build_default_plan(candidates, "2026-05-04")
+
+            self.assertEqual(len(decisions), 1)
+            self.assertEqual(decisions[0].action, "carry")
+            self.assertEqual(decisions[0].destination_date, "2026-05-04")
+
+    def test_preview_plan_is_readable_and_does_not_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            original = note.read_text() + "- [ ] Call Jordan\n"
+            note.write_text(original)
+            candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
+            decisions = carry.build_default_plan(candidates, "2026-05-04")
+
+            preview = carry.preview_plan(decisions)
+
+            self.assertIn("1 carry decision", preview)
+            self.assertIn("carry", preview)
+            self.assertIn("-> 2026-05-04", preview)
+            self.assertIn("Call Jordan", preview)
+            self.assertEqual(note.read_text(), original)
+
+    def test_validate_decision_rejects_bad_carry_actions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            candidate = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")[0]
+
+            with self.assertRaises(ValueError):
+                carry.validate_decision(carry.CarryDecision(candidate, "invent"))
+            with self.assertRaises(ValueError):
+                carry.validate_decision(carry.CarryDecision(candidate, "carry"))
+            with self.assertRaises(ValueError):
+                carry.validate_decision(carry.CarryDecision(candidate, "skip", "2026-05-04"))
+
 
 if __name__ == "__main__":
     unittest.main()
