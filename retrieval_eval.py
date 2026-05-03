@@ -93,6 +93,16 @@ class RetrievalSuiteResult:
         return len(self.results)
 
 
+@dataclass(frozen=True)
+class RetrievalTargetStatus:
+    """Presence report for benchmark target IDs in a loaded node set."""
+
+    case: RetrievalCase
+    present_expected_ids: frozenset[str]
+    missing_expected_ids: frozenset[str]
+    present_avoid_ids: frozenset[str]
+
+
 Retriever = Callable[[str], Iterable[object]]
 
 
@@ -128,6 +138,26 @@ def evaluate_retriever(
             )
         )
     return RetrievalSuiteResult(tuple(results))
+
+
+def evaluate_target_presence(
+    cases: Iterable[RetrievalCase],
+    nodes: Iterable[RetrievalNode],
+) -> tuple[RetrievalTargetStatus, ...]:
+    """Report which expected and avoid IDs exist in a loaded vault/node set."""
+
+    available_ids = {node.node_id for node in nodes}
+    statuses: list[RetrievalTargetStatus] = []
+    for case in cases:
+        statuses.append(
+            RetrievalTargetStatus(
+                case=case,
+                present_expected_ids=frozenset(case.expected_ids & available_ids),
+                missing_expected_ids=frozenset(case.expected_ids - available_ids),
+                present_avoid_ids=frozenset(case.avoid_ids & available_ids),
+            )
+        )
+    return tuple(statuses)
 
 
 def retrieval_node_counts(nodes: Iterable[RetrievalNode]) -> dict[str, int]:
@@ -434,6 +464,11 @@ def main() -> None:
         action="store_true",
         help="Print a read-only retrieval-node inventory for lexical-vault mode.",
     )
+    parser.add_argument(
+        "--show-targets",
+        action="store_true",
+        help="Print which benchmark expected/avoid target IDs exist in the loaded node set.",
+    )
     args = parser.parse_args()
 
     if args.retriever == "lexical-fixture":
@@ -463,6 +498,16 @@ def main() -> None:
         print("\nNode inventory")
         for node_type, count in retrieval_node_counts(scan_nodes).items():
             print(f"- {node_type or '(unknown)'}: {count}")
+    if args.show_targets and scan_nodes:
+        print("\nTarget inventory")
+        for status in evaluate_target_presence(stage_15_cases(), scan_nodes):
+            print(f"\n{status.case.name}")
+            if status.present_expected_ids:
+                print("- present expected: " + ", ".join(sorted(status.present_expected_ids)))
+            if status.missing_expected_ids:
+                print("- missing expected: " + ", ".join(sorted(status.missing_expected_ids)))
+            if status.present_avoid_ids:
+                print("- present avoid: " + ", ".join(sorted(status.present_avoid_ids)))
     for case_result in result.results:
         marker = "pass" if case_result.passed else "miss"
         print(f"\n{case_result.case.name}: {marker}")

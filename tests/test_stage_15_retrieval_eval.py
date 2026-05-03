@@ -9,6 +9,7 @@ from retrieval_eval import (
     RetrievalCase,
     RetrievalNode,
     evaluate_retriever,
+    evaluate_target_presence,
     lexical_retrieve,
     load_retrieval_nodes,
     retrieval_node_counts,
@@ -163,6 +164,40 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
 
         self.assertEqual(counts, {"cogs/daily": 1, "sprockets/project": 2})
 
+    def test_evaluate_target_presence_reports_missing_and_present_targets(self):
+        case = RetrievalCase(
+            name="targets",
+            query="Find memory work.",
+            expected_ids=frozenset({
+                "projects/phase-3-memory-enhancement",
+                "notes/openai-fallback-review-first",
+            }),
+            avoid_ids=frozenset({
+                "projects/phase-2-hardening",
+                "notes/anthropic-fallback-plan",
+            }),
+        )
+        nodes = [
+            RetrievalNode(
+                node_id="projects/phase-3-memory-enhancement",
+                title="Phase 3 - Memory Enhancement",
+                node_type="sprockets/project",
+                path=Path("phase-3-memory-enhancement.md"),
+            ),
+            RetrievalNode(
+                node_id="projects/phase-2-hardening",
+                title="Phase 2 - Hardening",
+                node_type="sprockets/project",
+                path=Path("phase-2-hardening.md"),
+            ),
+        ]
+
+        status = evaluate_target_presence([case], nodes)[0]
+
+        self.assertEqual(status.present_expected_ids, frozenset({"projects/phase-3-memory-enhancement"}))
+        self.assertEqual(status.missing_expected_ids, frozenset({"notes/openai-fallback-review-first"}))
+        self.assertEqual(status.present_avoid_ids, frozenset({"projects/phase-2-hardening"}))
+
     def test_load_retrieval_nodes_includes_daily_notes_with_stable_date_ids(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -230,6 +265,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 "--vault-dir",
                 str(vault),
                 "--list-nodes",
+                "--show-targets",
             ]):
                 with patch("builtins.print") as mock_print:
                     retrieval_eval.main()
@@ -239,6 +275,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- vault: ", printed)
         self.assertIn("- nodes: 1", printed)
         self.assertIn("- sprockets/contact: 1", printed)
+        self.assertIn("Target inventory", printed)
         self.assertIn("contacts/jordan-mack", printed)
 
 
