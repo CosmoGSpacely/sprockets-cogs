@@ -77,6 +77,16 @@ CASES = [
     ),
 ]
 
+PROMOTION_CRITERIA = [
+    "All live fallback eval cases return at least one valid candidate.",
+    "Every case scores pass without missing required node types or required text.",
+    "Task candidates include a same-date cogs/daily companion before review routing.",
+    "Hierarchy candidates use exact existing parent_hint values or leave parent_hint empty.",
+    "No fallback candidate creates area/goal/project hierarchy nodes directly.",
+    "OpenAI outage, quota, or refusal still falls back to local review without traceback.",
+    "Fallback output remains review-first; direct vault writes stay disabled.",
+]
+
 
 def _validate_candidates(candidates: list[dict]) -> tuple[int, list[str]]:
     errors: list[str] = []
@@ -164,6 +174,12 @@ def _print_summary(results: list[FallbackEvalResult]) -> None:
     print(f"- total:  {len(results)}")
 
 
+def print_promotion_criteria() -> None:
+    print("Fallback promotion criteria")
+    for i, criterion in enumerate(PROMOTION_CRITERIA, start=1):
+        print(f"{i}. {criterion}")
+
+
 def run_contract_check(case_name: str = "") -> None:
     schema = _openai_classify_schema()
     node_schema = schema["properties"]["nodes"]["items"]
@@ -235,9 +251,16 @@ def main() -> None:
         action="store_true",
         help="In live mode, hide raw candidate JSON and print only scores.",
     )
+    parser.add_argument(
+        "--criteria",
+        action="store_true",
+        help="Print the fallback promotion criteria and exit.",
+    )
     args = parser.parse_args()
 
-    if args.live_openai:
+    if args.criteria:
+        print_promotion_criteria()
+    elif args.live_openai:
         run_live_openai(args.case, quiet=args.quiet)
     else:
         run_contract_check(args.case)

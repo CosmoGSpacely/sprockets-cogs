@@ -3,6 +3,8 @@ import importlib
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -297,6 +299,17 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertEqual(result.candidate_count, 2)
         self.assertEqual(result.valid_count, 2)
         self.assertTrue(result.passed)
+
+    def test_fallback_eval_prints_promotion_criteria(self):
+        stream = StringIO()
+
+        with redirect_stdout(stream):
+            fallback_eval.print_promotion_criteria()
+
+        output = stream.getvalue()
+        self.assertIn("Fallback promotion criteria", output)
+        self.assertIn("review-first", output)
+        self.assertIn("direct vault writes stay disabled", output)
 
     def test_openai_fallback_skips_when_disabled(self):
         with patch.object(agentic_loop, "openai_fallback_enabled", return_value=False), \
