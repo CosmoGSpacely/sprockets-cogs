@@ -7,7 +7,7 @@ the cases future retrievers must satisfy and provides deterministic scoring.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 import re
 from typing import Callable, Iterable
@@ -337,6 +337,8 @@ def expand_retrieval_neighbors(
 
 def _query_preferred_node_types(query: str) -> tuple[str, ...]:
     query_tokens = _tokens(query)
+    if query_tokens & {"continue", "recent", "today", "yesterday"}:
+        return ("cogs/daily",)
     if query_tokens & {"capture", "reflection", "note", "idea"}:
         return ("sprockets/note", "cogs/daily")
     return ()
@@ -782,20 +784,65 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
 def _build_memory_index_retriever(
     nodes: tuple[RetrievalNode, ...],
 ) -> tuple[Retriever, Callable[[str], object]]:
-    from memory_index import InMemoryMemoryIndex, MemoryQuery, memory_record_from_retrieval_node
+    from memory_index import (
+        InMemoryMemoryIndex,
+        MemoryQuery,
+        RetrievalTrace,
+        memory_record_from_retrieval_node,
+    )
 
     by_id = {node.node_id: node for node in nodes}
     index = InMemoryMemoryIndex(memory_record_from_retrieval_node(node) for node in nodes)
+    recent_daily_nodes = tuple(
+        sorted(
+            (
+                node
+                for node in nodes
+                if node.node_type == "cogs/daily"
+                and _retrieval_daily_date(node) <= date.today()
+            ),
+            key=lambda node: node.node_id,
+            reverse=True,
+        )
+    )
 
     def retrieve(query: str) -> list[RetrievalNode]:
-        results = index.query(MemoryQuery(text=query))
+        preferred_types = _query_preferred_node_types(query)
+        memory_query = MemoryQuery(text=query, node_types=preferred_types)
+        results = index.query(memory_query)
+        if preferred_types == ("cogs/daily",) and not results:
+            return list(recent_daily_nodes[:memory_query.limit])
+        if preferred_types and not results:
+            results = index.query(MemoryQuery(text=query))
         return [by_id[result.node_id] for result in results if result.node_id in by_id]
 
     def trace(query: str) -> object:
-        _results, retrieval_trace = index.query_with_trace(MemoryQuery(text=query))
+        preferred_types = _query_preferred_node_types(query)
+        memory_query = MemoryQuery(text=query, node_types=preferred_types)
+        results, retrieval_trace = index.query_with_trace(memory_query)
+        if preferred_types == ("cogs/daily",) and not results:
+            fallback_ids = tuple(node.node_id for node in recent_daily_nodes[:memory_query.limit])
+            return RetrievalTrace(
+                query=memory_query,
+                retriever_name=retrieval_trace.retriever_name,
+                result_ids=fallback_ids,
+                filters_applied=retrieval_trace.filters_applied,
+                notes=retrieval_trace.notes + ("daily recency fallback",),
+            )
+        if preferred_types and not results:
+            _results, retrieval_trace = index.query_with_trace(MemoryQuery(text=query))
         return retrieval_trace
 
     return retrieve, trace
+
+
+def _retrieval_daily_date(node: RetrievalNode) -> date:
+    if node.node_id.startswith("daily/"):
+        try:
+            return datetime.strptime(node.node_id.removeprefix("daily/"), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    return date.min
 
 
 def main() -> None:
