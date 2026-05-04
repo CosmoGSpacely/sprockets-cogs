@@ -1,6 +1,8 @@
 import importlib
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import embeddings
@@ -19,6 +21,10 @@ class Stage16EmbeddingTests(unittest.TestCase):
         self.assertEqual(reloaded.EMBED_MODEL, "nomic-embed-text")
         self.assertEqual(reloaded.DEFAULT_EMBED_KEEP_ALIVE, "24h")
         self.assertEqual(reloaded.EMBED_KEEP_ALIVE, "24h")
+        self.assertEqual(
+            reloaded.DEFAULT_EMBED_CACHE_PATH,
+            Path.home() / ".cache" / "sprockets-cogs" / "embeddings.json",
+        )
 
     def test_embed_model_can_be_overridden_by_environment(self):
         with patch.dict(os.environ, {"SPROCKETS_COGS_EMBED_MODEL": "test-embed-model"}):
@@ -31,6 +37,12 @@ class Stage16EmbeddingTests(unittest.TestCase):
             reloaded = importlib.reload(embeddings)
 
         self.assertEqual(reloaded.EMBED_KEEP_ALIVE, "1h")
+
+    def test_embed_cache_path_can_be_overridden_by_environment(self):
+        with patch.dict(os.environ, {"SPROCKETS_COGS_EMBED_CACHE_PATH": "/tmp/test-embeddings.json"}):
+            reloaded = importlib.reload(embeddings)
+
+        self.assertEqual(reloaded.EMBED_CACHE_PATH, Path("/tmp/test-embeddings.json"))
 
     @patch("embeddings.ollama.embed")
     def test_embed_text_returns_single_numeric_vector(self, mock_embed):
@@ -149,8 +161,8 @@ class Stage16EmbeddingTests(unittest.TestCase):
             model="test-embed-model",
         )
 
-    @patch("embeddings.embed_node")
-    def test_build_embedding_index_pairs_nodes_with_vectors(self, mock_embed_node):
+    @patch("embeddings.embed_text")
+    def test_build_embedding_index_pairs_nodes_with_vectors(self, mock_embed_text):
         nodes = [
             RetrievalNode(
                 node_id="projects/phase-3-memory-enhancement",
@@ -165,7 +177,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
                 path="jordan-mack.md",
             ),
         ]
-        mock_embed_node.side_effect = [[1, 0], [0, 1]]
+        mock_embed_text.side_effect = [[1, 0], [0, 1]]
 
         index = embeddings.build_embedding_index(nodes, model="test-embed-model")
 
@@ -175,8 +187,80 @@ class Stage16EmbeddingTests(unittest.TestCase):
         ])
         self.assertEqual(index[0].vector, (1.0, 0.0))
         self.assertEqual(index[1].vector, (0.0, 1.0))
-        mock_embed_node.assert_any_call(nodes[0], model="test-embed-model")
-        mock_embed_node.assert_any_call(nodes[1], model="test-embed-model")
+        mock_embed_text.assert_any_call(
+            "id: projects/phase-3-memory-enhancement\n"
+            "type: sprockets/project\n"
+            "title: Phase 3 - Memory Enhancement",
+            model="test-embed-model",
+        )
+        mock_embed_text.assert_any_call(
+            "id: contacts/jordan-mack\n"
+            "type: sprockets/contact\n"
+            "title: Jordan Mack",
+            model="test-embed-model",
+        )
+
+    @patch("embeddings.embed_text")
+    def test_build_embedding_index_reuses_cached_vectors(self, mock_embed_text):
+        node = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path="phase-3-memory-enhancement.md",
+            text="Memory retrieval.",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = embeddings.JsonEmbeddingCache(Path(tmp) / "embeddings.json")
+            text = embeddings.node_embedding_text(node)
+            cache.set(
+                node.node_id,
+                "test-embed-model",
+                embeddings.embedding_text_hash(text),
+                [0.1, 0.2],
+            )
+
+            index = embeddings.build_embedding_index(
+                [node],
+                model="test-embed-model",
+                cache=cache,
+            )
+
+        self.assertEqual(index[0].vector, (0.1, 0.2))
+        mock_embed_text.assert_not_called()
+
+    @patch("embeddings.embed_text")
+    def test_build_embedding_index_updates_cache_when_text_changes(self, mock_embed_text):
+        mock_embed_text.return_value = [0.3, 0.4]
+        node = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path="phase-3-memory-enhancement.md",
+            text="New memory retrieval text.",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = embeddings.JsonEmbeddingCache(Path(tmp) / "embeddings.json")
+            cache.set(node.node_id, "test-embed-model", "old-hash", [0.1, 0.2])
+
+            index = embeddings.build_embedding_index(
+                [node],
+                model="test-embed-model",
+                cache=cache,
+            )
+            text_hash = embeddings.embedding_text_hash(embeddings.node_embedding_text(node))
+            cached_vector = cache.get(node.node_id, "test-embed-model", text_hash)
+
+        self.assertEqual(index[0].vector, (0.3, 0.4))
+        self.assertEqual(cached_vector, (0.3, 0.4))
+        mock_embed_text.assert_called_once()
+
+    def test_json_embedding_cache_ignores_unknown_schema_versions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "embeddings.json"
+            path.write_text('{"schema_version": 999, "entries": {"node": "old"}}')
+            cache = embeddings.JsonEmbeddingCache(path)
+
+            self.assertIsNone(cache.get("node", "model", "hash"))
 
     @patch("embeddings.embed_text")
     def test_retrieve_by_embedding_ranks_nodes_by_cosine_similarity(self, mock_embed_text):

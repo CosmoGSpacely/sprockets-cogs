@@ -715,10 +715,10 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
         "hybrid-graph-vault",
         "hybrid-graph-intent-vault",
     }:
-        from embeddings import build_embedding_index, retrieve_by_embedding
+        from embeddings import JsonEmbeddingCache, build_embedding_index, retrieve_by_embedding
 
         scan_nodes = tuple(load_retrieval_nodes(vault_dir))
-        index = build_embedding_index(scan_nodes)
+        index = build_embedding_index(scan_nodes, cache=JsonEmbeddingCache.default())
 
         if name == "embedding-vault":
             retriever = lambda query: retrieve_by_embedding(query, index)
