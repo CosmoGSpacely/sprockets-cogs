@@ -682,16 +682,21 @@ def apply_memory_parent_hints(input_text: str, classified: list[dict]) -> list[d
     now; the local model copied memory text into generated fields during live
     rehearsals. This guard uses retrieval as a structural hint only.
     """
-    result = list(classified)
-    if not result:
-        return result
+    return apply_memory_parent_title(classified, memory_parent_title(input_text))
 
+
+def memory_parent_title(input_text: str) -> str:
+    """Return the top retrieved hierarchy title for an input, if one exists."""
     retrieved = retrieve_relevant_nodes(input_text)
     top = retrieved[0] if retrieved else None
     if not top or getattr(top, "node_type", "") not in HIERARCHY_PARENT_NODE_TYPES:
-        return result
+        return ""
+    return getattr(top, "title", "").strip()
 
-    parent_title = getattr(top, "title", "").strip()
+
+def apply_memory_parent_title(classified: list[dict], parent_title: str) -> list[dict]:
+    """Attach an already-selected memory parent title to suitable nodes."""
+    result = list(classified)
     if not parent_title:
         return result
 
@@ -702,6 +707,53 @@ def apply_memory_parent_hints(input_text: str, classified: list[dict]) -> list[d
             continue
         node["parent_hint"] = parent_title
         log.info("Applied memory parent_hint for %s: %s", node.get("title", ""), parent_title)
+    return result
+
+
+def ensure_memory_hierarchy_tasks(
+    raw_nodes: list[dict],
+    classified: list[dict],
+    parent_title: str,
+) -> list[dict]:
+    """
+    Add a structural Sprockets task when memory identifies a parent project but
+    the classifier only produced a daily item.
+    """
+    if not parent_title:
+        return classified
+
+    result = list(classified)
+    existing_task_titles = [
+        node.get("title", "").lower()
+        for node in result
+        if node.get("node_type") == "sprockets/task"
+    ]
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    for raw in raw_nodes:
+        if raw.get("type_hint") != "task":
+            continue
+        raw_text = raw.get("raw", "").strip()
+        raw_lower = raw_text.lower()
+        if not raw_text:
+            continue
+        if any(title and title in raw_lower for title in existing_task_titles):
+            continue
+
+        title = re.sub(r"^(need to|remember to|todo:?)\s+", "", raw_text, flags=re.IGNORECASE).strip()
+        title = title[:1].upper() + title[1:] if title else raw_text
+        result.append({
+            "node_type": "sprockets/task",
+            "title": title,
+            "item_text": title,
+            "date": today,
+            "status": "active",
+            "confidence": "high",
+            "parent_hint": parent_title,
+        })
+        existing_task_titles.append(title.lower())
+        log.info("Auto-added memory hierarchy task for %s: %s", parent_title, title)
+
     return result
 
 
@@ -786,7 +838,9 @@ def process_input(file_path: Path) -> None:
         classified = classify_nodes(raw_nodes, context)
         classified = apply_explicit_hierarchy_hints(raw_nodes, classified)
         classified = ensure_hierarchy_tasks(raw_nodes, classified)
-        classified = apply_memory_parent_hints(content, classified)
+        memory_parent = memory_parent_title(content)
+        classified = ensure_memory_hierarchy_tasks(raw_nodes, classified, memory_parent)
+        classified = apply_memory_parent_title(classified, memory_parent)
         classified = ensure_cogs_companions(classified)
 
         valid_nodes, invalid_triples = validate_output(classified)
