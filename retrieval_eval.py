@@ -1026,6 +1026,9 @@ def main() -> None:
                 notes = getattr(trace, "notes", ())
                 if notes:
                     print("- trace notes: " + "; ".join(str(note) for note in notes))
+                quality_flags = getattr(trace, "quality_flags", ())
+                if quality_flags:
+                    print("- trace quality: " + "; ".join(str(flag) for flag in quality_flags))
                 result_summaries = getattr(trace, "result_summaries", ())
                 if result_summaries:
                     print("- trace results:")

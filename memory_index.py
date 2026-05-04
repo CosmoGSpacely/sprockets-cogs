@@ -89,6 +89,7 @@ class RetrievalTrace:
     filters_applied: dict[str, tuple[str, ...]] = field(default_factory=dict)
     notes: tuple[str, ...] = ()
     result_summaries: tuple[str, ...] = ()
+    quality_flags: tuple[str, ...] = ()
 
 
 class MemoryIndex(Protocol):
@@ -189,6 +190,7 @@ class InMemoryMemoryIndex:
             filters_applied=_filters_applied(query),
             notes=notes,
             result_summaries=tuple(_result_summary(result) for result in results),
+            quality_flags=_quality_flags(query, results),
         )
         return results, trace
 
@@ -292,6 +294,30 @@ def _result_summary(result: ScoredMemoryResult) -> str:
     if parts:
         return f"{result.node_id} score={result.score:.3g} reasons={reasons} parts={parts}"
     return f"{result.node_id} score={result.score:.3g} reasons={reasons}"
+
+
+def _quality_flags(
+    query: MemoryQuery,
+    results: Sequence[ScoredMemoryResult],
+) -> tuple[str, ...]:
+    if query.query_vector is None or not results:
+        return ()
+
+    flags: list[str] = []
+    vector_only_count = sum(1 for result in results if _is_vector_only(result))
+    if _is_vector_only(results[0]):
+        flags.append("top result is vector-only")
+    if vector_only_count >= min(3, len(results)):
+        flags.append(f"vector-only cluster: {vector_only_count}/{len(results)} results")
+    if len(results) >= 2:
+        top_margin = results[0].score - results[1].score
+        if top_margin < 0.5:
+            flags.append(f"low top margin: {top_margin:.3g}")
+    return tuple(flags)
+
+
+def _is_vector_only(result: ScoredMemoryResult) -> bool:
+    return result.reasons == ("vector",)
 
 
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:

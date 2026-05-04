@@ -126,6 +126,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             filters_applied={"node_types": query.node_types},
             notes=("graph expansion skipped",),
             result_summaries=("contacts/tom-reilly score=0.84 reasons=name match parts=title=0.84",),
+            quality_flags=("low top margin: 0.01",),
         )
 
         self.assertEqual(query.limit, 3)
@@ -139,6 +140,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             trace.result_summaries,
             ("contacts/tom-reilly score=0.84 reasons=name match parts=title=0.84",),
         )
+        self.assertEqual(trace.quality_flags, ("low top margin: 0.01",))
 
     def test_memory_record_from_retrieval_node_preserves_index_metadata(self):
         node = RetrievalNode(
@@ -389,6 +391,45 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         )
         self.assertIn("vector", results[0].reasons)
         self.assertEqual(results[0].score_parts, (("vector", 10.0),))
+
+    def test_in_memory_index_flags_low_confidence_vector_clusters(self):
+        first = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/production-readiness",
+                path=Path("projects/production-readiness.md"),
+                node_type="sprockets/project",
+                title="Production readiness",
+            ),
+            vector=(1.0, 0.0),
+        )
+        second = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/python-study",
+                path=Path("projects/python-study.md"),
+                node_type="sprockets/project",
+                title="Python study",
+            ),
+            vector=(0.99, 0.01),
+        )
+        third = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="goals/acquire-necessary-skills",
+                path=Path("goals/acquire-necessary-skills.md"),
+                node_type="sprockets/goal",
+                title="Acquire necessary skills",
+            ),
+            vector=(0.98, 0.02),
+        )
+        index = InMemoryMemoryIndex([third, second, first])
+
+        _results, trace = index.query_with_trace(MemoryQuery(
+            text="run beyond my laptop",
+            query_vector=(1.0, 0.0),
+        ))
+
+        self.assertIn("top result is vector-only", trace.quality_flags)
+        self.assertIn("vector-only cluster: 3/3 results", trace.quality_flags)
+        self.assertTrue(any(flag.startswith("low top margin:") for flag in trace.quality_flags))
 
     def test_in_memory_index_ignores_vector_dimension_mismatches(self):
         record = MemoryRecord(
