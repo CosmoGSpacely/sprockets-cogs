@@ -118,6 +118,7 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
         )
 
         self.assertIn("Relevant memory:", output)
+        self.assertIn("Use these only as lookup hints", output)
         self.assertIn("- notes/memory [sprockets/note] Memory", output)
 
     def test_format_context_preview_reports_no_memory(self):
