@@ -8,9 +8,11 @@ from memory_index import (
     RetrievalTrace,
     ScoredMemoryResult,
     VectorMetadata,
+    memory_record_from_retrieval_node,
     should_reindex,
     vector_metadata_for,
 )
+from retrieval_eval import RetrievalNode
 
 
 class Stage17MemoryIndexTests(unittest.TestCase):
@@ -123,6 +125,44 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         self.assertEqual(result.reasons, ("name match",))
         self.assertEqual(trace.result_ids, ("contacts/tom-reilly",))
         self.assertEqual(trace.filters_applied["node_types"], query.node_types)
+
+    def test_memory_record_from_retrieval_node_preserves_index_metadata(self):
+        node = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("Sprockets/projects/phase-3-memory-enhancement.md"),
+            parent_slugs=("build-sprockets-cogs",),
+            text="Evaluate retrieval quality before wiring production memory.",
+        )
+
+        record = memory_record_from_retrieval_node(node, source_mtime=1777741200.0)
+
+        self.assertEqual(record.node_id, "projects/phase-3-memory-enhancement")
+        self.assertEqual(
+            record.metadata.path,
+            Path("Sprockets/projects/phase-3-memory-enhancement.md"),
+        )
+        self.assertEqual(record.metadata.node_type, "sprockets/project")
+        self.assertEqual(record.metadata.title, "Phase 3 - Memory Enhancement")
+        self.assertEqual(record.metadata.parent_slugs, ("build-sprockets-cogs",))
+        self.assertEqual(record.metadata.source_mtime, 1777741200.0)
+        self.assertEqual(len(record.metadata.text_hash), 64)
+        self.assertIsNone(record.vector)
+        self.assertIsNone(record.vector_metadata)
+
+    def test_memory_record_from_retrieval_node_reads_source_mtime_when_available(self):
+        path = Path(__file__)
+        node = RetrievalNode(
+            node_id="notes/test-stage-17",
+            title="Test Stage 17",
+            node_type="sprockets/note",
+            path=path,
+        )
+
+        record = memory_record_from_retrieval_node(node)
+
+        self.assertEqual(record.metadata.source_mtime, path.stat().st_mtime)
 
 
 if __name__ == "__main__":
