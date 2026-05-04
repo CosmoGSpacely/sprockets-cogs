@@ -1068,6 +1068,7 @@ def main() -> None:
                 print("- missing expected: " + ", ".join(sorted(status.missing_expected_ids)))
             if status.present_avoid_ids:
                 print("- present avoid: " + ", ".join(sorted(status.present_avoid_ids)))
+    confidence_counts: dict[str, int] = {}
     for case_result in result.results:
         marker = "pass" if case_result.passed else "miss"
         print(f"\n{case_result.case.name}: {marker}")
@@ -1097,12 +1098,16 @@ def main() -> None:
                     print("- trace quality: " + "; ".join(str(flag) for flag in quality_flags))
                 confidence = getattr(trace, "confidence", None)
                 if confidence is not None:
+                    confidence_key = (
+                        f"{getattr(confidence, 'level', 'unknown')}/"
+                        f"{getattr(confidence, 'action', 'unknown')}"
+                    )
+                    confidence_counts[confidence_key] = confidence_counts.get(confidence_key, 0) + 1
                     reasons = ", ".join(getattr(confidence, "reasons", ()))
                     suffix = f" ({reasons})" if reasons else ""
                     print(
                         "- trace confidence: "
-                        f"{getattr(confidence, 'level', 'unknown')}/"
-                        f"{getattr(confidence, 'action', 'unknown')}"
+                        f"{confidence_key}"
                         f"{suffix}"
                     )
                 result_summaries = getattr(trace, "result_summaries", ())
@@ -1110,6 +1115,10 @@ def main() -> None:
                     print("- trace results:")
                     for summary in result_summaries:
                         print(f"  - {summary}")
+    if args.show_traces and confidence_counts:
+        print("\nConfidence summary")
+        for key, count in sorted(confidence_counts.items()):
+            print(f"- {key}: {count}")
 
     if args.strict and not result.passed:
         raise SystemExit(1)
