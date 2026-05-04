@@ -803,6 +803,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- trace results:", printed)
         self.assertIn("parts=title=", printed)
         self.assertIn("vector=", printed)
+        self.assertIn("- trace quality:", printed)
         mock_build_index.assert_called_once()
         self.assertTrue(mock_embed_text.called)
 
