@@ -237,18 +237,102 @@ def _rank_fusion(
     return [by_id[node_id] for node_id, _ in ranked[:limit]]
 
 
+def _node_slug(node: RetrievalNode) -> str:
+    return node.node_id.rsplit("/", 1)[-1]
+
+
+def _node_type_priority(node: RetrievalNode) -> int:
+    priority = {
+        "sprockets/contact": 0,
+        "sprockets/entity": 1,
+        "sprockets/area": 2,
+        "sprockets/goal": 3,
+        "sprockets/project": 4,
+        "sprockets/task": 5,
+        "sprockets/note": 6,
+        "cogs/daily": 7,
+    }
+    return priority.get(node.node_type, 99)
+
+
+def _node_relation_text(node: RetrievalNode) -> str:
+    return _node_search_text(node).lower()
+
+
+def expand_retrieval_neighbors(
+    ranked_nodes: Iterable[RetrievalNode],
+    all_nodes: Iterable[RetrievalNode],
+    limit: int = 5,
+) -> list[RetrievalNode]:
+    """Interleave retrieved nodes with nearby parent/child/title-mention nodes."""
+
+    if limit < 1:
+        return []
+
+    all_node_tuple = tuple(all_nodes)
+    by_id = {node.node_id: node for node in all_node_tuple}
+    by_slug = {_node_slug(node): node for node in all_node_tuple}
+    children_by_parent: dict[str, list[RetrievalNode]] = {}
+    for node in all_node_tuple:
+        for parent_slug in node.parent_slugs:
+            children_by_parent.setdefault(parent_slug, []).append(node)
+
+    expanded: list[RetrievalNode] = []
+    seen: set[str] = set()
+
+    def add(node: RetrievalNode) -> None:
+        if node.node_id not in seen:
+            seen.add(node.node_id)
+            expanded.append(node)
+
+    delayed_neighbors: list[RetrievalNode] = []
+    for node in ranked_nodes:
+        add(node)
+        relation_text = _node_relation_text(node)
+        mention_neighbors: list[RetrievalNode] = []
+        hierarchy_neighbors: list[RetrievalNode] = []
+        for parent_slug in node.parent_slugs:
+            parent = by_slug.get(parent_slug)
+            if parent:
+                hierarchy_neighbors.append(parent)
+        hierarchy_neighbors.extend(children_by_parent.get(_node_slug(node), []))
+        for candidate in all_node_tuple:
+            if candidate.node_id == node.node_id:
+                continue
+            title = candidate.title.strip().lower()
+            if title and title in relation_text:
+                mention_neighbors.append(candidate)
+
+        mention_neighbors.sort(key=lambda item: (_node_type_priority(item), item.node_id))
+        for neighbor in mention_neighbors:
+            if neighbor.node_id in by_id:
+                add(neighbor)
+        delayed_neighbors.extend(hierarchy_neighbors)
+
+    delayed_neighbors.sort(key=lambda item: (_node_type_priority(item), item.node_id))
+    for neighbor in delayed_neighbors:
+        if neighbor.node_id in by_id:
+            add(neighbor)
+
+    return expanded[:limit]
+
+
 def hybrid_retrieve(
     query: str,
     nodes: Iterable[RetrievalNode],
     embedding_retriever: Callable[[str], Iterable[RetrievalNode]],
     limit: int = 5,
+    expand_graph: bool = False,
 ) -> list[RetrievalNode]:
     """Combine lexical and embedding retrieval without production wiring."""
 
     node_tuple = tuple(nodes)
     lexical_results = lexical_retrieve(query, node_tuple, limit=limit)
     embedding_results = tuple(embedding_retriever(query))
-    return _rank_fusion((lexical_results, embedding_results), limit=limit)
+    results = _rank_fusion((lexical_results, embedding_results), limit=limit)
+    if expand_graph:
+        return expand_retrieval_neighbors(results, node_tuple, limit=limit)
+    return results
 
 
 def _daily_node_id(path: Path) -> str:
@@ -548,7 +632,7 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
         return stage_15_cases()
     if case_set == "real-vault":
         return stage_15_real_vault_cases()
-    if retriever_name in {"lexical-vault", "embedding-vault", "hybrid-vault"}:
+    if retriever_name in {"lexical-vault", "embedding-vault", "hybrid-vault", "hybrid-graph-vault"}:
         return stage_15_real_vault_cases()
     return stage_15_cases()
 
@@ -566,7 +650,14 @@ def main() -> None:
     )
     parser.add_argument(
         "--retriever",
-        choices=("current", "lexical-fixture", "lexical-vault", "embedding-vault", "hybrid-vault"),
+        choices=(
+            "current",
+            "lexical-fixture",
+            "lexical-vault",
+            "embedding-vault",
+            "hybrid-vault",
+            "hybrid-graph-vault",
+        ),
         default="current",
         help="Retriever to evaluate. Defaults to the current production stub.",
     )
@@ -617,6 +708,17 @@ def main() -> None:
             scan_nodes,
             lambda embedding_query: retrieve_by_embedding(embedding_query, index),
         )
+    elif args.retriever == "hybrid-graph-vault":
+        from embeddings import build_embedding_index, retrieve_by_embedding
+
+        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
+        index = build_embedding_index(scan_nodes)
+        retriever = lambda query: hybrid_retrieve(
+            query,
+            scan_nodes,
+            lambda embedding_query: retrieve_by_embedding(embedding_query, index),
+            expand_graph=True,
+        )
     else:
         import agentic_loop
 
@@ -628,8 +730,8 @@ def main() -> None:
 
     print("Stage 15 retrieval readiness")
     print(f"- retriever: {args.retriever}")
-    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in {'lexical-vault', 'embedding-vault', 'hybrid-vault'} else 'fixture')}")
-    if args.retriever in {"lexical-vault", "embedding-vault", "hybrid-vault"}:
+    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in {'lexical-vault', 'embedding-vault', 'hybrid-vault', 'hybrid-graph-vault'} else 'fixture')}")
+    if args.retriever in {"lexical-vault", "embedding-vault", "hybrid-vault", "hybrid-graph-vault"}:
         print(f"- vault: {args.vault_dir}")
     if scan_nodes:
         print(f"- nodes: {len(scan_nodes)}")
