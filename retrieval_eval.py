@@ -681,6 +681,7 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
         return stage_15_real_vault_cases()
     if retriever_name in {
         "lexical-vault",
+        "memory-vault",
         "embedding-vault",
         "hybrid-vault",
         "hybrid-graph-vault",
@@ -692,6 +693,15 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
 
 def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetriever:
     """Build a named benchmark retriever without touching production retrieval."""
+
+    if name == "memory-fixture":
+        fixture_nodes = stage_15_fixture_nodes()
+        retriever = _build_memory_index_retriever(fixture_nodes)
+        return ExperimentalRetriever(
+            name=name,
+            nodes=fixture_nodes,
+            retriever=retriever,
+        )
 
     if name == "lexical-fixture":
         fixture_nodes = stage_15_fixture_nodes()
@@ -707,6 +717,15 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
             name=name,
             nodes=scan_nodes,
             retriever=lambda query: lexical_retrieve(query, scan_nodes),
+        )
+
+    if name == "memory-vault":
+        scan_nodes = tuple(load_retrieval_nodes(vault_dir))
+        retriever = _build_memory_index_retriever(scan_nodes)
+        return ExperimentalRetriever(
+            name=name,
+            nodes=scan_nodes,
+            retriever=retriever,
         )
 
     if name in {
@@ -752,6 +771,19 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
     raise ValueError(f"unknown retriever: {name}")
 
 
+def _build_memory_index_retriever(nodes: tuple[RetrievalNode, ...]) -> Retriever:
+    from memory_index import InMemoryMemoryIndex, MemoryQuery, memory_record_from_retrieval_node
+
+    by_id = {node.node_id: node for node in nodes}
+    index = InMemoryMemoryIndex(memory_record_from_retrieval_node(node) for node in nodes)
+
+    def retrieve(query: str) -> list[RetrievalNode]:
+        results = index.query(MemoryQuery(text=query))
+        return [by_id[result.node_id] for result in results if result.node_id in by_id]
+
+    return retrieve
+
+
 def main() -> None:
     """Print the current retrieval baseline without failing the build."""
 
@@ -768,7 +800,9 @@ def main() -> None:
         choices=(
             "current",
             "lexical-fixture",
+            "memory-fixture",
             "lexical-vault",
+            "memory-vault",
             "embedding-vault",
             "hybrid-vault",
             "hybrid-graph-vault",
@@ -809,8 +843,16 @@ def main() -> None:
 
     print("Stage 15 retrieval readiness")
     print(f"- retriever: {args.retriever}")
-    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in {'lexical-vault', 'embedding-vault', 'hybrid-vault', 'hybrid-graph-vault', 'hybrid-graph-intent-vault'} else 'fixture')}")
-    if args.retriever in {"lexical-vault", "embedding-vault", "hybrid-vault", "hybrid-graph-vault", "hybrid-graph-intent-vault"}:
+    vault_retrievers = {
+        "lexical-vault",
+        "memory-vault",
+        "embedding-vault",
+        "hybrid-vault",
+        "hybrid-graph-vault",
+        "hybrid-graph-intent-vault",
+    }
+    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in vault_retrievers else 'fixture')}")
+    if args.retriever in vault_retrievers:
         print(f"- vault: {args.vault_dir}")
     if scan_nodes:
         print(f"- nodes: {len(scan_nodes)}")
