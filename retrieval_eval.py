@@ -104,6 +104,18 @@ class RetrievalTargetStatus:
 
 
 @dataclass(frozen=True)
+class SemanticQueryHint:
+    """A grounded query expansion for known user phrasing."""
+
+    label: str
+    expansion_terms: tuple[str, ...]
+
+    @property
+    def expansion_text(self) -> str:
+        return " ".join(self.expansion_terms)
+
+
+@dataclass(frozen=True)
 class ExperimentalRetriever:
     """Reusable benchmark retriever assembled from loaded nodes and strategies."""
 
@@ -909,7 +921,9 @@ def _build_memory_index_retriever(
         if preferred_types == ("cogs/daily",):
             query_vector = None
         semantic_hints = _semantic_query_hints(query) if gate_low_confidence else ()
-        query_text = " ".join((query, *semantic_hints)) if semantic_hints else query
+        query_text = " ".join(
+            (query, *(hint.expansion_text for hint in semantic_hints))
+        ) if semantic_hints else query
         memory_query = MemoryQuery(
             text=query_text,
             node_types=preferred_types,
@@ -923,7 +937,10 @@ def _build_memory_index_retriever(
             retrieval_trace = replace(
                 retrieval_trace,
                 notes=retrieval_trace.notes + (
-                    "semantic hint applied: production readiness",
+                    *(
+                        f"semantic hint applied: {hint.label}"
+                        for hint in semantic_hints
+                    ),
                 ),
             )
         return results, retrieval_trace, memory_query
@@ -948,7 +965,7 @@ def _is_daily_fallback(
     )
 
 
-def _semantic_query_hints(query: str) -> tuple[str, ...]:
+def _semantic_query_hints(query: str) -> tuple[SemanticQueryHint, ...]:
     query_tokens = _tokens(query)
     if (
         query_tokens & {"run", "available", "work"}
@@ -956,8 +973,22 @@ def _semantic_query_hints(query: str) -> tuple[str, ...]:
         and query_tokens & {"laptop", "computer", "workstation"}
     ):
         return (
-            "learn bring project production readiness",
-            "deployment release operations service monitoring backups",
+            SemanticQueryHint(
+                label="production readiness",
+                expansion_terms=(
+                    "learn",
+                    "bring",
+                    "project",
+                    "production",
+                    "readiness",
+                    "deployment",
+                    "release",
+                    "operations",
+                    "service",
+                    "monitoring",
+                    "backups",
+                ),
+            ),
         )
     return ()
 
