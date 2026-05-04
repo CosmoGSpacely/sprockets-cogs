@@ -8,8 +8,10 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Iterable
 
+from vault_graph import HIERARCHY_PARENT_NODE_TYPES
 from production_retrieval import (
     ProductionRetrievalStatus,
     format_retrieval_context,
@@ -33,6 +35,26 @@ class RetrievalPreview:
     trace: object | None = None
 
 
+@dataclass(frozen=True)
+class MemoryGuardPreview:
+    """Read-only preview of the post-classification memory parent guard."""
+
+    query: str
+    parent_title: str
+    parent_node_id: str
+    parent_node_type: str
+    task_like: bool
+    derived_task_title: str
+
+    @property
+    def would_apply_parent_hint(self) -> bool:
+        return bool(self.parent_title)
+
+    @property
+    def would_add_hierarchy_task(self) -> bool:
+        return self.task_like and bool(self.parent_title)
+
+
 def preview_retrieval(
     query: str,
     vault_dir: Path = DEFAULT_VAULT_DIR,
@@ -48,6 +70,21 @@ def preview_retrieval(
         vault_dir=vault_dir,
         results=results,
         trace=experimental.trace(query),
+    )
+
+
+def preview_memory_guard(preview: RetrievalPreview) -> MemoryGuardPreview:
+    """Return a write-free summary of the memory parent guard outcome."""
+
+    parent = _top_hierarchy_result(preview.results)
+    task_like = _looks_task_like(preview.query)
+    return MemoryGuardPreview(
+        query=preview.query,
+        parent_title=parent.title if parent else "",
+        parent_node_id=parent.node_id if parent else "",
+        parent_node_type=parent.node_type if parent else "",
+        task_like=task_like,
+        derived_task_title=_derive_task_title(preview.query) if task_like else "",
     )
 
 
@@ -68,6 +105,27 @@ def format_preview(preview: RetrievalPreview, show_trace: bool = False) -> str:
         lines.append(f"   path: {node.path}")
     if show_trace:
         lines.extend(_format_trace(preview.trace))
+    return "\n".join(lines)
+
+
+def format_memory_guard_preview(guard: MemoryGuardPreview) -> str:
+    """Format the post-classification memory guard preview."""
+
+    lines = [
+        "Sprockets-Cogs memory guard preview",
+        f"- query: {guard.query}",
+        f"- top hierarchy parent: {guard.parent_title or '(none)'}",
+    ]
+    if guard.parent_node_id:
+        lines.append(f"- parent node: {guard.parent_node_id} [{guard.parent_node_type}]")
+    lines.extend([
+        f"- task-like input: {'yes' if guard.task_like else 'no'}",
+        f"- would apply parent_hint: {'yes' if guard.would_apply_parent_hint else 'no'}",
+        f"- would add Sprockets task if classifier emits daily-only: {'yes' if guard.would_add_hierarchy_task else 'no'}",
+    ])
+    if guard.derived_task_title:
+        lines.append(f"- derived task title: {guard.derived_task_title}")
+    lines.append("- writes: none")
     return "\n".join(lines)
 
 
@@ -102,6 +160,23 @@ def _retrieval_nodes(items: Iterable[object]) -> Iterable[RetrievalNode]:
     for item in items:
         if isinstance(item, RetrievalNode):
             yield item
+
+
+def _top_hierarchy_result(nodes: Iterable[RetrievalNode]) -> RetrievalNode | None:
+    for node in nodes:
+        if node.node_type in HIERARCHY_PARENT_NODE_TYPES:
+            return node
+    return None
+
+
+def _looks_task_like(text: str) -> bool:
+    stripped = text.strip().lower()
+    return bool(re.match(r"^(need to|remember to|todo:?)\b", stripped))
+
+
+def _derive_task_title(text: str) -> str:
+    title = re.sub(r"^(need to|remember to|todo:?)\s+", "", text.strip(), flags=re.IGNORECASE).strip()
+    return title[:1].upper() + title[1:] if title else text.strip()
 
 
 def _format_trace(trace: object | None) -> list[str]:
@@ -165,6 +240,11 @@ def main() -> None:
         help="Print compact prompt-context formatting for preview results.",
     )
     parser.add_argument(
+        "--memory-guard",
+        action="store_true",
+        help="Preview the post-classification memory parent guard without writing.",
+    )
+    parser.add_argument(
         "--status",
         action="store_true",
         help="Print guarded production retrieval status without running a query.",
@@ -184,6 +264,9 @@ def main() -> None:
     )
     if args.context:
         print(format_context_preview(preview))
+        return
+    if args.memory_guard:
+        print(format_memory_guard_preview(preview_memory_guard(preview)))
         return
     print(format_preview(preview, show_trace=args.show_trace))
 
