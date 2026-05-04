@@ -17,6 +17,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from entity_state import get_entities_by_tier, upsert_entity
+import memory_guards
 from models import Confidence, NodeBase, validate_node
 from openai_fallback import (
     classify_nodes_with_openai_fallback,
@@ -687,26 +688,20 @@ def apply_memory_parent_hints(input_text: str, classified: list[dict]) -> list[d
 
 def memory_parent_title(input_text: str) -> str:
     """Return the top retrieved hierarchy title for an input, if one exists."""
-    retrieved = retrieve_relevant_nodes(input_text)
-    top = retrieved[0] if retrieved else None
-    if not top or getattr(top, "node_type", "") not in HIERARCHY_PARENT_NODE_TYPES:
-        return ""
-    return getattr(top, "title", "").strip()
+    return memory_guards.top_hierarchy_parent_title(
+        retrieve_relevant_nodes(input_text),
+        HIERARCHY_PARENT_NODE_TYPES,
+    )
 
 
 def apply_memory_parent_title(classified: list[dict], parent_title: str) -> list[dict]:
     """Attach an already-selected memory parent title to suitable nodes."""
-    result = list(classified)
-    if not parent_title:
-        return result
-
-    for node in result:
-        if node.get("parent_hint"):
-            continue
-        if node.get("node_type") not in {"sprockets/task", "sprockets/note"}:
-            continue
-        node["parent_hint"] = parent_title
-        log.info("Applied memory parent_hint for %s: %s", node.get("title", ""), parent_title)
+    before = [node.get("parent_hint", "") for node in classified]
+    result = memory_guards.apply_memory_parent_title(classified, parent_title)
+    after = [node.get("parent_hint", "") for node in result]
+    for node, previous, current in zip(result, before, after):
+        if current and current != previous:
+            log.info("Applied memory parent_hint for %s: %s", node.get("title", ""), current)
     return result
 
 
@@ -719,39 +714,14 @@ def ensure_memory_hierarchy_tasks(
     Add a structural Sprockets task when memory identifies a parent project but
     the classifier only produced a daily item.
     """
-    if not parent_title:
-        return classified
-
-    result = list(classified)
-    existing_task_titles = [
-        node.get("title", "").lower()
-        for node in result
-        if node.get("node_type") == "sprockets/task"
-    ]
     today = datetime.now().strftime("%Y-%m-%d")
-
-    for raw in raw_nodes:
-        if raw.get("type_hint") != "task":
-            continue
-        raw_text = raw.get("raw", "").strip()
-        raw_lower = raw_text.lower()
-        if not raw_text:
-            continue
-        if any(title and title in raw_lower for title in existing_task_titles):
-            continue
-
-        title = re.sub(r"^(need to|remember to|todo:?)\s+", "", raw_text, flags=re.IGNORECASE).strip()
-        title = title[:1].upper() + title[1:] if title else raw_text
-        result.append({
-            "node_type": "sprockets/task",
-            "title": title,
-            "item_text": title,
-            "date": today,
-            "status": "active",
-            "confidence": "high",
-            "parent_hint": parent_title,
-        })
-        existing_task_titles.append(title.lower())
+    result, added_titles = memory_guards.ensure_memory_hierarchy_tasks(
+        raw_nodes,
+        classified,
+        parent_title,
+        today,
+    )
+    for title in added_titles:
         log.info("Auto-added memory hierarchy task for %s: %s", parent_title, title)
 
     return result
