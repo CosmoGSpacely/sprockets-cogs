@@ -317,12 +317,45 @@ def expand_retrieval_neighbors(
     return expanded[:limit]
 
 
+def _query_preferred_node_types(query: str) -> tuple[str, ...]:
+    query_tokens = _tokens(query)
+    if query_tokens & {"capture", "reflection", "note", "idea"}:
+        return ("sprockets/note", "cogs/daily")
+    return ()
+
+
+def filter_by_query_intent(
+    query: str,
+    ranked_nodes: Iterable[RetrievalNode],
+    limit: int = 5,
+) -> list[RetrievalNode]:
+    """Prefer node types implied by the query without returning an empty set."""
+
+    if limit < 1:
+        return []
+
+    nodes = tuple(ranked_nodes)
+    preferred_types = _query_preferred_node_types(query)
+    if not preferred_types:
+        return list(nodes[:limit])
+
+    preferred = [
+        node
+        for node in nodes
+        if node.node_type in preferred_types
+    ]
+    if not preferred:
+        return list(nodes[:limit])
+    return preferred[:limit]
+
+
 def hybrid_retrieve(
     query: str,
     nodes: Iterable[RetrievalNode],
     embedding_retriever: Callable[[str], Iterable[RetrievalNode]],
     limit: int = 5,
     expand_graph: bool = False,
+    apply_intent_filter: bool = False,
 ) -> list[RetrievalNode]:
     """Combine lexical and embedding retrieval without production wiring."""
 
@@ -331,7 +364,9 @@ def hybrid_retrieve(
     embedding_results = tuple(embedding_retriever(query))
     results = _rank_fusion((lexical_results, embedding_results), limit=limit)
     if expand_graph:
-        return expand_retrieval_neighbors(results, node_tuple, limit=limit)
+        results = expand_retrieval_neighbors(results, node_tuple, limit=limit)
+    if apply_intent_filter:
+        results = filter_by_query_intent(query, results, limit=limit)
     return results
 
 
@@ -632,7 +667,13 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
         return stage_15_cases()
     if case_set == "real-vault":
         return stage_15_real_vault_cases()
-    if retriever_name in {"lexical-vault", "embedding-vault", "hybrid-vault", "hybrid-graph-vault"}:
+    if retriever_name in {
+        "lexical-vault",
+        "embedding-vault",
+        "hybrid-vault",
+        "hybrid-graph-vault",
+        "hybrid-graph-intent-vault",
+    }:
         return stage_15_real_vault_cases()
     return stage_15_cases()
 
@@ -657,6 +698,7 @@ def main() -> None:
             "embedding-vault",
             "hybrid-vault",
             "hybrid-graph-vault",
+            "hybrid-graph-intent-vault",
         ),
         default="current",
         help="Retriever to evaluate. Defaults to the current production stub.",
@@ -719,6 +761,18 @@ def main() -> None:
             lambda embedding_query: retrieve_by_embedding(embedding_query, index),
             expand_graph=True,
         )
+    elif args.retriever == "hybrid-graph-intent-vault":
+        from embeddings import build_embedding_index, retrieve_by_embedding
+
+        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
+        index = build_embedding_index(scan_nodes)
+        retriever = lambda query: hybrid_retrieve(
+            query,
+            scan_nodes,
+            lambda embedding_query: retrieve_by_embedding(embedding_query, index),
+            expand_graph=True,
+            apply_intent_filter=True,
+        )
     else:
         import agentic_loop
 
@@ -730,8 +784,8 @@ def main() -> None:
 
     print("Stage 15 retrieval readiness")
     print(f"- retriever: {args.retriever}")
-    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in {'lexical-vault', 'embedding-vault', 'hybrid-vault', 'hybrid-graph-vault'} else 'fixture')}")
-    if args.retriever in {"lexical-vault", "embedding-vault", "hybrid-vault", "hybrid-graph-vault"}:
+    print(f"- case-set: {args.case_set if args.case_set != 'auto' else ('real-vault' if args.retriever in {'lexical-vault', 'embedding-vault', 'hybrid-vault', 'hybrid-graph-vault', 'hybrid-graph-intent-vault'} else 'fixture')}")
+    if args.retriever in {"lexical-vault", "embedding-vault", "hybrid-vault", "hybrid-graph-vault", "hybrid-graph-intent-vault"}:
         print(f"- vault: {args.vault_dir}")
     if scan_nodes:
         print(f"- nodes: {len(scan_nodes)}")
