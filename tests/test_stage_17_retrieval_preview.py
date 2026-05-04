@@ -8,8 +8,10 @@ from production_retrieval import ProductionRetrievalStatus
 from retrieval_eval import ExperimentalRetriever, RetrievalNode
 from retrieval_preview import (
     format_context_preview,
+    format_memory_guard_preview,
     format_preview,
     format_status,
+    preview_memory_guard,
     preview_retrieval,
 )
 
@@ -154,6 +156,69 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
         self.assertIn("- raw retriever env: embedding-vault", output)
         self.assertIn("- allowed retrievers: memory-embedding-gated-vault, memory-vault", output)
         self.assertIn("- vault: /vault", output)
+
+    def test_preview_memory_guard_uses_top_hierarchy_result(self):
+        project = RetrievalNode(
+            node_id="projects/learn-how-to-bring-a-project-to-production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+        note = RetrievalNode(
+            node_id="notes/run-anywhere",
+            title="Run anywhere note",
+            node_type="sprockets/note",
+            path=Path("/vault/Sprockets/notes/run-anywhere.md"),
+        )
+
+        guard = preview_memory_guard(
+            preview_retrieval_result(
+                query="Need to draft a deployment checklist so this can run beyond my laptop.",
+                results=(note, project),
+                trace=None,
+            )
+        )
+
+        self.assertEqual(
+            guard.parent_title,
+            "Learn how to bring a project to production",
+        )
+        self.assertEqual(
+            guard.parent_node_id,
+            "projects/learn-how-to-bring-a-project-to-production",
+        )
+        self.assertTrue(guard.task_like)
+        self.assertTrue(guard.would_apply_parent_hint)
+        self.assertTrue(guard.would_add_hierarchy_task)
+        self.assertEqual(
+            guard.derived_task_title,
+            "Draft a deployment checklist so this can run beyond my laptop.",
+        )
+
+    def test_format_memory_guard_preview_is_read_only(self):
+        project = RetrievalNode(
+            node_id="projects/production",
+            title="Production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+        guard = preview_memory_guard(
+            preview_retrieval_result(
+                query="Need to make the service portable",
+                results=(project,),
+                trace=None,
+            )
+        )
+
+        output = format_memory_guard_preview(guard)
+
+        self.assertIn("Sprockets-Cogs memory guard preview", output)
+        self.assertIn("- top hierarchy parent: Production", output)
+        self.assertIn("- parent node: projects/production [sprockets/project]", output)
+        self.assertIn("- would apply parent_hint: yes", output)
+        self.assertIn("- would add Sprockets task if classifier emits daily-only: yes", output)
+        self.assertIn("- derived task title: Make the service portable", output)
+        self.assertIn("- writes: none", output)
 
 
 def preview_retrieval_result(
