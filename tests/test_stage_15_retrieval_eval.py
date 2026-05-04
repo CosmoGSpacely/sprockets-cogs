@@ -10,6 +10,7 @@ from retrieval_eval import (
     RetrievalNode,
     evaluate_retriever,
     evaluate_target_presence,
+    expand_retrieval_neighbors,
     hybrid_retrieve,
     lexical_retrieve,
     load_retrieval_nodes,
@@ -118,6 +119,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertEqual(select_cases("auto", "lexical-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "embedding-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-vault"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("auto", "hybrid-graph-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "current"), stage_15_cases())
         self.assertEqual(select_cases("fixture", "lexical-vault"), stage_15_cases())
         self.assertEqual(select_cases("real-vault", "current"), stage_15_real_vault_cases())
@@ -315,6 +317,93 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
 
         self.assertEqual(results, [])
 
+    def test_expand_retrieval_neighbors_adds_parent_child_and_title_mentions(self):
+        area = RetrievalNode(
+            node_id="areas/learn-agentic-ai",
+            title="Learn Agentic AI",
+            node_type="sprockets/area",
+            path=Path("learn-agentic-ai.md"),
+        )
+        goal = RetrievalNode(
+            node_id="goals/build-sprockets-cogs",
+            title="Build Sprockets-Cogs",
+            node_type="sprockets/goal",
+            path=Path("build-sprockets-cogs.md"),
+            parent_slugs=("learn-agentic-ai",),
+        )
+        project = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+            parent_slugs=("build-sprockets-cogs",),
+        )
+        task = RetrievalNode(
+            node_id="tasks/call-tom-reilly-at-globaltech-about-the-invoice",
+            title="Call Tom Reilly at GlobalTech about the invoice",
+            node_type="sprockets/task",
+            path=Path("call-tom-reilly-at-globaltech-about-the-invoice.md"),
+        )
+        contact = RetrievalNode(
+            node_id="contacts/tom-reilly",
+            title="Tom Reilly",
+            node_type="sprockets/contact",
+            path=Path("tom-reilly.md"),
+        )
+        entity = RetrievalNode(
+            node_id="entities/globaltech",
+            title="GlobalTech",
+            node_type="sprockets/entity",
+            path=Path("globaltech.md"),
+        )
+
+        expanded = expand_retrieval_neighbors(
+            (task, project),
+            (area, goal, project, task, contact, entity),
+            limit=6,
+        )
+
+        self.assertEqual([node.node_id for node in expanded], [
+            "tasks/call-tom-reilly-at-globaltech-about-the-invoice",
+            "contacts/tom-reilly",
+            "entities/globaltech",
+            "projects/phase-3-memory-enhancement",
+            "goals/build-sprockets-cogs",
+        ])
+
+    def test_hybrid_retriever_can_expand_graph_neighbors(self):
+        task = RetrievalNode(
+            node_id="tasks/call-tom-reilly-at-globaltech-about-the-invoice",
+            title="Call Tom Reilly at GlobalTech about the invoice",
+            node_type="sprockets/task",
+            path=Path("call-tom-reilly-at-globaltech-about-the-invoice.md"),
+        )
+        contact = RetrievalNode(
+            node_id="contacts/tom-reilly",
+            title="Tom Reilly",
+            node_type="sprockets/contact",
+            path=Path("tom-reilly.md"),
+        )
+        entity = RetrievalNode(
+            node_id="entities/globaltech",
+            title="GlobalTech",
+            node_type="sprockets/entity",
+            path=Path("globaltech.md"),
+        )
+
+        results = hybrid_retrieve(
+            "Tom invoice",
+            (task, contact, entity),
+            lambda _query: [task],
+            expand_graph=True,
+        )
+
+        self.assertEqual([node.node_id for node in results], [
+            "tasks/call-tom-reilly-at-globaltech-about-the-invoice",
+            "contacts/tom-reilly",
+            "entities/globaltech",
+        ])
+
     def test_cli_lexical_vault_mode_loads_nodes_from_configured_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -433,6 +522,65 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- vault: ", printed)
         self.assertIn("- nodes: 1", printed)
         self.assertIn("- sprockets/project: 1", printed)
+        mock_build_index.assert_called_once()
+        self.assertTrue(mock_retrieve_by_embedding.called)
+
+    def test_cli_hybrid_graph_vault_mode_uses_graph_expansion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "tasks",
+                "call-tom-reilly-at-globaltech-about-the-invoice",
+                "node_type: sprockets/task\n"
+                "title: Call Tom Reilly at GlobalTech about the invoice\n",
+            )
+            write_node(
+                vault,
+                "contacts",
+                "tom-reilly",
+                "node_type: sprockets/contact\n"
+                "title: Tom Reilly\n",
+            )
+            write_node(
+                vault,
+                "entities",
+                "globaltech",
+                "node_type: sprockets/entity\n"
+                "title: GlobalTech\n",
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+                    mock_build_index.return_value = ("embedded-index",)
+                    mock_retrieve_by_embedding.return_value = [
+                        RetrievalNode(
+                            node_id="tasks/call-tom-reilly-at-globaltech-about-the-invoice",
+                            title="Call Tom Reilly at GlobalTech about the invoice",
+                            node_type="sprockets/task",
+                            path=vault / "Sprockets" / "tasks" / "call-tom-reilly-at-globaltech-about-the-invoice.md",
+                        )
+                    ]
+
+                    with patch("sys.argv", [
+                        "retrieval_eval",
+                        "--retriever",
+                        "hybrid-graph-vault",
+                        "--vault-dir",
+                        str(vault),
+                        "--list-nodes",
+                    ]):
+                        with patch("builtins.print") as mock_print:
+                            retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- retriever: hybrid-graph-vault", printed)
+        self.assertIn("- case-set: real-vault", printed)
+        self.assertIn("- vault: ", printed)
+        self.assertIn("- nodes: 3", printed)
+        self.assertIn("- sprockets/contact: 1", printed)
+        self.assertIn("- sprockets/entity: 1", printed)
+        self.assertIn("- sprockets/task: 1", printed)
         mock_build_index.assert_called_once()
         self.assertTrue(mock_retrieve_by_embedding.called)
 
