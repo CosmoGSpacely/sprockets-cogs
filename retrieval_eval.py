@@ -103,6 +103,18 @@ class RetrievalTargetStatus:
     present_avoid_ids: frozenset[str]
 
 
+@dataclass(frozen=True)
+class ExperimentalRetriever:
+    """Reusable benchmark retriever assembled from loaded nodes and strategies."""
+
+    name: str
+    nodes: tuple[RetrievalNode, ...]
+    retriever: Retriever
+
+    def retrieve(self, query: str) -> Iterable[object]:
+        return self.retriever(query)
+
+
 Retriever = Callable[[str], Iterable[object]]
 
 
@@ -678,6 +690,68 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
     return stage_15_cases()
 
 
+def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetriever:
+    """Build a named benchmark retriever without touching production retrieval."""
+
+    if name == "lexical-fixture":
+        fixture_nodes = stage_15_fixture_nodes()
+        return ExperimentalRetriever(
+            name=name,
+            nodes=fixture_nodes,
+            retriever=lambda query: lexical_retrieve(query, fixture_nodes),
+        )
+
+    if name == "lexical-vault":
+        scan_nodes = tuple(load_retrieval_nodes(vault_dir))
+        return ExperimentalRetriever(
+            name=name,
+            nodes=scan_nodes,
+            retriever=lambda query: lexical_retrieve(query, scan_nodes),
+        )
+
+    if name in {
+        "embedding-vault",
+        "hybrid-vault",
+        "hybrid-graph-vault",
+        "hybrid-graph-intent-vault",
+    }:
+        from embeddings import build_embedding_index, retrieve_by_embedding
+
+        scan_nodes = tuple(load_retrieval_nodes(vault_dir))
+        index = build_embedding_index(scan_nodes)
+
+        if name == "embedding-vault":
+            retriever = lambda query: retrieve_by_embedding(query, index)
+        else:
+            retriever = lambda query: hybrid_retrieve(
+                query,
+                scan_nodes,
+                lambda embedding_query: retrieve_by_embedding(embedding_query, index),
+                expand_graph=name in {
+                    "hybrid-graph-vault",
+                    "hybrid-graph-intent-vault",
+                },
+                apply_intent_filter=name == "hybrid-graph-intent-vault",
+            )
+
+        return ExperimentalRetriever(
+            name=name,
+            nodes=scan_nodes,
+            retriever=retriever,
+        )
+
+    if name == "current":
+        import agentic_loop
+
+        return ExperimentalRetriever(
+            name=name,
+            nodes=(),
+            retriever=agentic_loop.retrieve_relevant_nodes,
+        )
+
+    raise ValueError(f"unknown retriever: {name}")
+
+
 def main() -> None:
     """Print the current retrieval baseline without failing the build."""
 
@@ -727,60 +801,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.retriever == "lexical-fixture":
-        fixture_nodes = stage_15_fixture_nodes()
-        retriever = lambda query: lexical_retrieve(query, fixture_nodes)
-        scan_nodes = fixture_nodes
-    elif args.retriever == "lexical-vault":
-        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
-        retriever = lambda query: lexical_retrieve(query, scan_nodes)
-    elif args.retriever == "embedding-vault":
-        from embeddings import build_embedding_index, retrieve_by_embedding
-
-        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
-        index = build_embedding_index(scan_nodes)
-        retriever = lambda query: retrieve_by_embedding(query, index)
-    elif args.retriever == "hybrid-vault":
-        from embeddings import build_embedding_index, retrieve_by_embedding
-
-        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
-        index = build_embedding_index(scan_nodes)
-        retriever = lambda query: hybrid_retrieve(
-            query,
-            scan_nodes,
-            lambda embedding_query: retrieve_by_embedding(embedding_query, index),
-        )
-    elif args.retriever == "hybrid-graph-vault":
-        from embeddings import build_embedding_index, retrieve_by_embedding
-
-        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
-        index = build_embedding_index(scan_nodes)
-        retriever = lambda query: hybrid_retrieve(
-            query,
-            scan_nodes,
-            lambda embedding_query: retrieve_by_embedding(embedding_query, index),
-            expand_graph=True,
-        )
-    elif args.retriever == "hybrid-graph-intent-vault":
-        from embeddings import build_embedding_index, retrieve_by_embedding
-
-        scan_nodes = tuple(load_retrieval_nodes(args.vault_dir))
-        index = build_embedding_index(scan_nodes)
-        retriever = lambda query: hybrid_retrieve(
-            query,
-            scan_nodes,
-            lambda embedding_query: retrieve_by_embedding(embedding_query, index),
-            expand_graph=True,
-            apply_intent_filter=True,
-        )
-    else:
-        import agentic_loop
-
-        retriever = agentic_loop.retrieve_relevant_nodes
-        scan_nodes = ()
+    experimental_retriever = build_experimental_retriever(args.retriever, args.vault_dir)
+    scan_nodes = experimental_retriever.nodes
 
     cases = select_cases(args.case_set, args.retriever)
-    result = evaluate_retriever(cases, retriever)
+    result = evaluate_retriever(cases, experimental_retriever.retrieve)
 
     print("Stage 15 retrieval readiness")
     print(f"- retriever: {args.retriever}")
