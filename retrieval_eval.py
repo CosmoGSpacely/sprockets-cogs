@@ -690,6 +690,7 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
     if retriever_name in {
         "lexical-vault",
         "memory-vault",
+        "memory-embedding-vault",
         "embedding-vault",
         "hybrid-vault",
         "hybrid-graph-vault",
@@ -731,6 +732,19 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
     if name == "memory-vault":
         scan_nodes = tuple(load_retrieval_nodes(vault_dir))
         retriever, trace_provider = _build_memory_index_retriever(scan_nodes)
+        return ExperimentalRetriever(
+            name=name,
+            nodes=scan_nodes,
+            retriever=retriever,
+            trace_provider=trace_provider,
+        )
+
+    if name == "memory-embedding-vault":
+        scan_nodes = tuple(load_retrieval_nodes(vault_dir))
+        retriever, trace_provider = _build_memory_index_retriever(
+            scan_nodes,
+            use_embeddings=True,
+        )
         return ExperimentalRetriever(
             name=name,
             nodes=scan_nodes,
@@ -783,16 +797,44 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
 
 def _build_memory_index_retriever(
     nodes: tuple[RetrievalNode, ...],
+    use_embeddings: bool = False,
 ) -> tuple[Retriever, Callable[[str], object]]:
     from memory_index import (
         InMemoryMemoryIndex,
         MemoryQuery,
+        MemoryRecord,
         RetrievalTrace,
         memory_record_from_retrieval_node,
+        vector_metadata_for,
     )
 
     by_id = {node.node_id: node for node in nodes}
-    index = InMemoryMemoryIndex(memory_record_from_retrieval_node(node) for node in nodes)
+    query_vector_provider: Callable[[str], tuple[float, ...] | None] = lambda _query: None
+    records = [memory_record_from_retrieval_node(node) for node in nodes]
+    if use_embeddings:
+        from embeddings import EMBED_MODEL, JsonEmbeddingCache, build_embedding_index, embed_text
+
+        embedded_by_id = {
+            embedded.node.node_id: embedded
+            for embedded in build_embedding_index(nodes, cache=JsonEmbeddingCache.default())
+        }
+        records = [
+            MemoryRecord(
+                metadata=record.metadata,
+                vector=embedded_by_id[record.node_id].vector,
+                vector_metadata=vector_metadata_for(
+                    EMBED_MODEL,
+                    record.metadata.text_hash,
+                    embedded_by_id[record.node_id].vector,
+                ),
+            )
+            if record.node_id in embedded_by_id
+            else record
+            for record in records
+        ]
+        query_vector_provider = lambda query: tuple(embed_text(query))
+
+    index = InMemoryMemoryIndex(records)
     recent_daily_nodes = tuple(
         sorted(
             (
@@ -808,17 +850,31 @@ def _build_memory_index_retriever(
 
     def retrieve(query: str) -> list[RetrievalNode]:
         preferred_types = _query_preferred_node_types(query)
-        memory_query = MemoryQuery(text=query, node_types=preferred_types)
+        query_vector = query_vector_provider(query)
+        if preferred_types == ("cogs/daily",):
+            query_vector = None
+        memory_query = MemoryQuery(
+            text=query,
+            node_types=preferred_types,
+            query_vector=query_vector,
+        )
         results = index.query(memory_query)
         if preferred_types == ("cogs/daily",) and not results:
             return list(recent_daily_nodes[:memory_query.limit])
         if preferred_types and not results:
-            results = index.query(MemoryQuery(text=query))
+            results = index.query(MemoryQuery(text=query, query_vector=query_vector))
         return [by_id[result.node_id] for result in results if result.node_id in by_id]
 
     def trace(query: str) -> object:
         preferred_types = _query_preferred_node_types(query)
-        memory_query = MemoryQuery(text=query, node_types=preferred_types)
+        query_vector = query_vector_provider(query)
+        if preferred_types == ("cogs/daily",):
+            query_vector = None
+        memory_query = MemoryQuery(
+            text=query,
+            node_types=preferred_types,
+            query_vector=query_vector,
+        )
         results, retrieval_trace = index.query_with_trace(memory_query)
         if preferred_types == ("cogs/daily",) and not results:
             fallback_ids = tuple(node.node_id for node in recent_daily_nodes[:memory_query.limit])
@@ -830,7 +886,9 @@ def _build_memory_index_retriever(
                 notes=retrieval_trace.notes + ("daily recency fallback",),
             )
         if preferred_types and not results:
-            _results, retrieval_trace = index.query_with_trace(MemoryQuery(text=query))
+            _results, retrieval_trace = index.query_with_trace(
+                MemoryQuery(text=query, query_vector=query_vector)
+            )
         return retrieval_trace
 
     return retrieve, trace
@@ -864,6 +922,7 @@ def main() -> None:
             "memory-fixture",
             "lexical-vault",
             "memory-vault",
+            "memory-embedding-vault",
             "embedding-vault",
             "hybrid-vault",
             "hybrid-graph-vault",
@@ -912,6 +971,7 @@ def main() -> None:
     vault_retrievers = {
         "lexical-vault",
         "memory-vault",
+        "memory-embedding-vault",
         "embedding-vault",
         "hybrid-vault",
         "hybrid-graph-vault",
