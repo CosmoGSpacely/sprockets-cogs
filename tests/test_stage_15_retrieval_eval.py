@@ -8,6 +8,7 @@ import retrieval_eval
 from retrieval_eval import (
     RetrievalCase,
     RetrievalNode,
+    build_experimental_retriever,
     evaluate_retriever,
     evaluate_target_presence,
     expand_retrieval_neighbors,
@@ -472,6 +473,66 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertEqual([node.node_id for node in results], [
             "notes/reflection-on-phase-2---hierarchy",
         ])
+
+    def test_build_experimental_retriever_builds_lexical_fixture_interface(self):
+        retriever = build_experimental_retriever("lexical-fixture", Path("/unused"))
+
+        results = list(retriever.retrieve("Ask Jordan about the proposal follow-up."))
+
+        self.assertEqual(retriever.name, "lexical-fixture")
+        self.assertEqual(len(retriever.nodes), len(stage_15_fixture_nodes()))
+        self.assertTrue(results)
+        self.assertTrue(all(isinstance(node, RetrievalNode) for node in results))
+
+    def test_build_experimental_retriever_builds_hybrid_graph_intent_interface(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "notes",
+                "reflection-on-phase-2---hierarchy",
+                "node_type: sprockets/note\n"
+                "title: Reflection on Phase 2 - Hierarchy\n",
+            )
+            write_node(
+                vault,
+                "tasks",
+                "add-hierarchy-context-tests-for-phase-2---hardening",
+                "node_type: sprockets/task\n"
+                "title: Add hierarchy context tests for Phase 2 - Hardening\n",
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+                    mock_build_index.return_value = ("embedded-index",)
+                    mock_retrieve_by_embedding.return_value = [
+                        RetrievalNode(
+                            node_id="tasks/add-hierarchy-context-tests-for-phase-2---hardening",
+                            title="Add hierarchy context tests for Phase 2 - Hardening",
+                            node_type="sprockets/task",
+                            path=vault / "Sprockets" / "tasks" / "add-hierarchy-context-tests-for-phase-2---hardening.md",
+                        )
+                    ]
+
+                    retriever = build_experimental_retriever(
+                        "hybrid-graph-intent-vault",
+                        vault,
+                    )
+                    results = list(retriever.retrieve(
+                        "Capture a reflection on Phase 2 hierarchy work."
+                    ))
+
+        self.assertEqual(retriever.name, "hybrid-graph-intent-vault")
+        self.assertEqual(len(retriever.nodes), 2)
+        self.assertEqual([node.node_id for node in results], [
+            "notes/reflection-on-phase-2---hierarchy",
+        ])
+        mock_build_index.assert_called_once()
+        self.assertTrue(mock_retrieve_by_embedding.called)
+
+    def test_build_experimental_retriever_rejects_unknown_name(self):
+        with self.assertRaisesRegex(ValueError, "unknown retriever"):
+            build_experimental_retriever("not-a-retriever", Path("/unused"))
 
     def test_cli_lexical_vault_mode_loads_nodes_from_configured_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
