@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from math import sqrt
 from pathlib import Path
 import re
 from typing import Protocol
@@ -61,6 +62,7 @@ class MemoryQuery:
     limit: int = 5
     node_types: tuple[str, ...] = ()
     parent_slugs: tuple[str, ...] = ()
+    query_vector: tuple[float, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -160,8 +162,8 @@ class InMemoryMemoryIndex:
                 filtered_by_parent += 1
                 continue
 
-            score, reasons = _score_record(query_tokens, record)
-            if score <= 0 and query_tokens:
+            score, reasons = _score_record(query_tokens, query.query_vector, record)
+            if score <= 0 and (query_tokens or query.query_vector is not None):
                 continue
             scored.append(ScoredMemoryResult(record=record, score=score, reasons=reasons))
 
@@ -240,6 +242,7 @@ def _tokens(text: str) -> set[str]:
 
 def _score_record(
     query_tokens: set[str],
+    query_vector: Sequence[float] | None,
     record: MemoryRecord,
 ) -> tuple[float, tuple[str, ...]]:
     metadata = record.metadata
@@ -247,7 +250,8 @@ def _score_record(
     id_overlap = query_tokens & _tokens(metadata.node_id.replace("/", " "))
     parent_overlap = query_tokens & _tokens(" ".join(metadata.parent_slugs))
 
-    score = float(len(title_overlap) * 4 + len(id_overlap) * 3 + len(parent_overlap) * 2)
+    lexical_score = float(len(title_overlap) * 4 + len(id_overlap) * 3 + len(parent_overlap) * 2)
+    vector_score = 0.0
     reasons: list[str] = []
     if title_overlap:
         reasons.append("title")
@@ -255,9 +259,26 @@ def _score_record(
         reasons.append("node_id")
     if parent_overlap:
         reasons.append("parent")
-    if not query_tokens:
+    if query_vector is not None and record.vector is not None:
+        vector_score = _cosine_similarity(query_vector, record.vector) * 10.0
+        if vector_score > 0:
+            reasons.append("vector")
+    if not query_tokens and query_vector is None:
         reasons.append("filter")
-    return score, tuple(reasons)
+    return lexical_score + vector_score, tuple(reasons)
+
+
+def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    if len(left) != len(right):
+        return 0.0
+
+    left_norm = sqrt(sum(value * value for value in left))
+    right_norm = sqrt(sum(value * value for value in right))
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+
+    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right))
+    return dot_product / (left_norm * right_norm)
 
 
 def _filters_applied(query: MemoryQuery) -> dict[str, tuple[str, ...]]:
