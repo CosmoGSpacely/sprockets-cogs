@@ -248,6 +248,25 @@ def build_context() -> str:
     return "\n".join(parts)
 
 
+def build_context_for_input(input_text: str) -> str:
+    """
+    Build classifier context for a specific input.
+
+    Stage 17 keeps retrieved memory behind SPROCKETS_COGS_MEMORY_CONTEXT so we
+    can rehearse the prompt shape before enabling it in the service.
+    """
+    from production_retrieval import format_retrieval_context, memory_context_enabled
+
+    context = build_context()
+    if not memory_context_enabled():
+        return context
+
+    memory_context = format_retrieval_context(tuple(retrieve_relevant_nodes(input_text)))
+    if not memory_context:
+        return context
+    return context + "\n\n" + memory_context
+
+
 def retrieve_relevant_nodes(query: str) -> list:
     """
     Phase 1: returns empty list.
@@ -719,7 +738,7 @@ def process_input(file_path: Path) -> None:
         content    = post.content
         session_id = post.get("session_id", processing_path.stem)
 
-        context    = build_context()
+        context    = build_context_for_input(content)
         raw_nodes  = extract_nodes(content)
         classified = classify_nodes(raw_nodes, context)
         classified = apply_explicit_hierarchy_hints(raw_nodes, classified)

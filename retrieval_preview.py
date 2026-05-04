@@ -82,10 +82,13 @@ def format_status(status: ProductionRetrievalStatus) -> str:
     """Format guarded production retrieval status for terminal output."""
 
     enabled = "enabled" if status.enabled else "disabled"
+    context_enabled = "enabled" if status.context_enabled else "disabled"
     return "\n".join([
         "Sprockets-Cogs production retrieval status",
         f"- memory retrieval: {enabled}",
         f"- enable env: {status.enable_env}",
+        f"- memory context: {context_enabled}",
+        f"- context env: {status.context_env}",
         f"- retriever: {status.retriever_name}",
         f"- retriever env: {status.retriever_env}",
         f"- retriever env accepted: {'yes' if status.retriever_env_accepted else 'no'}",
