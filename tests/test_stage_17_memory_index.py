@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 
 from memory_index import (
+    InMemoryMemoryIndex,
     MemoryNodeMetadata,
     MemoryQuery,
     MemoryRecord,
@@ -163,6 +164,116 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         record = memory_record_from_retrieval_node(node)
 
         self.assertEqual(record.metadata.source_mtime, path.stat().st_mtime)
+
+    def test_in_memory_index_upserts_and_gets_records(self):
+        index = InMemoryMemoryIndex()
+        first = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/phase-3-memory-enhancement",
+                path=Path("projects/phase-3-memory-enhancement.md"),
+                node_type="sprockets/project",
+                title="Phase 3 - Memory Enhancement",
+            )
+        )
+        replacement = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/phase-3-memory-enhancement",
+                path=Path("projects/phase-3-memory-enhancement.md"),
+                node_type="sprockets/project",
+                title="Phase 3 - Memory Index",
+            )
+        )
+
+        index.upsert_nodes([first])
+        index.upsert_nodes([replacement])
+
+        self.assertEqual(index.get(first.node_id), replacement)
+
+    def test_in_memory_index_deletes_records_missing_from_active_ids(self):
+        keep = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="contacts/tom-reilly",
+                path=Path("contacts/tom-reilly.md"),
+                node_type="sprockets/contact",
+                title="Tom Reilly",
+            )
+        )
+        delete = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="contacts/sandra-cho",
+                path=Path("contacts/sandra-cho.md"),
+                node_type="sprockets/contact",
+                title="Sandra Cho",
+            )
+        )
+        index = InMemoryMemoryIndex([delete, keep])
+
+        deleted = index.delete_missing_node_ids(["contacts/tom-reilly"])
+
+        self.assertEqual(deleted, ("contacts/sandra-cho",))
+        self.assertEqual(index.get("contacts/tom-reilly"), keep)
+        self.assertIsNone(index.get("contacts/sandra-cho"))
+
+    def test_in_memory_index_query_scores_and_filters_records(self):
+        project = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/phase-3-memory-enhancement",
+                path=Path("projects/phase-3-memory-enhancement.md"),
+                node_type="sprockets/project",
+                title="Phase 3 - Memory Enhancement",
+                parent_slugs=("build-sprockets-cogs",),
+            )
+        )
+        note = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="notes/memory-index",
+                path=Path("notes/memory-index.md"),
+                node_type="sprockets/note",
+                title="Memory Index Notes",
+                parent_slugs=("build-sprockets-cogs",),
+            )
+        )
+        contact = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="contacts/tom-reilly",
+                path=Path("contacts/tom-reilly.md"),
+                node_type="sprockets/contact",
+                title="Tom Reilly",
+            )
+        )
+        index = InMemoryMemoryIndex([contact, note, project])
+
+        results = index.query(
+            MemoryQuery(
+                text="memory enhancement",
+                limit=2,
+                node_types=("sprockets/project", "sprockets/note"),
+                parent_slugs=("build-sprockets-cogs",),
+            )
+        )
+
+        self.assertEqual(
+            [result.node_id for result in results],
+            [
+                "projects/phase-3-memory-enhancement",
+                "notes/memory-index",
+            ],
+        )
+        self.assertEqual(results[0].reasons, ("title", "node_id"))
+
+    def test_in_memory_index_query_returns_empty_for_non_positive_limit(self):
+        index = InMemoryMemoryIndex([
+            MemoryRecord(
+                metadata=MemoryNodeMetadata(
+                    node_id="notes/memory",
+                    path=Path("notes/memory.md"),
+                    node_type="sprockets/note",
+                    title="Memory",
+                )
+            )
+        ])
+
+        self.assertEqual(index.query(MemoryQuery(text="memory", limit=0)), ())
 
 
 if __name__ == "__main__":
