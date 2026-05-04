@@ -113,21 +113,32 @@ class Stage17MemoryIndexTests(unittest.TestCase):
                 title="Tom Reilly",
             )
         )
-        result = ScoredMemoryResult(record=record, score=0.84, reasons=("name match",))
+        result = ScoredMemoryResult(
+            record=record,
+            score=0.84,
+            reasons=("name match",),
+            score_parts=(("title", 0.84),),
+        )
         trace = RetrievalTrace(
             query=query,
             retriever_name="test-memory-index",
             result_ids=(result.node_id,),
             filters_applied={"node_types": query.node_types},
             notes=("graph expansion skipped",),
+            result_summaries=("contacts/tom-reilly score=0.84 reasons=name match parts=title=0.84",),
         )
 
         self.assertEqual(query.limit, 3)
         self.assertEqual(query.query_vector, (0.1, 0.2))
         self.assertEqual(result.node_id, "contacts/tom-reilly")
         self.assertEqual(result.reasons, ("name match",))
+        self.assertEqual(result.score_parts, (("title", 0.84),))
         self.assertEqual(trace.result_ids, ("contacts/tom-reilly",))
         self.assertEqual(trace.filters_applied["node_types"], query.node_types)
+        self.assertEqual(
+            trace.result_summaries,
+            ("contacts/tom-reilly score=0.84 reasons=name match parts=title=0.84",),
+        )
 
     def test_memory_record_from_retrieval_node_preserves_index_metadata(self):
         node = RetrievalNode(
@@ -262,6 +273,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             ],
         )
         self.assertEqual(results[0].reasons, ("title", "node_id"))
+        self.assertEqual(results[0].score_parts, (("title", 8.0), ("node_id", 6.0)))
 
     def test_in_memory_index_query_returns_empty_for_non_positive_limit(self):
         index = InMemoryMemoryIndex([
@@ -314,6 +326,13 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         self.assertIn("records scanned: 2", trace.notes)
         self.assertIn("filtered by node_type: 1", trace.notes)
         self.assertIn("candidates scored: 1", trace.notes)
+        self.assertEqual(
+            trace.result_summaries,
+            (
+                "projects/phase-3-memory-enhancement "
+                "score=14 reasons=title,node_id parts=title=8, node_id=6",
+            ),
+        )
 
     def test_in_memory_index_query_with_trace_records_zero_limit(self):
         query = MemoryQuery(text="memory", limit=0)
@@ -369,6 +388,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             ],
         )
         self.assertIn("vector", results[0].reasons)
+        self.assertEqual(results[0].score_parts, (("vector", 10.0),))
 
     def test_in_memory_index_ignores_vector_dimension_mismatches(self):
         record = MemoryRecord(

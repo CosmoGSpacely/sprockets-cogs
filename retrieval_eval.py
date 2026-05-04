@@ -884,6 +884,10 @@ def _build_memory_index_retriever(
                 result_ids=fallback_ids,
                 filters_applied=retrieval_trace.filters_applied,
                 notes=retrieval_trace.notes + ("daily recency fallback",),
+                result_summaries=tuple(
+                    f"{node.node_id} score=0 reasons=daily-recency-fallback"
+                    for node in recent_daily_nodes[:memory_query.limit]
+                ),
             )
         if preferred_types and not results:
             _results, retrieval_trace = index.query_with_trace(
@@ -1022,6 +1026,11 @@ def main() -> None:
                 notes = getattr(trace, "notes", ())
                 if notes:
                     print("- trace notes: " + "; ".join(str(note) for note in notes))
+                result_summaries = getattr(trace, "result_summaries", ())
+                if result_summaries:
+                    print("- trace results:")
+                    for summary in result_summaries:
+                        print(f"  - {summary}")
 
     if args.strict and not result.passed:
         raise SystemExit(1)

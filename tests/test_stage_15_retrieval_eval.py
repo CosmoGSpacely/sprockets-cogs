@@ -754,6 +754,9 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- trace retriever: in-memory", printed)
         self.assertIn("- trace notes: records scanned: 1", printed)
         self.assertIn("candidates scored:", printed)
+        self.assertIn("- trace results:", printed)
+        self.assertIn("score=", printed)
+        self.assertIn("reasons=", printed)
 
     def test_cli_memory_embedding_vault_mode_uses_cached_embeddings_without_production_wiring(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -797,6 +800,9 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- vault: ", printed)
         self.assertIn("- nodes: 1", printed)
         self.assertIn("- trace retriever: in-memory", printed)
+        self.assertIn("- trace results:", printed)
+        self.assertIn("parts=title=", printed)
+        self.assertIn("vector=", printed)
         mock_build_index.assert_called_once()
         self.assertTrue(mock_embed_text.called)
 
