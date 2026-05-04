@@ -15,11 +15,15 @@ from retrieval_eval import RetrievalNode, build_experimental_retriever
 MEMORY_RETRIEVAL_ENV = "SPROCKETS_COGS_MEMORY_RETRIEVAL"
 MEMORY_CONTEXT_ENV = "SPROCKETS_COGS_MEMORY_CONTEXT"
 RETRIEVER_ENV = "SPROCKETS_COGS_MEMORY_RETRIEVER"
+NODE_LIMIT_ENV = "SPROCKETS_COGS_MEMORY_NODE_LIMIT"
+TEXT_LIMIT_ENV = "SPROCKETS_COGS_MEMORY_TEXT_LIMIT"
 DEFAULT_RETRIEVER = "memory-embedding-gated-vault"
 ALLOWED_RETRIEVERS = frozenset({
     "memory-embedding-gated-vault",
     "memory-vault",
 })
+DEFAULT_PRODUCTION_NODE_LIMIT = 5
+DEFAULT_PRODUCTION_TEXT_LIMIT = 240
 DEFAULT_CONTEXT_NODE_LIMIT = 5
 DEFAULT_CONTEXT_TEXT_LIMIT = 240
 
@@ -89,11 +93,50 @@ def retrieve_with_gated_memory(query: str, vault_dir: Path) -> tuple[RetrievalNo
     """Run the selected gated memory retriever for production preview wiring."""
 
     retriever = build_experimental_retriever(configured_memory_retriever(), vault_dir)
-    return tuple(
+    nodes = tuple(
         node
         for node in retriever.retrieve(query)
         if isinstance(node, RetrievalNode)
     )
+    return compact_retrieval_nodes(
+        nodes,
+        node_limit=configured_production_node_limit(),
+        text_limit=configured_production_text_limit(),
+    )
+
+
+def compact_retrieval_nodes(
+    nodes: tuple[RetrievalNode, ...],
+    node_limit: int = DEFAULT_PRODUCTION_NODE_LIMIT,
+    text_limit: int = DEFAULT_PRODUCTION_TEXT_LIMIT,
+) -> tuple[RetrievalNode, ...]:
+    """Return bounded retrieval nodes suitable for production-facing callers."""
+
+    if node_limit < 1:
+        return ()
+    return tuple(
+        RetrievalNode(
+            node_id=node.node_id,
+            title=_single_line(node.title),
+            node_type=node.node_type,
+            path=node.path,
+            parent_slugs=node.parent_slugs,
+            text=_snippet(node.text, text_limit),
+        )
+        for node in nodes[:node_limit]
+    )
+
+
+def configured_production_node_limit() -> int:
+    """Return the production retrieval result limit."""
+
+    return _positive_int_env(NODE_LIMIT_ENV, DEFAULT_PRODUCTION_NODE_LIMIT)
+
+
+def configured_production_text_limit() -> int:
+    """Return the per-node text limit for production retrieval payloads."""
+
+    return _positive_int_env(TEXT_LIMIT_ENV, DEFAULT_PRODUCTION_TEXT_LIMIT)
 
 
 def format_retrieval_context(
@@ -134,3 +177,14 @@ def _snippet(text: str, max_chars: int) -> str:
     if len(compact) <= max_chars:
         return compact
     return compact[:max_chars].rstrip() + "..."
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
