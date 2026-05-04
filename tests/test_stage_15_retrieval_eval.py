@@ -616,7 +616,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         mock_build_index.assert_called_once()
         self.assertTrue(mock_embed_text.called)
 
-    def test_memory_embedding_gated_vault_withholds_low_confidence_results(self):
+    def test_memory_embedding_gated_vault_withholds_low_confidence_results_without_grounding(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
             production_path = write_node(
@@ -658,14 +658,67 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                         "memory-embedding-gated-vault",
                         vault,
                     )
-                    results = list(retriever.retrieve("What should be available away from this computer?"))
-                    trace = retriever.trace("What should be available away from this computer?")
+                    results = list(retriever.retrieve("What deserves attention next?"))
+                    trace = retriever.trace("What deserves attention next?")
 
         self.assertEqual(retriever.name, "memory-embedding-gated-vault")
         self.assertEqual(results, [])
         self.assertEqual(trace.result_ids, ())
         self.assertEqual(trace.confidence.action, "review")
         self.assertIn("confidence gate withheld low-confidence results", trace.notes)
+        mock_build_index.assert_called_once()
+        self.assertTrue(mock_embed_text.called)
+
+    def test_memory_embedding_gated_vault_grounds_production_readiness_intent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            production_path = write_node(
+                vault,
+                "projects",
+                "learn-how-to-bring-a-project-to-production",
+                "node_type: sprockets/project\n"
+                "title: Learn how to bring a project to production\n",
+            )
+            laptop_path = write_node(
+                vault,
+                "notes",
+                "laptop-setup",
+                "node_type: sprockets/note\n"
+                "title: Laptop setup\n",
+            )
+            production = RetrievalNode(
+                node_id="projects/learn-how-to-bring-a-project-to-production",
+                title="Learn how to bring a project to production",
+                node_type="sprockets/project",
+                path=production_path,
+            )
+            laptop = RetrievalNode(
+                node_id="notes/laptop-setup",
+                title="Laptop setup",
+                node_type="sprockets/note",
+                path=laptop_path,
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.embed_text") as mock_embed_text:
+                    mock_build_index.return_value = (
+                        embeddings.EmbeddedNode(node=production, vector=(0.99, 0.01)),
+                        embeddings.EmbeddedNode(node=laptop, vector=(1.0, 0.0)),
+                    )
+                    mock_embed_text.return_value = [1.0, 0.0]
+
+                    retriever = build_experimental_retriever(
+                        "memory-embedding-gated-vault",
+                        vault,
+                    )
+                    results = list(retriever.retrieve("What should run beyond my laptop?"))
+                    trace = retriever.trace("What should run beyond my laptop?")
+
+        self.assertEqual(results[0].node_id, "projects/learn-how-to-bring-a-project-to-production")
+        self.assertEqual(trace.result_ids[0], "projects/learn-how-to-bring-a-project-to-production")
+        self.assertEqual(trace.confidence.action, "use")
+        self.assertIn("semantic hint applied: production readiness", trace.notes)
+        self.assertNotIn("confidence gate withheld low-confidence results", trace.notes)
         mock_build_index.assert_called_once()
         self.assertTrue(mock_embed_text.called)
 
