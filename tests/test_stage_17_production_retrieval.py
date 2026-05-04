@@ -301,6 +301,89 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
 
         self.assertNotIn("parent_hint", result[0])
 
+    def test_memory_parent_title_uses_top_hierarchy_result(self):
+        project = RetrievalNode(
+            node_id="projects/production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+
+        with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[project]):
+            title = agentic_loop.memory_parent_title("run beyond laptop")
+
+        self.assertEqual(title, "Learn how to bring a project to production")
+
+    def test_memory_parent_title_ignores_non_hierarchy_top_result(self):
+        contact = RetrievalNode(
+            node_id="contacts/tom-reilly",
+            title="Tom Reilly",
+            node_type="sprockets/contact",
+            path=Path("/vault/Sprockets/contacts/tom-reilly.md"),
+        )
+
+        with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[contact]):
+            title = agentic_loop.memory_parent_title("call Tom")
+
+        self.assertEqual(title, "")
+
+    def test_ensure_memory_hierarchy_tasks_adds_missing_task(self):
+        raw_nodes = [
+            {
+                "raw": "Need to draft a deployment checklist so this can run beyond my laptop.",
+                "type_hint": "task",
+            }
+        ]
+        classified = [
+            {
+                "node_type": "cogs/daily",
+                "item_text": "Draft a deployment checklist so this can run beyond my laptop",
+                "date": "2026-05-04",
+                "confidence": "high",
+            }
+        ]
+
+        with patch.object(agentic_loop, "datetime") as fake_datetime:
+            fake_datetime.now.return_value.strftime.return_value = "2026-05-04"
+            result = agentic_loop.ensure_memory_hierarchy_tasks(
+                raw_nodes,
+                classified,
+                "Learn how to bring a project to production",
+            )
+
+        self.assertEqual(len(result), 2)
+        task = result[1]
+        self.assertEqual(task["node_type"], "sprockets/task")
+        self.assertEqual(
+            task["title"],
+            "Draft a deployment checklist so this can run beyond my laptop.",
+        )
+        self.assertEqual(task["date"], "2026-05-04")
+        self.assertEqual(task["parent_hint"], "Learn how to bring a project to production")
+
+    def test_ensure_memory_hierarchy_tasks_preserves_existing_task(self):
+        raw_nodes = [
+            {
+                "raw": "Need to draft a deployment checklist",
+                "type_hint": "task",
+            }
+        ]
+        classified = [
+            {
+                "node_type": "sprockets/task",
+                "title": "Draft a deployment checklist",
+                "confidence": "high",
+            }
+        ]
+
+        result = agentic_loop.ensure_memory_hierarchy_tasks(
+            raw_nodes,
+            classified,
+            "Learn how to bring a project to production",
+        )
+
+        self.assertEqual(result, classified)
+
     def test_agentic_loop_retrieval_uses_adapter_when_flag_is_enabled(self):
         node = RetrievalNode(
             node_id="notes/memory",
