@@ -139,6 +139,9 @@ Retriever = Callable[[str], Iterable[object]]
 def _retrieved_id(item: object) -> str:
     if isinstance(item, RetrievalNode):
         return item.node_id
+    node_id = getattr(item, "node_id", None)
+    if node_id:
+        return str(node_id)
     if isinstance(item, Path):
         return item.as_posix()
     if isinstance(item, dict):

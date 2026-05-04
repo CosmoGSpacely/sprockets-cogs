@@ -81,6 +81,21 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertEqual(result.results[0].retrieved_ids, ("projects/phase-3-memory-enhancement",))
 
+    def test_evaluate_retriever_accepts_retrieval_node_shaped_objects(self):
+        class NodeLike:
+            node_id = "projects/phase-3-memory-enhancement"
+
+        case = RetrievalCase(
+            name="node-like",
+            query="Phase 3 memory",
+            expected_ids=frozenset({"projects/phase-3-memory-enhancement"}),
+        )
+
+        result = evaluate_retriever([case], lambda _query: [NodeLike()])
+
+        self.assertTrue(result.passed)
+        self.assertEqual(result.results[0].retrieved_ids, ("projects/phase-3-memory-enhancement",))
+
     def test_stage_15_cases_cover_required_memory_risks(self):
         cases = stage_15_cases()
         categories = {case.category for case in cases}
