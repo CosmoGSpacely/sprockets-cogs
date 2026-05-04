@@ -102,6 +102,12 @@ class MemoryIndex(Protocol):
     def query(self, query: MemoryQuery) -> tuple[ScoredMemoryResult, ...]:
         ...
 
+    def query_with_trace(
+        self,
+        query: MemoryQuery,
+    ) -> tuple[tuple[ScoredMemoryResult, ...], RetrievalTrace]:
+        ...
+
 
 class InMemoryMemoryIndex:
     """Small deterministic MemoryIndex implementation for tests and experiments."""
@@ -125,15 +131,33 @@ class InMemoryMemoryIndex:
         return self._records.get(node_id)
 
     def query(self, query: MemoryQuery) -> tuple[ScoredMemoryResult, ...]:
+        results, _trace = self.query_with_trace(query)
+        return results
+
+    def query_with_trace(
+        self,
+        query: MemoryQuery,
+    ) -> tuple[tuple[ScoredMemoryResult, ...], RetrievalTrace]:
         if query.limit < 1:
-            return ()
+            trace = RetrievalTrace(
+                query=query,
+                retriever_name="in-memory",
+                result_ids=(),
+                filters_applied=_filters_applied(query),
+                notes=("limit below 1",),
+            )
+            return (), trace
 
         query_tokens = _tokens(query.text)
         scored: list[ScoredMemoryResult] = []
+        filtered_by_type = 0
+        filtered_by_parent = 0
         for record in self._records.values():
             if query.node_types and record.metadata.node_type not in query.node_types:
+                filtered_by_type += 1
                 continue
             if query.parent_slugs and not set(query.parent_slugs).issubset(record.metadata.parent_slugs):
+                filtered_by_parent += 1
                 continue
 
             score, reasons = _score_record(query_tokens, record)
@@ -142,7 +166,21 @@ class InMemoryMemoryIndex:
             scored.append(ScoredMemoryResult(record=record, score=score, reasons=reasons))
 
         scored.sort(key=lambda result: (-result.score, result.node_id))
-        return tuple(scored[:query.limit])
+        results = tuple(scored[:query.limit])
+        notes = (
+            f"records scanned: {len(self._records)}",
+            f"filtered by node_type: {filtered_by_type}",
+            f"filtered by parent: {filtered_by_parent}",
+            f"candidates scored: {len(scored)}",
+        )
+        trace = RetrievalTrace(
+            query=query,
+            retriever_name="in-memory",
+            result_ids=tuple(result.node_id for result in results),
+            filters_applied=_filters_applied(query),
+            notes=notes,
+        )
+        return results, trace
 
 
 def vector_metadata_for(model: str, text_hash: str, vector: Sequence[float]) -> VectorMetadata:
@@ -220,3 +258,12 @@ def _score_record(
     if not query_tokens:
         reasons.append("filter")
     return score, tuple(reasons)
+
+
+def _filters_applied(query: MemoryQuery) -> dict[str, tuple[str, ...]]:
+    filters: dict[str, tuple[str, ...]] = {}
+    if query.node_types:
+        filters["node_types"] = query.node_types
+    if query.parent_slugs:
+        filters["parent_slugs"] = query.parent_slugs
+    return filters

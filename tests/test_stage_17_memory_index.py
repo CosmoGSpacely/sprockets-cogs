@@ -275,6 +275,54 @@ class Stage17MemoryIndexTests(unittest.TestCase):
 
         self.assertEqual(index.query(MemoryQuery(text="memory", limit=0)), ())
 
+    def test_in_memory_index_query_with_trace_explains_filters_and_results(self):
+        project = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/phase-3-memory-enhancement",
+                path=Path("projects/phase-3-memory-enhancement.md"),
+                node_type="sprockets/project",
+                title="Phase 3 - Memory Enhancement",
+                parent_slugs=("build-sprockets-cogs",),
+            )
+        )
+        contact = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="contacts/tom-reilly",
+                path=Path("contacts/tom-reilly.md"),
+                node_type="sprockets/contact",
+                title="Tom Reilly",
+            )
+        )
+        query = MemoryQuery(
+            text="memory enhancement",
+            limit=5,
+            node_types=("sprockets/project",),
+            parent_slugs=("build-sprockets-cogs",),
+        )
+        index = InMemoryMemoryIndex([contact, project])
+
+        results, trace = index.query_with_trace(query)
+
+        self.assertEqual([result.node_id for result in results], [project.node_id])
+        self.assertEqual(trace.query, query)
+        self.assertEqual(trace.retriever_name, "in-memory")
+        self.assertEqual(trace.result_ids, (project.node_id,))
+        self.assertEqual(trace.filters_applied["node_types"], ("sprockets/project",))
+        self.assertEqual(trace.filters_applied["parent_slugs"], ("build-sprockets-cogs",))
+        self.assertIn("records scanned: 2", trace.notes)
+        self.assertIn("filtered by node_type: 1", trace.notes)
+        self.assertIn("candidates scored: 1", trace.notes)
+
+    def test_in_memory_index_query_with_trace_records_zero_limit(self):
+        query = MemoryQuery(text="memory", limit=0)
+        index = InMemoryMemoryIndex()
+
+        results, trace = index.query_with_trace(query)
+
+        self.assertEqual(results, ())
+        self.assertEqual(trace.result_ids, ())
+        self.assertEqual(trace.notes, ("limit below 1",))
+
 
 if __name__ == "__main__":
     unittest.main()
