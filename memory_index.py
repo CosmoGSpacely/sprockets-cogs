@@ -72,6 +72,7 @@ class ScoredMemoryResult:
     record: MemoryRecord
     score: float
     reasons: tuple[str, ...] = ()
+    score_parts: tuple[tuple[str, float], ...] = ()
 
     @property
     def node_id(self) -> str:
@@ -87,6 +88,7 @@ class RetrievalTrace:
     result_ids: tuple[str, ...]
     filters_applied: dict[str, tuple[str, ...]] = field(default_factory=dict)
     notes: tuple[str, ...] = ()
+    result_summaries: tuple[str, ...] = ()
 
 
 class MemoryIndex(Protocol):
@@ -162,10 +164,15 @@ class InMemoryMemoryIndex:
                 filtered_by_parent += 1
                 continue
 
-            score, reasons = _score_record(query_tokens, query.query_vector, record)
+            score, reasons, score_parts = _score_record(query_tokens, query.query_vector, record)
             if score <= 0 and (query_tokens or query.query_vector is not None):
                 continue
-            scored.append(ScoredMemoryResult(record=record, score=score, reasons=reasons))
+            scored.append(ScoredMemoryResult(
+                record=record,
+                score=score,
+                reasons=reasons,
+                score_parts=score_parts,
+            ))
 
         scored.sort(key=lambda result: (-result.score, result.node_id))
         results = tuple(scored[:query.limit])
@@ -181,6 +188,7 @@ class InMemoryMemoryIndex:
             result_ids=tuple(result.node_id for result in results),
             filters_applied=_filters_applied(query),
             notes=notes,
+            result_summaries=tuple(_result_summary(result) for result in results),
         )
         return results, trace
 
@@ -244,14 +252,18 @@ def _score_record(
     query_tokens: set[str],
     query_vector: Sequence[float] | None,
     record: MemoryRecord,
-) -> tuple[float, tuple[str, ...]]:
+) -> tuple[float, tuple[str, ...], tuple[tuple[str, float], ...]]:
     metadata = record.metadata
     title_overlap = query_tokens & _tokens(metadata.title)
     id_overlap = query_tokens & _tokens(metadata.node_id.replace("/", " "))
     parent_overlap = query_tokens & _tokens(" ".join(metadata.parent_slugs))
 
-    lexical_score = float(len(title_overlap) * 4 + len(id_overlap) * 3 + len(parent_overlap) * 2)
-    vector_score = 0.0
+    score_parts = {
+        "title": float(len(title_overlap) * 4),
+        "node_id": float(len(id_overlap) * 3),
+        "parent": float(len(parent_overlap) * 2),
+        "vector": 0.0,
+    }
     reasons: list[str] = []
     if title_overlap:
         reasons.append("title")
@@ -260,12 +272,26 @@ def _score_record(
     if parent_overlap:
         reasons.append("parent")
     if query_vector is not None and record.vector is not None:
-        vector_score = _cosine_similarity(query_vector, record.vector) * 10.0
-        if vector_score > 0:
+        score_parts["vector"] = _cosine_similarity(query_vector, record.vector) * 10.0
+        if score_parts["vector"] > 0:
             reasons.append("vector")
     if not query_tokens and query_vector is None:
         reasons.append("filter")
-    return lexical_score + vector_score, tuple(reasons)
+    included_parts = tuple(
+        (name, value)
+        for name, value in score_parts.items()
+        if value > 0
+    )
+    total_score = sum(value for _name, value in included_parts)
+    return total_score, tuple(reasons), included_parts
+
+
+def _result_summary(result: ScoredMemoryResult) -> str:
+    parts = ", ".join(f"{name}={value:.3g}" for name, value in result.score_parts)
+    reasons = ",".join(result.reasons) if result.reasons else "none"
+    if parts:
+        return f"{result.node_id} score={result.score:.3g} reasons={reasons} parts={parts}"
+    return f"{result.node_id} score={result.score:.3g} reasons={reasons}"
 
 
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
