@@ -125,6 +125,79 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
         mock_build.assert_called_once_with("memory-vault", Path("/vault"))
         self.assertEqual(results, (node,))
 
+    def test_retrieve_with_gated_memory_returns_compact_nodes(self):
+        first = RetrievalNode(
+            node_id="notes/first",
+            title="First\nMemory",
+            node_type="sprockets/note",
+            path=Path("/vault/first.md"),
+            text="abcdefghijklmnopqrstuvwxyz",
+        )
+        second = RetrievalNode(
+            node_id="notes/second",
+            title="Second",
+            node_type="sprockets/note",
+            path=Path("/vault/second.md"),
+            text="second text",
+        )
+        experimental = ExperimentalRetriever(
+            name="memory-vault",
+            nodes=(first, second),
+            retriever=lambda _query: (first, second),
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                production_retrieval.RETRIEVER_ENV: "memory-vault",
+                production_retrieval.NODE_LIMIT_ENV: "1",
+                production_retrieval.TEXT_LIMIT_ENV: "10",
+            },
+            clear=True,
+        ):
+            with patch("production_retrieval.build_experimental_retriever") as mock_build:
+                mock_build.return_value = experimental
+                results = production_retrieval.retrieve_with_gated_memory(
+                    "memory",
+                    Path("/vault"),
+                )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].node_id, "notes/first")
+        self.assertEqual(results[0].title, "First Memory")
+        self.assertEqual(results[0].text, "abcdefghij...")
+
+    def test_compact_retrieval_nodes_handles_non_positive_limit(self):
+        node = RetrievalNode(
+            node_id="notes/memory",
+            title="Memory",
+            node_type="sprockets/note",
+            path=Path("/vault/memory.md"),
+        )
+
+        self.assertEqual(
+            production_retrieval.compact_retrieval_nodes((node,), node_limit=0),
+            (),
+        )
+
+    def test_configured_production_limits_ignore_invalid_values(self):
+        with patch.dict(
+            os.environ,
+            {
+                production_retrieval.NODE_LIMIT_ENV: "not-a-number",
+                production_retrieval.TEXT_LIMIT_ENV: "-2",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                production_retrieval.configured_production_node_limit(),
+                production_retrieval.DEFAULT_PRODUCTION_NODE_LIMIT,
+            )
+            self.assertEqual(
+                production_retrieval.configured_production_text_limit(),
+                production_retrieval.DEFAULT_PRODUCTION_TEXT_LIMIT,
+            )
+
     def test_format_retrieval_context_compacts_nodes_for_prompt_use(self):
         node = RetrievalNode(
             node_id="projects/phase-3-memory-enhancement",
