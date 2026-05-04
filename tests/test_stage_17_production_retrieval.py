@@ -23,6 +23,20 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
                 ):
                     self.assertTrue(production_retrieval.memory_retrieval_enabled())
 
+    def test_memory_context_is_disabled_by_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(production_retrieval.memory_context_enabled())
+
+    def test_memory_context_flag_accepts_truthy_values(self):
+        for value in ("1", "true", "yes", "on", " TRUE "):
+            with self.subTest(value=value):
+                with patch.dict(
+                    os.environ,
+                    {production_retrieval.MEMORY_CONTEXT_ENV: value},
+                    clear=True,
+                ):
+                    self.assertTrue(production_retrieval.memory_context_enabled())
+
     def test_configured_memory_retriever_defaults_to_gated_memory(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(
@@ -50,6 +64,7 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
             os.environ,
             {
                 production_retrieval.MEMORY_RETRIEVAL_ENV: "yes",
+                production_retrieval.MEMORY_CONTEXT_ENV: "on",
                 production_retrieval.RETRIEVER_ENV: "memory-vault",
             },
             clear=True,
@@ -57,11 +72,13 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
             status = production_retrieval.production_retrieval_status(Path("/vault"))
 
         self.assertTrue(status.enabled)
+        self.assertTrue(status.context_enabled)
         self.assertEqual(status.retriever_name, "memory-vault")
         self.assertEqual(status.raw_retriever_name, "memory-vault")
         self.assertTrue(status.retriever_env_accepted)
         self.assertEqual(status.vault_dir, Path("/vault"))
         self.assertEqual(status.enable_env, production_retrieval.MEMORY_RETRIEVAL_ENV)
+        self.assertEqual(status.context_env, production_retrieval.MEMORY_CONTEXT_ENV)
         self.assertEqual(status.retriever_env, production_retrieval.RETRIEVER_ENV)
         self.assertEqual(
             set(status.allowed_retrievers),
@@ -162,7 +179,38 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
                 results = agentic_loop.retrieve_relevant_nodes("memory")
 
         self.assertEqual(results, [])
+
+    def test_agentic_loop_context_for_input_omits_memory_by_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with patch.object(agentic_loop, "build_context", return_value="Base context"):
+                with patch.object(agentic_loop, "retrieve_relevant_nodes") as mock_retrieve:
+                    context = agentic_loop.build_context_for_input("Find memory")
+
+        self.assertEqual(context, "Base context")
         mock_retrieve.assert_not_called()
+
+    def test_agentic_loop_context_for_input_can_append_relevant_memory(self):
+        node = RetrievalNode(
+            node_id="notes/memory",
+            title="Memory",
+            node_type="sprockets/note",
+            path=Path("/vault/Sprockets/notes/memory.md"),
+        )
+
+        with patch.dict(
+            os.environ,
+            {production_retrieval.MEMORY_CONTEXT_ENV: "1"},
+            clear=True,
+        ):
+            with patch.object(agentic_loop, "build_context", return_value="Base context"):
+                with patch.object(agentic_loop, "retrieve_relevant_nodes") as mock_retrieve:
+                    mock_retrieve.return_value = [node]
+                    context = agentic_loop.build_context_for_input("Find memory")
+
+        self.assertIn("Base context", context)
+        self.assertIn("Relevant memory:", context)
+        self.assertIn("- notes/memory [sprockets/note] Memory", context)
+        mock_retrieve.assert_called_once_with("Find memory")
 
     def test_agentic_loop_retrieval_uses_adapter_when_flag_is_enabled(self):
         node = RetrievalNode(

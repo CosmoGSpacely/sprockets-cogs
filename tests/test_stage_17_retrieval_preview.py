@@ -135,6 +135,7 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
         output = format_status(
             ProductionRetrievalStatus(
                 enabled=False,
+                context_enabled=False,
                 retriever_name="memory-embedding-gated-vault",
                 vault_dir=Path("/vault"),
                 raw_retriever_name="embedding-vault",
@@ -145,6 +146,8 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
         self.assertIn("Sprockets-Cogs production retrieval status", output)
         self.assertIn("- memory retrieval: disabled", output)
         self.assertIn("- enable env: SPROCKETS_COGS_MEMORY_RETRIEVAL", output)
+        self.assertIn("- memory context: disabled", output)
+        self.assertIn("- context env: SPROCKETS_COGS_MEMORY_CONTEXT", output)
         self.assertIn("- retriever: memory-embedding-gated-vault", output)
         self.assertIn("- retriever env accepted: no", output)
         self.assertIn("- raw retriever env: embedding-vault", output)

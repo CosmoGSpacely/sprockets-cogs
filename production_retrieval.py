@@ -13,6 +13,7 @@ from retrieval_eval import RetrievalNode, build_experimental_retriever
 
 
 MEMORY_RETRIEVAL_ENV = "SPROCKETS_COGS_MEMORY_RETRIEVAL"
+MEMORY_CONTEXT_ENV = "SPROCKETS_COGS_MEMORY_CONTEXT"
 RETRIEVER_ENV = "SPROCKETS_COGS_MEMORY_RETRIEVER"
 DEFAULT_RETRIEVER = "memory-embedding-gated-vault"
 ALLOWED_RETRIEVERS = frozenset({
@@ -30,11 +31,13 @@ class ProductionRetrievalStatus:
     """Operational status for the guarded production retrieval adapter."""
 
     enabled: bool
+    context_enabled: bool
     retriever_name: str
     vault_dir: Path
     raw_retriever_name: str
     allowed_retrievers: tuple[str, ...]
     enable_env: str = MEMORY_RETRIEVAL_ENV
+    context_env: str = MEMORY_CONTEXT_ENV
     retriever_env: str = RETRIEVER_ENV
 
     @property
@@ -46,6 +49,12 @@ def memory_retrieval_enabled() -> bool:
     """Return whether production semantic retrieval is explicitly enabled."""
 
     return os.environ.get(MEMORY_RETRIEVAL_ENV, "").strip().lower() in _TRUE_VALUES
+
+
+def memory_context_enabled() -> bool:
+    """Return whether retrieved memory may be added to classifier context."""
+
+    return os.environ.get(MEMORY_CONTEXT_ENV, "").strip().lower() in _TRUE_VALUES
 
 
 def configured_memory_retriever() -> str:
@@ -68,6 +77,7 @@ def production_retrieval_status(vault_dir: Path) -> ProductionRetrievalStatus:
 
     return ProductionRetrievalStatus(
         enabled=memory_retrieval_enabled(),
+        context_enabled=memory_context_enabled(),
         retriever_name=configured_memory_retriever(),
         vault_dir=vault_dir,
         raw_retriever_name=raw_memory_retriever_config(),
