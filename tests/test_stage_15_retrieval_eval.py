@@ -119,6 +119,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
 
     def test_select_cases_uses_real_vault_cases_for_lexical_vault_auto(self):
         self.assertEqual(select_cases("auto", "lexical-vault"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("auto", "memory-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "embedding-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-graph-vault"), stage_15_real_vault_cases())
@@ -484,6 +485,16 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertTrue(results)
         self.assertTrue(all(isinstance(node, RetrievalNode) for node in results))
 
+    def test_build_experimental_retriever_builds_memory_fixture_interface(self):
+        retriever = build_experimental_retriever("memory-fixture", Path("/unused"))
+
+        results = list(retriever.retrieve("Phase 3 memory enhancement"))
+
+        self.assertEqual(retriever.name, "memory-fixture")
+        self.assertEqual(len(retriever.nodes), len(stage_15_fixture_nodes()))
+        self.assertEqual(results[0].node_id, "projects/phase-3-memory-enhancement")
+        self.assertTrue(all(isinstance(node, RetrievalNode) for node in results))
+
     def test_build_experimental_retriever_builds_hybrid_graph_intent_interface(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -566,6 +577,36 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- sprockets/contact: 1", printed)
         self.assertIn("Target inventory", printed)
         self.assertIn("contacts/tom-reilly", printed)
+
+    def test_cli_memory_vault_mode_uses_memory_index_without_production_wiring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "projects",
+                "phase-3-memory-enhancement",
+                "node_type: sprockets/project\n"
+                "title: Phase 3 - Memory Enhancement\n",
+                "Evaluate retrieval quality before production wiring.",
+            )
+
+            with patch("sys.argv", [
+                "retrieval_eval",
+                "--retriever",
+                "memory-vault",
+                "--vault-dir",
+                str(vault),
+                "--list-nodes",
+            ]):
+                with patch("builtins.print") as mock_print:
+                    retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- retriever: memory-vault", printed)
+        self.assertIn("- case-set: real-vault", printed)
+        self.assertIn("- vault: ", printed)
+        self.assertIn("- nodes: 1", printed)
+        self.assertIn("- sprockets/project: 1", printed)
 
     def test_cli_embedding_vault_mode_uses_embedding_index_without_production_wiring(self):
         with tempfile.TemporaryDirectory() as tmp:
