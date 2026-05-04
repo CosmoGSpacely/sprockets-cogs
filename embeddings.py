@@ -11,7 +11,7 @@ from typing import Protocol
 
 import ollama
 
-from retrieval_eval import RetrievalNode
+from retrieval_types import RetrievalNode
 from vector_math import cosine_similarity
 
 

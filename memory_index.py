@@ -14,7 +14,7 @@ import re
 from typing import Protocol
 
 from embeddings import embedding_text_hash, node_embedding_text
-from retrieval_eval import RetrievalNode
+from retrieval_types import RetrievalNode
 from vector_math import cosine_similarity
 
 
