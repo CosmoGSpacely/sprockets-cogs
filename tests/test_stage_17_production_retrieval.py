@@ -30,6 +30,23 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
                 "memory-embedding-gated-vault",
             )
 
+    def test_production_retrieval_status_reports_flag_retriever_and_vault(self):
+        with patch.dict(
+            os.environ,
+            {
+                production_retrieval.MEMORY_RETRIEVAL_ENV: "yes",
+                production_retrieval.RETRIEVER_ENV: "memory-vault",
+            },
+            clear=True,
+        ):
+            status = production_retrieval.production_retrieval_status(Path("/vault"))
+
+        self.assertTrue(status.enabled)
+        self.assertEqual(status.retriever_name, "memory-vault")
+        self.assertEqual(status.vault_dir, Path("/vault"))
+        self.assertEqual(status.enable_env, production_retrieval.MEMORY_RETRIEVAL_ENV)
+        self.assertEqual(status.retriever_env, production_retrieval.RETRIEVER_ENV)
+
     def test_retrieve_with_gated_memory_uses_configured_experimental_retriever(self):
         node = RetrievalNode(
             node_id="projects/learn-how-to-bring-a-project-to-production",

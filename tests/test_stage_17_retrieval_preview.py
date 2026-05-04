@@ -4,8 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from memory_index import MemoryQuery, RetrievalConfidence, RetrievalTrace
+from production_retrieval import ProductionRetrievalStatus
 from retrieval_eval import ExperimentalRetriever, RetrievalNode
-from retrieval_preview import format_preview, preview_retrieval
+from retrieval_preview import format_preview, format_status, preview_retrieval
 
 
 class Stage17RetrievalPreviewTests(unittest.TestCase):
@@ -94,6 +95,21 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
 
         self.assertIn("- results: 0", output)
         self.assertIn("- unavailable", output)
+
+    def test_format_status_summarizes_guarded_production_retrieval(self):
+        output = format_status(
+            ProductionRetrievalStatus(
+                enabled=False,
+                retriever_name="memory-embedding-gated-vault",
+                vault_dir=Path("/vault"),
+            )
+        )
+
+        self.assertIn("Sprockets-Cogs production retrieval status", output)
+        self.assertIn("- memory retrieval: disabled", output)
+        self.assertIn("- enable env: SPROCKETS_COGS_MEMORY_RETRIEVAL", output)
+        self.assertIn("- retriever: memory-embedding-gated-vault", output)
+        self.assertIn("- vault: /vault", output)
 
 
 def preview_retrieval_result(

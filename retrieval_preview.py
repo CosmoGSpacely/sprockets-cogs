@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from production_retrieval import ProductionRetrievalStatus, production_retrieval_status
 from retrieval_eval import RetrievalNode, build_experimental_retriever
 
 
@@ -66,6 +67,20 @@ def format_preview(preview: RetrievalPreview, show_trace: bool = False) -> str:
     return "\n".join(lines)
 
 
+def format_status(status: ProductionRetrievalStatus) -> str:
+    """Format guarded production retrieval status for terminal output."""
+
+    enabled = "enabled" if status.enabled else "disabled"
+    return "\n".join([
+        "Sprockets-Cogs production retrieval status",
+        f"- memory retrieval: {enabled}",
+        f"- enable env: {status.enable_env}",
+        f"- retriever: {status.retriever_name}",
+        f"- retriever env: {status.retriever_env}",
+        f"- vault: {status.vault_dir}",
+    ])
+
+
 def _retrieval_nodes(items: Iterable[object]) -> Iterable[RetrievalNode]:
     for item in items:
         if isinstance(item, RetrievalNode):
@@ -109,7 +124,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Preview gated memory retrieval without production wiring.",
     )
-    parser.add_argument("query", nargs="+", help="Query text to retrieve against.")
+    parser.add_argument("query", nargs="*", help="Query text to retrieve against.")
     parser.add_argument(
         "--vault-dir",
         type=Path,
@@ -127,7 +142,18 @@ def main() -> None:
         action="store_true",
         help="Print retrieval trace details.",
     )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Print guarded production retrieval status without running a query.",
+    )
     args = parser.parse_args()
+
+    if args.status:
+        print(format_status(production_retrieval_status(args.vault_dir)))
+        return
+    if not args.query:
+        parser.error("query is required unless --status is used")
 
     preview = preview_retrieval(
         " ".join(args.query),
