@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import agentic_loop
+import embeddings
 import retrieval_eval
 from retrieval_eval import (
     RetrievalCase,
@@ -120,6 +121,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
     def test_select_cases_uses_real_vault_cases_for_lexical_vault_auto(self):
         self.assertEqual(select_cases("auto", "lexical-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "memory-vault"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("auto", "memory-embedding-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "embedding-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-graph-vault"), stage_15_real_vault_cases())
@@ -558,6 +560,58 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertEqual(results[0].node_id, "daily/2026-05-04")
         self.assertNotIn("daily/2026-05-06", [node.node_id for node in results])
 
+    def test_build_experimental_retriever_builds_memory_embedding_vault_interface(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            production_path = write_node(
+                vault,
+                "projects",
+                "learn-how-to-bring-a-project-to-production",
+                "node_type: sprockets/project\n"
+                "title: Learn how to bring a project to production\n",
+            )
+            laptop_path = write_node(
+                vault,
+                "notes",
+                "laptop-setup",
+                "node_type: sprockets/note\n"
+                "title: Laptop setup\n",
+            )
+            production = RetrievalNode(
+                node_id="projects/learn-how-to-bring-a-project-to-production",
+                title="Learn how to bring a project to production",
+                node_type="sprockets/project",
+                path=production_path,
+            )
+            laptop = RetrievalNode(
+                node_id="notes/laptop-setup",
+                title="Laptop setup",
+                node_type="sprockets/note",
+                path=laptop_path,
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.embed_text") as mock_embed_text:
+                    mock_build_index.return_value = (
+                        embeddings.EmbeddedNode(node=production, vector=(1.0, 0.0)),
+                        embeddings.EmbeddedNode(node=laptop, vector=(0.0, 1.0)),
+                    )
+                    mock_embed_text.return_value = [1.0, 0.0]
+
+                    retriever = build_experimental_retriever(
+                        "memory-embedding-vault",
+                        vault,
+                    )
+                    results = list(retriever.retrieve("What should run beyond my laptop?"))
+                    trace = retriever.trace("What should run beyond my laptop?")
+
+        self.assertEqual(retriever.name, "memory-embedding-vault")
+        self.assertEqual(results[0].node_id, "projects/learn-how-to-bring-a-project-to-production")
+        self.assertEqual(trace.retriever_name, "in-memory")
+        self.assertIn("projects/learn-how-to-bring-a-project-to-production", trace.result_ids)
+        mock_build_index.assert_called_once()
+        self.assertTrue(mock_embed_text.called)
+
     def test_build_experimental_retriever_builds_hybrid_graph_intent_interface(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -700,6 +754,51 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- trace retriever: in-memory", printed)
         self.assertIn("- trace notes: records scanned: 1", printed)
         self.assertIn("candidates scored:", printed)
+
+    def test_cli_memory_embedding_vault_mode_uses_cached_embeddings_without_production_wiring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            production_path = write_node(
+                vault,
+                "projects",
+                "learn-how-to-bring-a-project-to-production",
+                "node_type: sprockets/project\n"
+                "title: Learn how to bring a project to production\n",
+            )
+            production = RetrievalNode(
+                node_id="projects/learn-how-to-bring-a-project-to-production",
+                title="Learn how to bring a project to production",
+                node_type="sprockets/project",
+                path=production_path,
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.embed_text") as mock_embed_text:
+                    mock_build_index.return_value = (
+                        embeddings.EmbeddedNode(node=production, vector=(1.0, 0.0)),
+                    )
+                    mock_embed_text.return_value = [1.0, 0.0]
+
+                    with patch("sys.argv", [
+                        "retrieval_eval",
+                        "--retriever",
+                        "memory-embedding-vault",
+                        "--vault-dir",
+                        str(vault),
+                        "--list-nodes",
+                        "--show-traces",
+                    ]):
+                        with patch("builtins.print") as mock_print:
+                            retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- retriever: memory-embedding-vault", printed)
+        self.assertIn("- case-set: real-vault", printed)
+        self.assertIn("- vault: ", printed)
+        self.assertIn("- nodes: 1", printed)
+        self.assertIn("- trace retriever: in-memory", printed)
+        mock_build_index.assert_called_once()
+        self.assertTrue(mock_embed_text.called)
 
     def test_cli_non_memory_retriever_reports_unavailable_traces(self):
         with patch("sys.argv", [
