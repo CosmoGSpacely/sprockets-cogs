@@ -141,6 +141,22 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertEqual(companion["item_text"], "Send proposal to Jordan")
         self.assertEqual(companion["date"], "2026-05-04")
 
+    def test_ensure_cogs_companions_strips_invalid_task_date(self):
+        classified = [
+            {
+                "node_type": "sprockets/task",
+                "title": "Review memory context",
+                "date": "2026-05-04Already in today's note: Call Jordan",
+                "status": "active",
+                "confidence": "high",
+            }
+        ]
+
+        result = agentic_loop.ensure_cogs_companions(classified)
+
+        self.assertEqual(len(result), 1)
+        self.assertNotIn("date", result[0])
+
     def test_openai_fallback_routes_valid_candidates_to_review(self):
         raw_nodes = [{"raw": "call Jordan", "type_hint": "task"}]
         candidates = [

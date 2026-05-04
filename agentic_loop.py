@@ -520,6 +520,15 @@ def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
     def _words(s: str) -> set:
         return set(s.lower().split()) - _stop
 
+    def _valid_date(date: str) -> bool:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            return False
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            return False
+        return True
+
     result = list(classified)
     cogs_by_date: dict[str, list[str]] = {}
     for n in classified:
@@ -532,8 +541,11 @@ def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
             continue
         title = node.get("title", "")
         date  = node.get("date", "")
-        if not date or not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
-            log.warning("ensure_cogs_companions: task %r has invalid date %r, skipping companion", title, date)
+        if not date:
+            continue
+        if not _valid_date(date):
+            node.pop("date", None)
+            log.warning("ensure_cogs_companions: task %r has invalid date, skipping companion", title)
             continue
         title_words = _words(title)
         existing = cogs_by_date.get(date, [])
