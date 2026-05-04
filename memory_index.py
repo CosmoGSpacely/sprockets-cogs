@@ -9,13 +9,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from math import sqrt
 from pathlib import Path
 import re
 from typing import Protocol
 
 from embeddings import embedding_text_hash, node_embedding_text
 from retrieval_eval import RetrievalNode
+from vector_math import cosine_similarity
 
 
 @dataclass(frozen=True)
@@ -286,7 +286,10 @@ def _score_record(
     if parent_overlap:
         reasons.append("parent")
     if query_vector is not None and record.vector is not None:
-        score_parts["vector"] = _cosine_similarity(query_vector, record.vector) * 10.0
+        try:
+            score_parts["vector"] = cosine_similarity(query_vector, record.vector) * 10.0
+        except ValueError:
+            score_parts["vector"] = 0.0
         if score_parts["vector"] > 0:
             reasons.append("vector")
     if not query_tokens and query_vector is None:
@@ -371,19 +374,6 @@ def _assess_confidence(
         action="use",
         reasons=("anchored top result",),
     )
-
-
-def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
-    if len(left) != len(right):
-        return 0.0
-
-    left_norm = sqrt(sum(value * value for value in left))
-    right_norm = sqrt(sum(value * value for value in right))
-    if left_norm == 0 or right_norm == 0:
-        return 0.0
-
-    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right))
-    return dot_product / (left_norm * right_norm)
 
 
 def _filters_applied(query: MemoryQuery) -> dict[str, tuple[str, ...]]:

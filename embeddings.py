@@ -6,13 +6,13 @@ import json
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from math import sqrt
 from pathlib import Path
 from typing import Protocol
 
 import ollama
 
 from retrieval_eval import RetrievalNode
+from vector_math import cosine_similarity
 
 
 DEFAULT_EMBED_MODEL = "nomic-embed-text"
@@ -181,21 +181,6 @@ def embed_node(node: RetrievalNode, model: str | None = None) -> list[float]:
     return embed_text(node_embedding_text(node), model=model)
 
 
-def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
-    if len(left) != len(right):
-        raise EmbeddingError(
-            f"embedding dimensions do not match: {len(left)} != {len(right)}"
-        )
-
-    left_norm = sqrt(sum(value * value for value in left))
-    right_norm = sqrt(sum(value * value for value in right))
-    if left_norm == 0 or right_norm == 0:
-        return 0.0
-
-    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right))
-    return dot_product / (left_norm * right_norm)
-
-
 def build_embedding_index(
     nodes: Sequence[RetrievalNode],
     model: str | None = None,
@@ -229,9 +214,12 @@ def retrieve_by_embedding(
         return []
 
     query_vector = embed_text(query, model=model)
-    ranked = [
-        (_cosine_similarity(query_vector, item.vector), item.node.node_id, item.node)
-        for item in index
-    ]
+    try:
+        ranked = [
+            (cosine_similarity(query_vector, item.vector), item.node.node_id, item.node)
+            for item in index
+        ]
+    except ValueError as exc:
+        raise EmbeddingError(f"embedding {exc}") from exc
     ranked.sort(key=lambda item: (-item[0], item[1]))
     return [node for _, _, node in ranked[:limit]]
