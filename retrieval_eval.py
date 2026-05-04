@@ -803,6 +803,7 @@ def _build_memory_index_retriever(
         InMemoryMemoryIndex,
         MemoryQuery,
         MemoryRecord,
+        RetrievalConfidence,
         RetrievalTrace,
         memory_record_from_retrieval_node,
         vector_metadata_for,
@@ -887,6 +888,11 @@ def _build_memory_index_retriever(
                 result_summaries=tuple(
                     f"{node.node_id} score=0 reasons=daily-recency-fallback"
                     for node in recent_daily_nodes[:memory_query.limit]
+                ),
+                confidence=RetrievalConfidence(
+                    level="high",
+                    action="use",
+                    reasons=("daily recency fallback",),
                 ),
             )
         if preferred_types and not results:
@@ -1029,6 +1035,16 @@ def main() -> None:
                 quality_flags = getattr(trace, "quality_flags", ())
                 if quality_flags:
                     print("- trace quality: " + "; ".join(str(flag) for flag in quality_flags))
+                confidence = getattr(trace, "confidence", None)
+                if confidence is not None:
+                    reasons = ", ".join(getattr(confidence, "reasons", ()))
+                    suffix = f" ({reasons})" if reasons else ""
+                    print(
+                        "- trace confidence: "
+                        f"{getattr(confidence, 'level', 'unknown')}/"
+                        f"{getattr(confidence, 'action', 'unknown')}"
+                        f"{suffix}"
+                    )
                 result_summaries = getattr(trace, "result_summaries", ())
                 if result_summaries:
                     print("- trace results:")
