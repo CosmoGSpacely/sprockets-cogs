@@ -253,6 +253,13 @@ def retrieve_relevant_nodes(query: str) -> list:
     Phase 1: returns empty list.
     Phase 3: semantic search over vault embeddings.
     """
+    from production_retrieval import memory_retrieval_enabled, retrieve_with_gated_memory
+
+    if memory_retrieval_enabled():
+        try:
+            return list(retrieve_with_gated_memory(query, VAULT_DIR))
+        except Exception as exc:
+            log.warning("Memory retrieval disabled for this query after error: %s", exc)
     return []
 
 
