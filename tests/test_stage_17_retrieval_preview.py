@@ -102,6 +102,8 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
                 enabled=False,
                 retriever_name="memory-embedding-gated-vault",
                 vault_dir=Path("/vault"),
+                raw_retriever_name="embedding-vault",
+                allowed_retrievers=("memory-embedding-gated-vault", "memory-vault"),
             )
         )
 
@@ -109,6 +111,9 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
         self.assertIn("- memory retrieval: disabled", output)
         self.assertIn("- enable env: SPROCKETS_COGS_MEMORY_RETRIEVAL", output)
         self.assertIn("- retriever: memory-embedding-gated-vault", output)
+        self.assertIn("- retriever env accepted: no", output)
+        self.assertIn("- raw retriever env: embedding-vault", output)
+        self.assertIn("- allowed retrievers: memory-embedding-gated-vault, memory-vault", output)
         self.assertIn("- vault: /vault", output)
 
 

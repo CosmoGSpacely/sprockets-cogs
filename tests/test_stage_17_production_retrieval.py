@@ -30,6 +30,21 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
                 "memory-embedding-gated-vault",
             )
 
+    def test_configured_memory_retriever_rejects_unsafe_experimental_modes(self):
+        with patch.dict(
+            os.environ,
+            {production_retrieval.RETRIEVER_ENV: "hybrid-graph-intent-vault"},
+            clear=True,
+        ):
+            self.assertEqual(
+                production_retrieval.configured_memory_retriever(),
+                "memory-embedding-gated-vault",
+            )
+            self.assertEqual(
+                production_retrieval.raw_memory_retriever_config(),
+                "hybrid-graph-intent-vault",
+            )
+
     def test_production_retrieval_status_reports_flag_retriever_and_vault(self):
         with patch.dict(
             os.environ,
@@ -43,9 +58,27 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
 
         self.assertTrue(status.enabled)
         self.assertEqual(status.retriever_name, "memory-vault")
+        self.assertEqual(status.raw_retriever_name, "memory-vault")
+        self.assertTrue(status.retriever_env_accepted)
         self.assertEqual(status.vault_dir, Path("/vault"))
         self.assertEqual(status.enable_env, production_retrieval.MEMORY_RETRIEVAL_ENV)
         self.assertEqual(status.retriever_env, production_retrieval.RETRIEVER_ENV)
+        self.assertEqual(
+            set(status.allowed_retrievers),
+            {"memory-embedding-gated-vault", "memory-vault"},
+        )
+
+    def test_production_retrieval_status_reports_rejected_retriever_env(self):
+        with patch.dict(
+            os.environ,
+            {production_retrieval.RETRIEVER_ENV: "embedding-vault"},
+            clear=True,
+        ):
+            status = production_retrieval.production_retrieval_status(Path("/vault"))
+
+        self.assertEqual(status.retriever_name, "memory-embedding-gated-vault")
+        self.assertEqual(status.raw_retriever_name, "embedding-vault")
+        self.assertFalse(status.retriever_env_accepted)
 
     def test_retrieve_with_gated_memory_uses_configured_experimental_retriever(self):
         node = RetrievalNode(

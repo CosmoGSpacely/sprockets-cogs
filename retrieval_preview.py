@@ -77,6 +77,9 @@ def format_status(status: ProductionRetrievalStatus) -> str:
         f"- enable env: {status.enable_env}",
         f"- retriever: {status.retriever_name}",
         f"- retriever env: {status.retriever_env}",
+        f"- retriever env accepted: {'yes' if status.retriever_env_accepted else 'no'}",
+        f"- raw retriever env: {status.raw_retriever_name}",
+        f"- allowed retrievers: {', '.join(status.allowed_retrievers)}",
         f"- vault: {status.vault_dir}",
     ])
 
