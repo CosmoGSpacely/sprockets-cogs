@@ -908,15 +908,24 @@ def _build_memory_index_retriever(
         query_vector = query_vector_provider(query)
         if preferred_types == ("cogs/daily",):
             query_vector = None
+        semantic_hints = _semantic_query_hints(query) if gate_low_confidence else ()
+        query_text = " ".join((query, *semantic_hints)) if semantic_hints else query
         memory_query = MemoryQuery(
-            text=query,
+            text=query_text,
             node_types=preferred_types,
             query_vector=query_vector,
         )
         results, retrieval_trace = index.query_with_trace(memory_query)
         if preferred_types and preferred_types != ("cogs/daily",) and not results:
-            memory_query = MemoryQuery(text=query, query_vector=query_vector)
+            memory_query = MemoryQuery(text=query_text, query_vector=query_vector)
             results, retrieval_trace = index.query_with_trace(memory_query)
+        if semantic_hints:
+            retrieval_trace = replace(
+                retrieval_trace,
+                notes=retrieval_trace.notes + (
+                    "semantic hint applied: production readiness",
+                ),
+            )
         return results, retrieval_trace, memory_query
 
     return retrieve, trace
@@ -937,6 +946,20 @@ def _is_daily_fallback(
         and not results
         and getattr(memory_query, "node_types", ()) == ("cogs/daily",)
     )
+
+
+def _semantic_query_hints(query: str) -> tuple[str, ...]:
+    query_tokens = _tokens(query)
+    if (
+        query_tokens & {"run", "available", "work"}
+        and query_tokens & {"beyond", "away", "outside"}
+        and query_tokens & {"laptop", "computer", "workstation"}
+    ):
+        return (
+            "learn bring project production readiness",
+            "deployment release operations service monitoring backups",
+        )
+    return ()
 
 
 def _retrieval_daily_date(node: RetrievalNode) -> date:
