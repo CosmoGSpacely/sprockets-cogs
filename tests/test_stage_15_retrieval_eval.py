@@ -11,6 +11,7 @@ from retrieval_eval import (
     evaluate_retriever,
     evaluate_target_presence,
     expand_retrieval_neighbors,
+    filter_by_query_intent,
     hybrid_retrieve,
     lexical_retrieve,
     load_retrieval_nodes,
@@ -120,6 +121,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertEqual(select_cases("auto", "embedding-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-graph-vault"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("auto", "hybrid-graph-intent-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "current"), stage_15_cases())
         self.assertEqual(select_cases("fixture", "lexical-vault"), stage_15_cases())
         self.assertEqual(select_cases("real-vault", "current"), stage_15_real_vault_cases())
@@ -404,6 +406,73 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             "entities/globaltech",
         ])
 
+    def test_filter_by_query_intent_prefers_notes_for_reflection_queries(self):
+        note = RetrievalNode(
+            node_id="notes/reflection-on-phase-2---hierarchy",
+            title="Reflection on Phase 2 - Hierarchy",
+            node_type="sprockets/note",
+            path=Path("reflection-on-phase-2---hierarchy.md"),
+        )
+        task = RetrievalNode(
+            node_id="tasks/add-hierarchy-context-tests-for-phase-2---hardening",
+            title="Add hierarchy context tests for Phase 2 - Hardening",
+            node_type="sprockets/task",
+            path=Path("add-hierarchy-context-tests-for-phase-2---hardening.md"),
+        )
+        project = RetrievalNode(
+            node_id="projects/phase-2-hardening",
+            title="Phase 2 - Hardening",
+            node_type="sprockets/project",
+            path=Path("phase-2-hardening.md"),
+        )
+
+        filtered = filter_by_query_intent(
+            "Capture a reflection on Phase 2 hierarchy work.",
+            (note, task, project),
+        )
+
+        self.assertEqual([node.node_id for node in filtered], [
+            "notes/reflection-on-phase-2---hierarchy",
+        ])
+
+    def test_filter_by_query_intent_falls_back_when_no_preferred_type_exists(self):
+        task = RetrievalNode(
+            node_id="tasks/add-hierarchy-context-tests-for-phase-2---hardening",
+            title="Add hierarchy context tests for Phase 2 - Hardening",
+            node_type="sprockets/task",
+            path=Path("add-hierarchy-context-tests-for-phase-2---hardening.md"),
+        )
+
+        filtered = filter_by_query_intent("Capture a reflection.", (task,))
+
+        self.assertEqual(filtered, [task])
+
+    def test_hybrid_retriever_can_apply_intent_filter_after_graph_expansion(self):
+        note = RetrievalNode(
+            node_id="notes/reflection-on-phase-2---hierarchy",
+            title="Reflection on Phase 2 - Hierarchy",
+            node_type="sprockets/note",
+            path=Path("reflection-on-phase-2---hierarchy.md"),
+        )
+        task = RetrievalNode(
+            node_id="tasks/add-hierarchy-context-tests-for-phase-2---hardening",
+            title="Add hierarchy context tests for Phase 2 - Hardening",
+            node_type="sprockets/task",
+            path=Path("add-hierarchy-context-tests-for-phase-2---hardening.md"),
+        )
+
+        results = hybrid_retrieve(
+            "Capture a reflection on Phase 2 hierarchy work.",
+            (note, task),
+            lambda _query: [task],
+            expand_graph=True,
+            apply_intent_filter=True,
+        )
+
+        self.assertEqual([node.node_id for node in results], [
+            "notes/reflection-on-phase-2---hierarchy",
+        ])
+
     def test_cli_lexical_vault_mode_loads_nodes_from_configured_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -580,6 +649,57 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- nodes: 3", printed)
         self.assertIn("- sprockets/contact: 1", printed)
         self.assertIn("- sprockets/entity: 1", printed)
+        self.assertIn("- sprockets/task: 1", printed)
+        mock_build_index.assert_called_once()
+        self.assertTrue(mock_retrieve_by_embedding.called)
+
+    def test_cli_hybrid_graph_intent_vault_mode_uses_intent_filtering(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "notes",
+                "reflection-on-phase-2---hierarchy",
+                "node_type: sprockets/note\n"
+                "title: Reflection on Phase 2 - Hierarchy\n",
+            )
+            write_node(
+                vault,
+                "tasks",
+                "add-hierarchy-context-tests-for-phase-2---hardening",
+                "node_type: sprockets/task\n"
+                "title: Add hierarchy context tests for Phase 2 - Hardening\n",
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+                    mock_build_index.return_value = ("embedded-index",)
+                    mock_retrieve_by_embedding.return_value = [
+                        RetrievalNode(
+                            node_id="tasks/add-hierarchy-context-tests-for-phase-2---hardening",
+                            title="Add hierarchy context tests for Phase 2 - Hardening",
+                            node_type="sprockets/task",
+                            path=vault / "Sprockets" / "tasks" / "add-hierarchy-context-tests-for-phase-2---hardening.md",
+                        )
+                    ]
+
+                    with patch("sys.argv", [
+                        "retrieval_eval",
+                        "--retriever",
+                        "hybrid-graph-intent-vault",
+                        "--vault-dir",
+                        str(vault),
+                        "--list-nodes",
+                    ]):
+                        with patch("builtins.print") as mock_print:
+                            retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- retriever: hybrid-graph-intent-vault", printed)
+        self.assertIn("- case-set: real-vault", printed)
+        self.assertIn("- vault: ", printed)
+        self.assertIn("- nodes: 2", printed)
+        self.assertIn("- sprockets/note: 1", printed)
         self.assertIn("- sprockets/task: 1", printed)
         mock_build_index.assert_called_once()
         self.assertTrue(mock_retrieve_by_embedding.called)
