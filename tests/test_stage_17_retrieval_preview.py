@@ -6,7 +6,12 @@ from unittest.mock import patch
 from memory_index import MemoryQuery, RetrievalConfidence, RetrievalTrace
 from production_retrieval import ProductionRetrievalStatus
 from retrieval_eval import ExperimentalRetriever, RetrievalNode
-from retrieval_preview import format_preview, format_status, preview_retrieval
+from retrieval_preview import (
+    format_context_preview,
+    format_preview,
+    format_status,
+    preview_retrieval,
+)
 
 
 class Stage17RetrievalPreviewTests(unittest.TestCase):
@@ -95,6 +100,36 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
 
         self.assertIn("- results: 0", output)
         self.assertIn("- unavailable", output)
+
+    def test_format_context_preview_formats_results_as_prompt_context(self):
+        node = RetrievalNode(
+            node_id="notes/memory",
+            title="Memory",
+            node_type="sprockets/note",
+            path=Path("/vault/memory.md"),
+        )
+
+        output = format_context_preview(
+            preview_retrieval_result(
+                query="Find memory",
+                results=(node,),
+                trace=None,
+            )
+        )
+
+        self.assertIn("Relevant memory:", output)
+        self.assertIn("- notes/memory [sprockets/note] Memory", output)
+
+    def test_format_context_preview_reports_no_memory(self):
+        output = format_context_preview(
+            preview_retrieval_result(
+                query="Find memory",
+                results=(),
+                trace=None,
+            )
+        )
+
+        self.assertEqual(output, "Relevant memory: (none)")
 
     def test_format_status_summarizes_guarded_production_retrieval(self):
         output = format_status(
