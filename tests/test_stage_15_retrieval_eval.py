@@ -542,8 +542,11 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         retriever = build_experimental_retriever("memory-fixture", Path("/unused"))
 
         results = list(retriever.retrieve("Continue the note from today."))
+        trace = retriever.trace("Continue the note from today.")
 
         self.assertEqual(results[0].node_id, "daily/2026-05-02")
+        self.assertEqual(trace.confidence.level, "high")
+        self.assertEqual(trace.confidence.action, "use")
 
     def test_memory_vault_recency_fallback_ignores_future_daily_notes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -804,6 +807,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("parts=title=", printed)
         self.assertIn("vector=", printed)
         self.assertIn("- trace quality:", printed)
+        self.assertIn("- trace confidence:", printed)
         mock_build_index.assert_called_once()
         self.assertTrue(mock_embed_text.called)
 

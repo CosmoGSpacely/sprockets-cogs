@@ -80,6 +80,15 @@ class ScoredMemoryResult:
 
 
 @dataclass(frozen=True)
+class RetrievalConfidence:
+    """Trace-level confidence assessment for a memory query result set."""
+
+    level: str
+    action: str
+    reasons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class RetrievalTrace:
     """Debug information for one memory query."""
 
@@ -90,6 +99,7 @@ class RetrievalTrace:
     notes: tuple[str, ...] = ()
     result_summaries: tuple[str, ...] = ()
     quality_flags: tuple[str, ...] = ()
+    confidence: RetrievalConfidence | None = None
 
 
 class MemoryIndex(Protocol):
@@ -183,6 +193,7 @@ class InMemoryMemoryIndex:
             f"filtered by parent: {filtered_by_parent}",
             f"candidates scored: {len(scored)}",
         )
+        quality_flags = _quality_flags(query, results)
         trace = RetrievalTrace(
             query=query,
             retriever_name="in-memory",
@@ -190,7 +201,8 @@ class InMemoryMemoryIndex:
             filters_applied=_filters_applied(query),
             notes=notes,
             result_summaries=tuple(_result_summary(result) for result in results),
-            quality_flags=_quality_flags(query, results),
+            quality_flags=quality_flags,
+            confidence=_assess_confidence(query, results, quality_flags),
         )
         return results, trace
 
@@ -318,6 +330,47 @@ def _quality_flags(
 
 def _is_vector_only(result: ScoredMemoryResult) -> bool:
     return result.reasons == ("vector",)
+
+
+def _assess_confidence(
+    query: MemoryQuery,
+    results: Sequence[ScoredMemoryResult],
+    quality_flags: Sequence[str],
+) -> RetrievalConfidence:
+    if not results:
+        return RetrievalConfidence(
+            level="low",
+            action="review",
+            reasons=("no results",),
+        )
+
+    if query.query_vector is None:
+        return RetrievalConfidence(
+            level="high",
+            action="use",
+            reasons=("lexical or filtered retrieval",),
+        )
+
+    top_result = results[0]
+    if _is_vector_only(top_result):
+        return RetrievalConfidence(
+            level="low",
+            action="review",
+            reasons=tuple(quality_flags) or ("top result is vector-only",),
+        )
+
+    if quality_flags:
+        return RetrievalConfidence(
+            level="medium",
+            action="use",
+            reasons=tuple(quality_flags),
+        )
+
+    return RetrievalConfidence(
+        level="high",
+        action="use",
+        reasons=("anchored top result",),
+    )
 
 
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:

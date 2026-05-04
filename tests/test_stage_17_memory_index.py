@@ -6,6 +6,7 @@ from memory_index import (
     MemoryNodeMetadata,
     MemoryQuery,
     MemoryRecord,
+    RetrievalConfidence,
     RetrievalTrace,
     ScoredMemoryResult,
     VectorMetadata,
@@ -127,6 +128,11 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             notes=("graph expansion skipped",),
             result_summaries=("contacts/tom-reilly score=0.84 reasons=name match parts=title=0.84",),
             quality_flags=("low top margin: 0.01",),
+            confidence=RetrievalConfidence(
+                level="medium",
+                action="use",
+                reasons=("low top margin: 0.01",),
+            ),
         )
 
         self.assertEqual(query.limit, 3)
@@ -141,6 +147,8 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             ("contacts/tom-reilly score=0.84 reasons=name match parts=title=0.84",),
         )
         self.assertEqual(trace.quality_flags, ("low top margin: 0.01",))
+        self.assertEqual(trace.confidence.level, "medium")
+        self.assertEqual(trace.confidence.action, "use")
 
     def test_memory_record_from_retrieval_node_preserves_index_metadata(self):
         node = RetrievalNode(
@@ -329,6 +337,14 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         self.assertIn("filtered by node_type: 1", trace.notes)
         self.assertIn("candidates scored: 1", trace.notes)
         self.assertEqual(
+            trace.confidence,
+            RetrievalConfidence(
+                level="high",
+                action="use",
+                reasons=("lexical or filtered retrieval",),
+            ),
+        )
+        self.assertEqual(
             trace.result_summaries,
             (
                 "projects/phase-3-memory-enhancement "
@@ -430,6 +446,39 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         self.assertIn("top result is vector-only", trace.quality_flags)
         self.assertIn("vector-only cluster: 3/3 results", trace.quality_flags)
         self.assertTrue(any(flag.startswith("low top margin:") for flag in trace.quality_flags))
+        self.assertEqual(trace.confidence.level, "low")
+        self.assertEqual(trace.confidence.action, "review")
+        self.assertIn("top result is vector-only", trace.confidence.reasons)
+
+    def test_in_memory_index_confidence_is_medium_when_anchored_top_has_quality_flags(self):
+        anchored = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/production-readiness",
+                path=Path("projects/production-readiness.md"),
+                node_type="sprockets/project",
+                title="Production readiness",
+            ),
+            vector=(1.0, 0.0),
+        )
+        close = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/production-rollout",
+                path=Path("projects/production-rollout.md"),
+                node_type="sprockets/project",
+                title="Production rollout",
+            ),
+            vector=(0.999, 0.001),
+        )
+        index = InMemoryMemoryIndex([close, anchored])
+
+        _results, trace = index.query_with_trace(MemoryQuery(
+            text="production",
+            query_vector=(1.0, 0.0),
+        ))
+
+        self.assertTrue(any(flag.startswith("low top margin:") for flag in trace.quality_flags))
+        self.assertEqual(trace.confidence.level, "medium")
+        self.assertEqual(trace.confidence.action, "use")
 
     def test_in_memory_index_ignores_vector_dimension_mismatches(self):
         record = MemoryRecord(
