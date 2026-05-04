@@ -152,6 +152,10 @@ def format_status(status: ProductionRetrievalStatus) -> str:
         f"- retriever env accepted: {'yes' if status.retriever_env_accepted else 'no'}",
         f"- raw retriever env: {status.raw_retriever_name}",
         f"- allowed retrievers: {', '.join(status.allowed_retrievers)}",
+        f"- production node limit: {status.node_limit}",
+        f"- node limit env: {status.node_limit_env}",
+        f"- production text limit: {status.text_limit}",
+        f"- text limit env: {status.text_limit_env}",
         f"- vault: {status.vault_dir}",
     ])
 

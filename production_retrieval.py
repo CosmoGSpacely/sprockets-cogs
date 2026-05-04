@@ -40,9 +40,13 @@ class ProductionRetrievalStatus:
     vault_dir: Path
     raw_retriever_name: str
     allowed_retrievers: tuple[str, ...]
+    node_limit: int
+    text_limit: int
     enable_env: str = MEMORY_RETRIEVAL_ENV
     context_env: str = MEMORY_CONTEXT_ENV
     retriever_env: str = RETRIEVER_ENV
+    node_limit_env: str = NODE_LIMIT_ENV
+    text_limit_env: str = TEXT_LIMIT_ENV
 
     @property
     def retriever_env_accepted(self) -> bool:
@@ -86,6 +90,8 @@ def production_retrieval_status(vault_dir: Path) -> ProductionRetrievalStatus:
         vault_dir=vault_dir,
         raw_retriever_name=raw_memory_retriever_config(),
         allowed_retrievers=tuple(sorted(ALLOWED_RETRIEVERS)),
+        node_limit=configured_production_node_limit(),
+        text_limit=configured_production_text_limit(),
     )
 
 
