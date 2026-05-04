@@ -10,7 +10,9 @@ from retrieval_preview import (
     format_context_preview,
     format_memory_guard_preview,
     format_preview,
+    format_production_return_preview,
     format_status,
+    preview_production_return,
     preview_memory_guard,
     preview_retrieval,
 )
@@ -226,6 +228,77 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
         self.assertIn("- derived task title: Make the service portable", output)
         self.assertIn("- writes: none", output)
 
+    def test_preview_production_return_respects_disabled_flag(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with patch("retrieval_preview.retrieve_with_gated_memory") as mock_retrieve:
+                preview = preview_production_return("Find memory", Path("/vault"))
+
+        self.assertFalse(preview.enabled)
+        self.assertEqual(preview.results, ())
+        mock_retrieve.assert_not_called()
+
+    def test_preview_production_return_uses_compact_adapter_when_enabled(self):
+        node = RetrievalNode(
+            node_id="projects/production",
+            title="Production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+            parent_slugs=("build-sprockets-cogs",),
+            text="Compact production payload.",
+        )
+
+        with patch.dict(
+            "os.environ",
+            {"SPROCKETS_COGS_MEMORY_RETRIEVAL": "1"},
+            clear=True,
+        ):
+            with patch("retrieval_preview.retrieve_with_gated_memory") as mock_retrieve:
+                mock_retrieve.return_value = (node,)
+                preview = preview_production_return("Find memory", Path("/vault"))
+
+        self.assertTrue(preview.enabled)
+        self.assertEqual(preview.results, (node,))
+        mock_retrieve.assert_called_once_with("Find memory", Path("/vault"))
+
+    def test_format_production_return_preview_lists_compact_nodes(self):
+        node = RetrievalNode(
+            node_id="projects/production",
+            title="Production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+            parent_slugs=("build-sprockets-cogs",),
+            text="Compact production payload.",
+        )
+
+        output = format_production_return_preview(
+            production_return_preview_result(
+                query="Find production",
+                enabled=True,
+                results=(node,),
+            )
+        )
+
+        self.assertIn("Sprockets-Cogs production retrieval return preview", output)
+        self.assertIn("- memory retrieval enabled: yes", output)
+        self.assertIn("- results: 1", output)
+        self.assertIn("1. projects/production [sprockets/project] Production", output)
+        self.assertIn("parents: build-sprockets-cogs", output)
+        self.assertIn("text: Compact production payload.", output)
+        self.assertIn("- writes: none", output)
+
+    def test_format_production_return_preview_reports_adapter_error(self):
+        output = format_production_return_preview(
+            production_return_preview_result(
+                query="Find production",
+                enabled=True,
+                results=(),
+                error="embedding service offline",
+            )
+        )
+
+        self.assertIn("- error: embedding service offline", output)
+        self.assertIn("- results: 0", output)
+
 
 def preview_retrieval_result(
     query: str,
@@ -240,4 +313,21 @@ def preview_retrieval_result(
         vault_dir=Path("/vault"),
         results=results,
         trace=trace,
+    )
+
+
+def production_return_preview_result(
+    query: str,
+    enabled: bool,
+    results: tuple[RetrievalNode, ...],
+    error: str = "",
+):
+    from retrieval_preview import ProductionReturnPreview
+
+    return ProductionReturnPreview(
+        query=query,
+        vault_dir=Path("/vault"),
+        enabled=enabled,
+        results=results,
+        error=error,
     )
