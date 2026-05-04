@@ -143,6 +143,8 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
                 vault_dir=Path("/vault"),
                 raw_retriever_name="embedding-vault",
                 allowed_retrievers=("memory-embedding-gated-vault", "memory-vault"),
+                node_limit=5,
+                text_limit=240,
             )
         )
 
@@ -155,6 +157,10 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
         self.assertIn("- retriever env accepted: no", output)
         self.assertIn("- raw retriever env: embedding-vault", output)
         self.assertIn("- allowed retrievers: memory-embedding-gated-vault, memory-vault", output)
+        self.assertIn("- production node limit: 5", output)
+        self.assertIn("- node limit env: SPROCKETS_COGS_MEMORY_NODE_LIMIT", output)
+        self.assertIn("- production text limit: 240", output)
+        self.assertIn("- text limit env: SPROCKETS_COGS_MEMORY_TEXT_LIMIT", output)
         self.assertIn("- vault: /vault", output)
 
     def test_preview_memory_guard_uses_top_hierarchy_result(self):
