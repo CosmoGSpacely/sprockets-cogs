@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Protocol
 
 from embeddings import embedding_text_hash, node_embedding_text
@@ -102,6 +103,48 @@ class MemoryIndex(Protocol):
         ...
 
 
+class InMemoryMemoryIndex:
+    """Small deterministic MemoryIndex implementation for tests and experiments."""
+
+    def __init__(self, records: Iterable[MemoryRecord] = ()):
+        self._records: dict[str, MemoryRecord] = {}
+        self.upsert_nodes(records)
+
+    def upsert_nodes(self, records: Iterable[MemoryRecord]) -> None:
+        for record in records:
+            self._records[record.node_id] = record
+
+    def delete_missing_node_ids(self, active_ids: Iterable[str]) -> tuple[str, ...]:
+        active = set(active_ids)
+        deleted = tuple(sorted(node_id for node_id in self._records if node_id not in active))
+        for node_id in deleted:
+            del self._records[node_id]
+        return deleted
+
+    def get(self, node_id: str) -> MemoryRecord | None:
+        return self._records.get(node_id)
+
+    def query(self, query: MemoryQuery) -> tuple[ScoredMemoryResult, ...]:
+        if query.limit < 1:
+            return ()
+
+        query_tokens = _tokens(query.text)
+        scored: list[ScoredMemoryResult] = []
+        for record in self._records.values():
+            if query.node_types and record.metadata.node_type not in query.node_types:
+                continue
+            if query.parent_slugs and not set(query.parent_slugs).issubset(record.metadata.parent_slugs):
+                continue
+
+            score, reasons = _score_record(query_tokens, record)
+            if score <= 0 and query_tokens:
+                continue
+            scored.append(ScoredMemoryResult(record=record, score=score, reasons=reasons))
+
+        scored.sort(key=lambda result: (-result.score, result.node_id))
+        return tuple(scored[:query.limit])
+
+
 def vector_metadata_for(model: str, text_hash: str, vector: Sequence[float]) -> VectorMetadata:
     """Build reusable vector metadata from a generated embedding vector."""
 
@@ -148,3 +191,32 @@ def memory_record_from_retrieval_node(
             text_hash=text_hash,
         )
     )
+
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _tokens(text: str) -> set[str]:
+    return set(_TOKEN_RE.findall(text.lower()))
+
+
+def _score_record(
+    query_tokens: set[str],
+    record: MemoryRecord,
+) -> tuple[float, tuple[str, ...]]:
+    metadata = record.metadata
+    title_overlap = query_tokens & _tokens(metadata.title)
+    id_overlap = query_tokens & _tokens(metadata.node_id.replace("/", " "))
+    parent_overlap = query_tokens & _tokens(" ".join(metadata.parent_slugs))
+
+    score = float(len(title_overlap) * 4 + len(id_overlap) * 3 + len(parent_overlap) * 2)
+    reasons: list[str] = []
+    if title_overlap:
+        reasons.append("title")
+    if id_overlap:
+        reasons.append("node_id")
+    if parent_overlap:
+        reasons.append("parent")
+    if not query_tokens:
+        reasons.append("filter")
+    return score, tuple(reasons)
