@@ -216,6 +216,91 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
         self.assertIn("- notes/memory [sprockets/note] Memory", context)
         mock_retrieve.assert_called_once_with("Find memory")
 
+    def test_apply_memory_parent_hints_uses_top_hierarchy_result(self):
+        project = RetrievalNode(
+            node_id="projects/learn-how-to-bring-a-project-to-production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+        classified = [
+            {
+                "node_type": "sprockets/task",
+                "title": "Draft deployment checklist",
+                "confidence": "high",
+            }
+        ]
+
+        with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[project]):
+            result = agentic_loop.apply_memory_parent_hints("run beyond laptop", classified)
+
+        self.assertEqual(
+            result[0]["parent_hint"],
+            "Learn how to bring a project to production",
+        )
+
+    def test_apply_memory_parent_hints_preserves_existing_parent_hint(self):
+        project = RetrievalNode(
+            node_id="projects/production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+        classified = [
+            {
+                "node_type": "sprockets/task",
+                "title": "Draft checklist",
+                "parent_hint": "Phase 3 - Memory Enhancement",
+                "confidence": "high",
+            }
+        ]
+
+        with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[project]):
+            result = agentic_loop.apply_memory_parent_hints("run beyond laptop", classified)
+
+        self.assertEqual(result[0]["parent_hint"], "Phase 3 - Memory Enhancement")
+
+    def test_apply_memory_parent_hints_ignores_non_hierarchy_top_result(self):
+        contact = RetrievalNode(
+            node_id="contacts/tom-reilly",
+            title="Tom Reilly",
+            node_type="sprockets/contact",
+            path=Path("/vault/Sprockets/contacts/tom-reilly.md"),
+        )
+        classified = [
+            {
+                "node_type": "sprockets/task",
+                "title": "Call Tom",
+                "confidence": "high",
+            }
+        ]
+
+        with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[contact]):
+            result = agentic_loop.apply_memory_parent_hints("call Tom", classified)
+
+        self.assertNotIn("parent_hint", result[0])
+
+    def test_apply_memory_parent_hints_ignores_daily_items(self):
+        project = RetrievalNode(
+            node_id="projects/production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+        classified = [
+            {
+                "node_type": "cogs/daily",
+                "item_text": "Draft deployment checklist",
+                "date": "2026-05-04",
+                "confidence": "high",
+            }
+        ]
+
+        with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[project]):
+            result = agentic_loop.apply_memory_parent_hints("run beyond laptop", classified)
+
+        self.assertNotIn("parent_hint", result[0])
+
     def test_agentic_loop_retrieval_uses_adapter_when_flag_is_enabled(self):
         node = RetrievalNode(
             node_id="notes/memory",

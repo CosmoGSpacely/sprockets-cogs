@@ -674,6 +674,37 @@ def apply_explicit_hierarchy_hints(raw_nodes: list[dict], classified: list[dict]
     return result
 
 
+def apply_memory_parent_hints(input_text: str, classified: list[dict]) -> list[dict]:
+    """
+    Attach a parent_hint from the top retrieved hierarchy node after classification.
+
+    Stage 17 deliberately keeps retrieved memory out of the classifier prompt for
+    now; the local model copied memory text into generated fields during live
+    rehearsals. This guard uses retrieval as a structural hint only.
+    """
+    result = list(classified)
+    if not result:
+        return result
+
+    retrieved = retrieve_relevant_nodes(input_text)
+    top = retrieved[0] if retrieved else None
+    if not top or getattr(top, "node_type", "") not in HIERARCHY_PARENT_NODE_TYPES:
+        return result
+
+    parent_title = getattr(top, "title", "").strip()
+    if not parent_title:
+        return result
+
+    for node in result:
+        if node.get("parent_hint"):
+            continue
+        if node.get("node_type") not in {"sprockets/task", "sprockets/note"}:
+            continue
+        node["parent_hint"] = parent_title
+        log.info("Applied memory parent_hint for %s: %s", node.get("title", ""), parent_title)
+    return result
+
+
 def route_ambiguous_hierarchy_parent_hints_to_review(nodes: list[NodeBase]) -> list[NodeBase]:
     """
     Route valid nodes with ambiguous hierarchy parent_hint values to review/.
@@ -755,6 +786,7 @@ def process_input(file_path: Path) -> None:
         classified = classify_nodes(raw_nodes, context)
         classified = apply_explicit_hierarchy_hints(raw_nodes, classified)
         classified = ensure_hierarchy_tasks(raw_nodes, classified)
+        classified = apply_memory_parent_hints(content, classified)
         classified = ensure_cogs_companions(classified)
 
         valid_nodes, invalid_triples = validate_output(classified)
