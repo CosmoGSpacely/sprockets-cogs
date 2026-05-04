@@ -15,7 +15,9 @@ from vault_graph import HIERARCHY_PARENT_NODE_TYPES
 from production_retrieval import (
     ProductionRetrievalStatus,
     format_retrieval_context,
+    memory_retrieval_enabled,
     production_retrieval_status,
+    retrieve_with_gated_memory,
 )
 from retrieval_eval import RetrievalNode, build_experimental_retriever
 
@@ -55,6 +57,17 @@ class MemoryGuardPreview:
         return self.task_like and bool(self.parent_title)
 
 
+@dataclass(frozen=True)
+class ProductionReturnPreview:
+    """Read-only preview of what production retrieval would return now."""
+
+    query: str
+    vault_dir: Path
+    enabled: bool
+    results: tuple[RetrievalNode, ...]
+    error: str = ""
+
+
 def preview_retrieval(
     query: str,
     vault_dir: Path = DEFAULT_VAULT_DIR,
@@ -85,6 +98,38 @@ def preview_memory_guard(preview: RetrievalPreview) -> MemoryGuardPreview:
         parent_node_type=parent.node_type if parent else "",
         task_like=task_like,
         derived_task_title=_derive_task_title(preview.query) if task_like else "",
+    )
+
+
+def preview_production_return(
+    query: str,
+    vault_dir: Path = DEFAULT_VAULT_DIR,
+) -> ProductionReturnPreview:
+    """Return the compact nodes agentic_loop.retrieve_relevant_nodes would expose."""
+
+    enabled = memory_retrieval_enabled()
+    if not enabled:
+        return ProductionReturnPreview(
+            query=query,
+            vault_dir=vault_dir,
+            enabled=False,
+            results=(),
+        )
+    try:
+        results = retrieve_with_gated_memory(query, vault_dir)
+    except Exception as exc:
+        return ProductionReturnPreview(
+            query=query,
+            vault_dir=vault_dir,
+            enabled=True,
+            results=(),
+            error=str(exc),
+        )
+    return ProductionReturnPreview(
+        query=query,
+        vault_dir=vault_dir,
+        enabled=True,
+        results=results,
     )
 
 
@@ -125,6 +170,29 @@ def format_memory_guard_preview(guard: MemoryGuardPreview) -> str:
     ])
     if guard.derived_task_title:
         lines.append(f"- derived task title: {guard.derived_task_title}")
+    lines.append("- writes: none")
+    return "\n".join(lines)
+
+
+def format_production_return_preview(preview: ProductionReturnPreview) -> str:
+    """Format compact production retrieval results without writing."""
+
+    lines = [
+        "Sprockets-Cogs production retrieval return preview",
+        f"- query: {preview.query}",
+        f"- memory retrieval enabled: {'yes' if preview.enabled else 'no'}",
+        f"- vault: {preview.vault_dir}",
+        f"- results: {len(preview.results)}",
+    ]
+    if preview.error:
+        lines.append(f"- error: {preview.error}")
+    for index, node in enumerate(preview.results, start=1):
+        lines.append(f"{index}. {node.node_id} [{node.node_type}] {node.title}")
+        if node.parent_slugs:
+            lines.append(f"   parents: {', '.join(node.parent_slugs)}")
+        if node.text:
+            lines.append(f"   text: {node.text}")
+        lines.append(f"   path: {node.path}")
     lines.append("- writes: none")
     return "\n".join(lines)
 
@@ -249,6 +317,11 @@ def main() -> None:
         help="Preview the post-classification memory parent guard without writing.",
     )
     parser.add_argument(
+        "--production-return",
+        action="store_true",
+        help="Preview compact production retrieval return nodes without writing.",
+    )
+    parser.add_argument(
         "--status",
         action="store_true",
         help="Print guarded production retrieval status without running a query.",
@@ -261,8 +334,15 @@ def main() -> None:
     if not args.query:
         parser.error("query is required unless --status is used")
 
+    query = " ".join(args.query)
+    if args.production_return:
+        print(format_production_return_preview(
+            preview_production_return(query, vault_dir=args.vault_dir)
+        ))
+        return
+
     preview = preview_retrieval(
-        " ".join(args.query),
+        query,
         vault_dir=args.vault_dir,
         retriever_name=args.retriever,
     )
