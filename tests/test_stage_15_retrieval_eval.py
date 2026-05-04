@@ -9,6 +9,7 @@ import retrieval_eval
 from retrieval_eval import (
     RetrievalCase,
     RetrievalNode,
+    SemanticQueryHint,
     build_experimental_retriever,
     evaluate_retriever,
     evaluate_target_presence,
@@ -130,6 +131,37 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertEqual(select_cases("auto", "current"), stage_15_cases())
         self.assertEqual(select_cases("fixture", "lexical-vault"), stage_15_cases())
         self.assertEqual(select_cases("real-vault", "current"), stage_15_real_vault_cases())
+
+    def test_semantic_query_hints_expand_known_production_readiness_language(self):
+        hints = retrieval_eval._semantic_query_hints(
+            "What should I study so this can run beyond my laptop?"
+        )
+
+        self.assertEqual(
+            hints,
+            (
+                SemanticQueryHint(
+                    label="production readiness",
+                    expansion_terms=(
+                        "learn",
+                        "bring",
+                        "project",
+                        "production",
+                        "readiness",
+                        "deployment",
+                        "release",
+                        "operations",
+                        "service",
+                        "monitoring",
+                        "backups",
+                    ),
+                ),
+            ),
+        )
+        self.assertIn("production readiness", hints[0].expansion_text)
+
+    def test_semantic_query_hints_ignore_unknown_language(self):
+        self.assertEqual(retrieval_eval._semantic_query_hints("What deserves attention next?"), ())
 
     def test_current_empty_retriever_is_a_recorded_baseline_miss(self):
         result = evaluate_retriever(stage_15_cases(), agentic_loop.retrieve_relevant_nodes)
