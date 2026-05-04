@@ -27,3 +27,15 @@ class RetrievalCase:
     avoid_ids: frozenset[str] = frozenset()
     category: str = "general"
     reason: str = ""
+
+
+@dataclass(frozen=True)
+class SemanticQueryHint:
+    """A grounded query expansion for known user phrasing."""
+
+    label: str
+    expansion_terms: tuple[str, ...]
+
+    @property
+    def expansion_text(self) -> str:
+        return " ".join(self.expansion_terms)
