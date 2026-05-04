@@ -437,6 +437,27 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             "notes/reflection-on-phase-2---hierarchy",
         ])
 
+    def test_filter_by_query_intent_prefers_daily_notes_for_recent_queries(self):
+        daily = RetrievalNode(
+            node_id="daily/2026-05-03",
+            title="Sun 03 May 2026",
+            node_type="cogs/daily",
+            path=Path("Sun 03 May 2026.md"),
+        )
+        task = RetrievalNode(
+            node_id="tasks/add-hierarchy-context-tests-for-phase-2---hardening",
+            title="Add hierarchy context tests for Phase 2 - Hardening",
+            node_type="sprockets/task",
+            path=Path("add-hierarchy-context-tests-for-phase-2---hardening.md"),
+        )
+
+        filtered = filter_by_query_intent(
+            "Continue the note from today about hierarchy context tests.",
+            (task, daily),
+        )
+
+        self.assertEqual([node.node_id for node in filtered], ["daily/2026-05-03"])
+
     def test_filter_by_query_intent_falls_back_when_no_preferred_type_exists(self):
         task = RetrievalNode(
             node_id="tasks/add-hierarchy-context-tests-for-phase-2---hardening",
@@ -498,6 +519,44 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIsNotNone(trace)
         self.assertEqual(trace.retriever_name, "in-memory")
         self.assertEqual(trace.result_ids[0], "projects/phase-3-memory-enhancement")
+
+    def test_memory_fixture_retriever_applies_intent_filters_with_fallback(self):
+        retriever = build_experimental_retriever("memory-fixture", Path("/unused"))
+
+        reflection_results = list(retriever.retrieve(
+            "Capture an idea about a compact Dataview dashboard."
+        ))
+        fallback_results = list(retriever.retrieve(
+            "Capture a reflection with no matching note tokens."
+        ))
+        daily_trace = retriever.trace("Continue the note from yesterday about retrieval traces.")
+
+        self.assertEqual(reflection_results[0].node_id, "notes/dataview-dashboard")
+        self.assertTrue(fallback_results)
+        self.assertEqual(daily_trace.filters_applied["node_types"], ("cogs/daily",))
+        self.assertIn("daily recency fallback", daily_trace.notes)
+
+    def test_memory_fixture_retriever_falls_back_to_recent_daily_notes(self):
+        retriever = build_experimental_retriever("memory-fixture", Path("/unused"))
+
+        results = list(retriever.retrieve("Continue the note from today."))
+
+        self.assertEqual(results[0].node_id, "daily/2026-05-02")
+
+    def test_memory_vault_recency_fallback_ignores_future_daily_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            future = vault / "Cogs" / "daily" / "Wed 06 May 2026.md"
+            current = vault / "Cogs" / "daily" / "Mon 04 May 2026.md"
+            future.parent.mkdir(parents=True, exist_ok=True)
+            future.write_text("- [ ] Future note\n")
+            current.write_text("- [ ] Current note\n")
+
+            retriever = build_experimental_retriever("memory-vault", vault)
+            results = list(retriever.retrieve("Continue the note from today."))
+
+        self.assertEqual(results[0].node_id, "daily/2026-05-04")
+        self.assertNotIn("daily/2026-05-06", [node.node_id for node in results])
 
     def test_build_experimental_retriever_builds_hybrid_graph_intent_interface(self):
         with tempfile.TemporaryDirectory() as tmp:
