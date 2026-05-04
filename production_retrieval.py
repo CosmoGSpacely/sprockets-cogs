@@ -106,7 +106,12 @@ def format_retrieval_context(
     if node_limit < 1 or not nodes:
         return ""
 
-    lines = ["Relevant memory:"]
+    lines = [
+        "Relevant memory:",
+        "Use these only as lookup hints for parent_hint or disambiguation.",
+        "Do not copy memory text into title, item_text, date, or new node content.",
+        "For parent_hint, use the exact title of a relevant sprockets/area, sprockets/goal, or sprockets/project.",
+    ]
     for node in nodes[:node_limit]:
         title = _single_line(node.title)
         lines.append(f"- {node.node_id} [{node.node_type}] {title}")

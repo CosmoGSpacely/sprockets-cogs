@@ -138,6 +138,9 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
         context = production_retrieval.format_retrieval_context((node,))
 
         self.assertIn("Relevant memory:", context)
+        self.assertIn("Use these only as lookup hints", context)
+        self.assertIn("Do not copy memory text into title, item_text, date", context)
+        self.assertIn("For parent_hint, use the exact title", context)
         self.assertIn(
             "- projects/phase-3-memory-enhancement [sprockets/project] Phase 3 - Memory Enhancement",
             context,
@@ -209,6 +212,7 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
 
         self.assertIn("Base context", context)
         self.assertIn("Relevant memory:", context)
+        self.assertIn("Do not copy memory text into title, item_text, date", context)
         self.assertIn("- notes/memory [sprockets/note] Memory", context)
         mock_retrieve.assert_called_once_with("Find memory")
 
