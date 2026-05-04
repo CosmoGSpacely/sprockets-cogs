@@ -10,7 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from production_retrieval import ProductionRetrievalStatus, production_retrieval_status
+from production_retrieval import (
+    ProductionRetrievalStatus,
+    format_retrieval_context,
+    production_retrieval_status,
+)
 from retrieval_eval import RetrievalNode, build_experimental_retriever
 
 
@@ -65,6 +69,13 @@ def format_preview(preview: RetrievalPreview, show_trace: bool = False) -> str:
     if show_trace:
         lines.extend(_format_trace(preview.trace))
     return "\n".join(lines)
+
+
+def format_context_preview(preview: RetrievalPreview) -> str:
+    """Format preview results as the prompt context they could become."""
+
+    context = format_retrieval_context(preview.results)
+    return context or "Relevant memory: (none)"
 
 
 def format_status(status: ProductionRetrievalStatus) -> str:
@@ -146,6 +157,11 @@ def main() -> None:
         help="Print retrieval trace details.",
     )
     parser.add_argument(
+        "--context",
+        action="store_true",
+        help="Print compact prompt-context formatting for preview results.",
+    )
+    parser.add_argument(
         "--status",
         action="store_true",
         help="Print guarded production retrieval status without running a query.",
@@ -163,6 +179,9 @@ def main() -> None:
         vault_dir=args.vault_dir,
         retriever_name=args.retriever,
     )
+    if args.context:
+        print(format_context_preview(preview))
+        return
     print(format_preview(preview, show_trace=args.show_trace))
 
 

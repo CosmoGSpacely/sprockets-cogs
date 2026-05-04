@@ -19,6 +19,8 @@ ALLOWED_RETRIEVERS = frozenset({
     "memory-embedding-gated-vault",
     "memory-vault",
 })
+DEFAULT_CONTEXT_NODE_LIMIT = 5
+DEFAULT_CONTEXT_TEXT_LIMIT = 240
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 
@@ -82,3 +84,38 @@ def retrieve_with_gated_memory(query: str, vault_dir: Path) -> tuple[RetrievalNo
         for node in retriever.retrieve(query)
         if isinstance(node, RetrievalNode)
     )
+
+
+def format_retrieval_context(
+    nodes: tuple[RetrievalNode, ...],
+    node_limit: int = DEFAULT_CONTEXT_NODE_LIMIT,
+    text_limit: int = DEFAULT_CONTEXT_TEXT_LIMIT,
+) -> str:
+    """Format retrieved nodes as compact prompt context text."""
+
+    if node_limit < 1 or not nodes:
+        return ""
+
+    lines = ["Relevant memory:"]
+    for node in nodes[:node_limit]:
+        title = _single_line(node.title)
+        lines.append(f"- {node.node_id} [{node.node_type}] {title}")
+        if node.parent_slugs:
+            lines.append(f"  parents: {', '.join(node.parent_slugs)}")
+        snippet = _snippet(node.text, text_limit)
+        if snippet:
+            lines.append(f"  text: {snippet}")
+    return "\n".join(lines)
+
+
+def _single_line(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _snippet(text: str, max_chars: int) -> str:
+    if max_chars < 1:
+        return ""
+    compact = _single_line(text)
+    if len(compact) <= max_chars:
+        return compact
+    return compact[:max_chars].rstrip() + "..."

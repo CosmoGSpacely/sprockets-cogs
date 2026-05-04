@@ -108,6 +108,54 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
         mock_build.assert_called_once_with("memory-vault", Path("/vault"))
         self.assertEqual(results, (node,))
 
+    def test_format_retrieval_context_compacts_nodes_for_prompt_use(self):
+        node = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/phase-3-memory-enhancement.md"),
+            parent_slugs=("build-sprockets-cogs",),
+            text="This project covers retrieval readiness.\nIt should remain compact.",
+        )
+
+        context = production_retrieval.format_retrieval_context((node,))
+
+        self.assertIn("Relevant memory:", context)
+        self.assertIn(
+            "- projects/phase-3-memory-enhancement [sprockets/project] Phase 3 - Memory Enhancement",
+            context,
+        )
+        self.assertIn("parents: build-sprockets-cogs", context)
+        self.assertIn("text: This project covers retrieval readiness. It should remain compact.", context)
+
+    def test_format_retrieval_context_limits_nodes_and_text(self):
+        first = RetrievalNode(
+            node_id="notes/first",
+            title="First",
+            node_type="sprockets/note",
+            path=Path("/vault/first.md"),
+            text="abcdefghijklmnopqrstuvwxyz",
+        )
+        second = RetrievalNode(
+            node_id="notes/second",
+            title="Second",
+            node_type="sprockets/note",
+            path=Path("/vault/second.md"),
+        )
+
+        context = production_retrieval.format_retrieval_context(
+            (first, second),
+            node_limit=1,
+            text_limit=10,
+        )
+
+        self.assertIn("notes/first", context)
+        self.assertIn("text: abcdefghij...", context)
+        self.assertNotIn("notes/second", context)
+
+    def test_format_retrieval_context_returns_empty_for_no_nodes(self):
+        self.assertEqual(production_retrieval.format_retrieval_context(()), "")
+
     def test_agentic_loop_retrieval_stays_empty_when_flag_is_disabled(self):
         with patch.dict(os.environ, {}, clear=True):
             with patch("production_retrieval.retrieve_with_gated_memory") as mock_retrieve:
