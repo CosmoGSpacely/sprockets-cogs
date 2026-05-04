@@ -103,6 +103,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             limit=3,
             node_types=("sprockets/contact", "sprockets/entity"),
             parent_slugs=("build-sprockets-cogs",),
+            query_vector=(0.1, 0.2),
         )
         record = MemoryRecord(
             metadata=MemoryNodeMetadata(
@@ -122,6 +123,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         )
 
         self.assertEqual(query.limit, 3)
+        self.assertEqual(query.query_vector, (0.1, 0.2))
         self.assertEqual(result.node_id, "contacts/tom-reilly")
         self.assertEqual(result.reasons, ("name match",))
         self.assertEqual(trace.result_ids, ("contacts/tom-reilly",))
@@ -322,6 +324,72 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         self.assertEqual(results, ())
         self.assertEqual(trace.result_ids, ())
         self.assertEqual(trace.notes, ("limit below 1",))
+
+    def test_in_memory_index_query_can_rank_by_vector_similarity(self):
+        semantic_match = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="projects/learn-how-to-bring-a-project-to-production",
+                path=Path("projects/learn-how-to-bring-a-project-to-production.md"),
+                node_type="sprockets/project",
+                title="Learn how to bring a project to production",
+            ),
+            vector=(1.0, 0.0),
+            vector_metadata=VectorMetadata(
+                model="test-embed",
+                dimension=2,
+                text_hash="hash-1",
+            ),
+        )
+        lexical_match = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="notes/laptop-setup",
+                path=Path("notes/laptop-setup.md"),
+                node_type="sprockets/note",
+                title="Laptop setup",
+            ),
+            vector=(0.0, 1.0),
+            vector_metadata=VectorMetadata(
+                model="test-embed",
+                dimension=2,
+                text_hash="hash-2",
+            ),
+        )
+        index = InMemoryMemoryIndex([lexical_match, semantic_match])
+
+        results = index.query(MemoryQuery(
+            text="run beyond my laptop",
+            query_vector=(1.0, 0.0),
+        ))
+
+        self.assertEqual(
+            [result.node_id for result in results],
+            [
+                "projects/learn-how-to-bring-a-project-to-production",
+                "notes/laptop-setup",
+            ],
+        )
+        self.assertIn("vector", results[0].reasons)
+
+    def test_in_memory_index_ignores_vector_dimension_mismatches(self):
+        record = MemoryRecord(
+            metadata=MemoryNodeMetadata(
+                node_id="notes/memory",
+                path=Path("notes/memory.md"),
+                node_type="sprockets/note",
+                title="Memory",
+            ),
+            vector=(1.0,),
+            vector_metadata=VectorMetadata(
+                model="test-embed",
+                dimension=1,
+                text_hash="hash-1",
+            ),
+        )
+        index = InMemoryMemoryIndex([record])
+
+        results = index.query(MemoryQuery(text="", query_vector=(1.0, 0.0)))
+
+        self.assertEqual(results, ())
 
 
 if __name__ == "__main__":
