@@ -489,11 +489,15 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         retriever = build_experimental_retriever("memory-fixture", Path("/unused"))
 
         results = list(retriever.retrieve("Phase 3 memory enhancement"))
+        trace = retriever.trace("Phase 3 memory enhancement")
 
         self.assertEqual(retriever.name, "memory-fixture")
         self.assertEqual(len(retriever.nodes), len(stage_15_fixture_nodes()))
         self.assertEqual(results[0].node_id, "projects/phase-3-memory-enhancement")
         self.assertTrue(all(isinstance(node, RetrievalNode) for node in results))
+        self.assertIsNotNone(trace)
+        self.assertEqual(trace.retriever_name, "in-memory")
+        self.assertEqual(trace.result_ids[0], "projects/phase-3-memory-enhancement")
 
     def test_build_experimental_retriever_builds_hybrid_graph_intent_interface(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -607,6 +611,49 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- vault: ", printed)
         self.assertIn("- nodes: 1", printed)
         self.assertIn("- sprockets/project: 1", printed)
+
+    def test_cli_memory_vault_mode_can_show_query_traces(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "projects",
+                "phase-3-memory-enhancement",
+                "node_type: sprockets/project\n"
+                "title: Phase 3 - Memory Enhancement\n",
+                "Evaluate retrieval quality before production wiring.",
+            )
+
+            with patch("sys.argv", [
+                "retrieval_eval",
+                "--retriever",
+                "memory-vault",
+                "--vault-dir",
+                str(vault),
+                "--case-set",
+                "fixture",
+                "--show-traces",
+            ]):
+                with patch("builtins.print") as mock_print:
+                    retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- trace retriever: in-memory", printed)
+        self.assertIn("- trace notes: records scanned: 1", printed)
+        self.assertIn("candidates scored:", printed)
+
+    def test_cli_non_memory_retriever_reports_unavailable_traces(self):
+        with patch("sys.argv", [
+            "retrieval_eval",
+            "--retriever",
+            "lexical-fixture",
+            "--show-traces",
+        ]):
+            with patch("builtins.print") as mock_print:
+                retrieval_eval.main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("- trace: unavailable", printed)
 
     def test_cli_embedding_vault_mode_uses_embedding_index_without_production_wiring(self):
         with tempfile.TemporaryDirectory() as tmp:

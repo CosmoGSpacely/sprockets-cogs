@@ -110,9 +110,15 @@ class ExperimentalRetriever:
     name: str
     nodes: tuple[RetrievalNode, ...]
     retriever: Retriever
+    trace_provider: Callable[[str], object | None] | None = None
 
     def retrieve(self, query: str) -> Iterable[object]:
         return self.retriever(query)
+
+    def trace(self, query: str) -> object | None:
+        if self.trace_provider is None:
+            return None
+        return self.trace_provider(query)
 
 
 Retriever = Callable[[str], Iterable[object]]
@@ -696,11 +702,12 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
 
     if name == "memory-fixture":
         fixture_nodes = stage_15_fixture_nodes()
-        retriever = _build_memory_index_retriever(fixture_nodes)
+        retriever, trace_provider = _build_memory_index_retriever(fixture_nodes)
         return ExperimentalRetriever(
             name=name,
             nodes=fixture_nodes,
             retriever=retriever,
+            trace_provider=trace_provider,
         )
 
     if name == "lexical-fixture":
@@ -721,11 +728,12 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
 
     if name == "memory-vault":
         scan_nodes = tuple(load_retrieval_nodes(vault_dir))
-        retriever = _build_memory_index_retriever(scan_nodes)
+        retriever, trace_provider = _build_memory_index_retriever(scan_nodes)
         return ExperimentalRetriever(
             name=name,
             nodes=scan_nodes,
             retriever=retriever,
+            trace_provider=trace_provider,
         )
 
     if name in {
@@ -771,7 +779,9 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
     raise ValueError(f"unknown retriever: {name}")
 
 
-def _build_memory_index_retriever(nodes: tuple[RetrievalNode, ...]) -> Retriever:
+def _build_memory_index_retriever(
+    nodes: tuple[RetrievalNode, ...],
+) -> tuple[Retriever, Callable[[str], object]]:
     from memory_index import InMemoryMemoryIndex, MemoryQuery, memory_record_from_retrieval_node
 
     by_id = {node.node_id: node for node in nodes}
@@ -781,7 +791,11 @@ def _build_memory_index_retriever(nodes: tuple[RetrievalNode, ...]) -> Retriever
         results = index.query(MemoryQuery(text=query))
         return [by_id[result.node_id] for result in results if result.node_id in by_id]
 
-    return retrieve
+    def trace(query: str) -> object:
+        _results, retrieval_trace = index.query_with_trace(MemoryQuery(text=query))
+        return retrieval_trace
+
+    return retrieve, trace
 
 
 def main() -> None:
@@ -833,6 +847,11 @@ def main() -> None:
         action="store_true",
         help="Print which benchmark expected/avoid target IDs exist in the loaded node set.",
     )
+    parser.add_argument(
+        "--show-traces",
+        action="store_true",
+        help="Print retrieval traces when the selected retriever supports them.",
+    )
     args = parser.parse_args()
 
     experimental_retriever = build_experimental_retriever(args.retriever, args.vault_dir)
@@ -882,6 +901,20 @@ def main() -> None:
             print("- missing: " + ", ".join(sorted(case_result.missing_ids)))
         if case_result.forbidden_ids:
             print("- forbidden: " + ", ".join(sorted(case_result.forbidden_ids)))
+        if args.show_traces:
+            trace = experimental_retriever.trace(case_result.case.query)
+            if trace is None:
+                print("- trace: unavailable")
+            else:
+                print("- trace retriever: " + str(getattr(trace, "retriever_name", "unknown")))
+                filters = getattr(trace, "filters_applied", {})
+                if filters:
+                    print("- trace filters: " + ", ".join(
+                        f"{key}={','.join(value)}" for key, value in filters.items()
+                    ))
+                notes = getattr(trace, "notes", ())
+                if notes:
+                    print("- trace notes: " + "; ".join(str(note) for note in notes))
 
     if args.strict and not result.passed:
         raise SystemExit(1)
