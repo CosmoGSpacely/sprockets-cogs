@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from embeddings import embedding_text_hash, node_embedding_text
+from retrieval_eval import RetrievalNode
+
 
 @dataclass(frozen=True)
 class MemoryNodeMetadata:
@@ -118,3 +121,30 @@ def should_reindex(record: MemoryRecord | None, model: str, text_hash: str) -> b
     if metadata.model != model or metadata.text_hash != text_hash:
         return True
     return metadata.dimension != len(record.vector)
+
+
+def memory_record_from_retrieval_node(
+    node: RetrievalNode,
+    source_mtime: float | None = None,
+) -> MemoryRecord:
+    """Convert a Stage 15 retrieval node into the Stage 17 memory record shape."""
+
+    path = Path(node.path)
+    if source_mtime is None:
+        try:
+            source_mtime = path.stat().st_mtime
+        except OSError:
+            source_mtime = None
+
+    text_hash = embedding_text_hash(node_embedding_text(node))
+    return MemoryRecord(
+        metadata=MemoryNodeMetadata(
+            node_id=node.node_id,
+            path=path,
+            node_type=node.node_type,
+            title=node.title,
+            parent_slugs=node.parent_slugs,
+            source_mtime=source_mtime,
+            text_hash=text_hash,
+        )
+    )
