@@ -915,6 +915,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("vector=", printed)
         self.assertIn("- trace quality:", printed)
         self.assertIn("- trace confidence:", printed)
+        self.assertIn("Confidence summary", printed)
+        self.assertIn("- low/review:", printed)
         mock_build_index.assert_called_once()
         self.assertTrue(mock_embed_text.called)
 
