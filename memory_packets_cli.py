@@ -36,6 +36,17 @@ def main() -> None:
         help="Show one packet by node ID.",
     )
     parser.add_argument(
+        "--include-recent-cogs",
+        action="store_true",
+        help="Include one rolling recent Cogs history packet.",
+    )
+    parser.add_argument(
+        "--recent-day-limit",
+        type=int,
+        default=7,
+        help="Maximum daily notes to include in the recent Cogs packet.",
+    )
+    parser.add_argument(
         "--child-limit",
         type=int,
         default=8,
@@ -55,6 +66,8 @@ def main() -> None:
         node_types=node_types,
         child_limit=args.child_limit,
         excerpt_chars=args.excerpt_chars,
+        include_recent_cogs=args.include_recent_cogs,
+        recent_day_limit=args.recent_day_limit,
     )
     if args.node_id:
         packet = next((item for item in packets if item.node_id == args.node_id), None)

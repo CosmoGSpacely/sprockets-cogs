@@ -1,8 +1,10 @@
 import unittest
+from datetime import date
 from pathlib import Path
 
 from memory_packets import (
     build_memory_packets,
+    build_recent_cogs_packet,
     format_memory_packet,
     format_memory_packet_inventory,
     memory_packet_for_node,
@@ -101,6 +103,49 @@ class Stage22MemoryPacketTests(unittest.TestCase):
         self.assertIn("- writes: none", inventory)
         self.assertIn("- path: areas/learn-agentic-ai.md", detail)
         self.assertIn("- writes: none", detail)
+
+    def test_build_recent_cogs_packet_uses_recent_non_future_daily_notes(self):
+        recent = RetrievalNode(
+            node_id="daily/2026-05-04",
+            title="Mon 04 May 2026",
+            node_type="cogs/daily",
+            path=Path("Cogs/daily/Mon 04 May 2026.md"),
+            text="---\ntags: [daily]\n---\n# Daily\n- [ ] Review memory packets",
+        )
+        older = RetrievalNode(
+            node_id="daily/2026-05-01",
+            title="Fri 01 May 2026",
+            node_type="cogs/daily",
+            path=Path("Cogs/daily/Fri 01 May 2026.md"),
+            text="- [x] Finish graph retrieval",
+        )
+        future = RetrievalNode(
+            node_id="daily/2026-05-06",
+            title="Wed 06 May 2026",
+            node_type="cogs/daily",
+            path=Path("Cogs/daily/Wed 06 May 2026.md"),
+            text="- [ ] Future item",
+        )
+
+        packet = build_recent_cogs_packet(
+            (older, recent, future),
+            today=date(2026, 5, 5),
+            day_limit=2,
+            excerpt_chars=120,
+        )
+
+        self.assertIsNotNone(packet)
+        assert packet is not None
+        self.assertEqual(packet.node_id, "memory/recent-cogs")
+        self.assertEqual(packet.node_type, "memory/recent-cogs")
+        self.assertEqual(packet.child_ids, ("daily/2026-05-04", "daily/2026-05-01"))
+        self.assertNotIn("daily/2026-05-06", packet.child_ids)
+        self.assertIn("Review memory packets", packet.excerpt)
+
+    def test_build_recent_cogs_packet_returns_none_when_empty(self):
+        packet = build_recent_cogs_packet((), today=date(2026, 5, 5))
+
+        self.assertIsNone(packet)
 
 
 if __name__ == "__main__":
