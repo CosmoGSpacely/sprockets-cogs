@@ -113,17 +113,27 @@ def fetch_service_log_lines(
 def format_memory_guard_report(
     events: Iterable[MemoryGuardLogEvent],
     limit: int | None = None,
+    decision: str = "",
 ) -> str:
     """Format parsed memory guard events as a compact review report."""
 
-    event_list = tuple(events)
+    event_list = tuple(
+        event for event in events
+        if not decision or event.decision == decision
+    )
     if limit is not None and limit >= 0:
         event_list = event_list[-limit:]
 
+    selected_count = sum(1 for event in event_list if event.decision == "selected")
+    skipped_count = sum(1 for event in event_list if event.decision == "skipped")
     lines = [
         "Sprockets-Cogs memory guard log report",
         f"- events: {len(event_list)}",
+        f"- selected: {selected_count}",
+        f"- skipped: {skipped_count}",
     ]
+    if decision:
+        lines.append(f"- decision filter: {decision}")
     if not event_list:
         lines.append("- no selected/skipped memory parent guard events found")
         return "\n".join(lines)
@@ -145,6 +155,7 @@ def format_memory_guard_report(
 def format_memory_guard_jsonl_report(
     lines: Iterable[str],
     limit: int | None = None,
+    decision: str = "",
 ) -> str:
     """Format memory guard events from the durable JSONL trace sink."""
 
@@ -162,7 +173,7 @@ def format_memory_guard_jsonl_report(
         )
         for record in read_memory_parent_trace_records(lines)
     )
-    return format_memory_guard_report(events, limit=limit)
+    return format_memory_guard_report(events, limit=limit, decision=decision)
 
 
 def _timestamp_from_line(line: str) -> str:
@@ -212,6 +223,12 @@ def main() -> None:
         help="Number of most recent events to show. Defaults to 20.",
     )
     parser.add_argument(
+        "--decision",
+        choices=("selected", "skipped"),
+        default="",
+        help="Only show selected or skipped memory parent decisions.",
+    )
+    parser.add_argument(
         "--file",
         type=Path,
         help="Parse a log file instead of calling journalctl.",
@@ -229,13 +246,21 @@ def main() -> None:
             if args.jsonl.exists()
             else ()
         )
-        print(format_memory_guard_jsonl_report(lines, limit=args.limit))
+        print(format_memory_guard_jsonl_report(
+            lines,
+            limit=args.limit,
+            decision=args.decision,
+        ))
         return
     if args.file:
         lines = args.file.read_text(encoding="utf-8").splitlines()
     else:
         lines = fetch_service_log_lines(args.since, args.service)
-    print(format_memory_guard_report(parse_memory_guard_log(lines), limit=args.limit))
+    print(format_memory_guard_report(
+        parse_memory_guard_log(lines),
+        limit=args.limit,
+        decision=args.decision,
+    ))
 
 
 if __name__ == "__main__":
