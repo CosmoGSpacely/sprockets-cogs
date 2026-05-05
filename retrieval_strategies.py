@@ -116,6 +116,22 @@ def node_type_priority(node: RetrievalNode) -> int:
     return priority.get(node.node_type, 99)
 
 
+def graph_reason_priority(reason: str) -> int:
+    """Return priority for graph trace reasons without changing result order."""
+
+    if reason == "direct":
+        return 3
+    if (
+        reason.startswith("parent of ")
+        or reason.startswith("child of ")
+        or reason.startswith("sibling of ")
+    ):
+        return 2
+    if reason.startswith("title mention in "):
+        return 1
+    return 0
+
+
 def expand_retrieval_neighbors(
     ranked_nodes: Iterable[RetrievalNode],
     all_nodes: Iterable[RetrievalNode],
@@ -157,6 +173,8 @@ def expand_retrieval_neighbors_with_reasons(
         if node.node_id not in seen:
             seen.add(node.node_id)
             expanded.append(node)
+            reasons[node.node_id] = reason
+        elif graph_reason_priority(reason) > graph_reason_priority(reasons[node.node_id]):
             reasons[node.node_id] = reason
 
     delayed_neighbors: list[tuple[RetrievalNode, str]] = []

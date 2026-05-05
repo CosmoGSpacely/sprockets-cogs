@@ -4,6 +4,7 @@ from pathlib import Path
 from retrieval_strategies import (
     expand_retrieval_neighbors,
     expand_retrieval_neighbors_with_reasons,
+    graph_reason_priority,
     hybrid_retrieve_with_trace,
 )
 from retrieval_types import RetrievalNode
@@ -180,6 +181,46 @@ class Stage20GraphRetrievalTests(unittest.TestCase):
         self.assertEqual(
             reasons["notes/phase-3-memory-notes"],
             "sibling of tasks/add-retrieval-traces via phase-3-memory-enhancement",
+        )
+
+    def test_graph_reasons_prefer_structure_over_title_mentions(self):
+        project = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+        )
+        seed_task = RetrievalNode(
+            node_id="tasks/review-stage-20-for-phase-3---memory-enhancement",
+            title="Review Stage 20 for Phase 3 - Memory Enhancement",
+            node_type="sprockets/task",
+            path=Path("review-stage-20-for-phase-3---memory-enhancement.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+
+        expanded, reasons = expand_retrieval_neighbors_with_reasons(
+            (seed_task,),
+            (project, seed_task),
+            limit=2,
+        )
+
+        self.assertEqual(
+            [node.node_id for node in expanded],
+            [
+                "tasks/review-stage-20-for-phase-3---memory-enhancement",
+                "projects/phase-3-memory-enhancement",
+            ],
+        )
+        self.assertEqual(
+            reasons["projects/phase-3-memory-enhancement"],
+            "parent of tasks/review-stage-20-for-phase-3---memory-enhancement",
+        )
+
+    def test_graph_reason_priority_keeps_direct_hits_strongest(self):
+        self.assertGreater(graph_reason_priority("direct"), graph_reason_priority("parent of tasks/a"))
+        self.assertGreater(
+            graph_reason_priority("parent of tasks/a"),
+            graph_reason_priority("title mention in tasks/a"),
         )
 
     def test_hybrid_graph_trace_explains_graph_results(self):
