@@ -153,6 +153,12 @@ def expand_retrieval_neighbors(
             if parent:
                 hierarchy_neighbors.append(parent)
         hierarchy_neighbors.extend(children_by_parent.get(node_slug(node), []))
+        for parent_slug in node.parent_slugs:
+            hierarchy_neighbors.extend(
+                sibling
+                for sibling in children_by_parent.get(parent_slug, [])
+                if sibling.node_id != node.node_id
+            )
         for candidate in all_node_tuple:
             if candidate.node_id == node.node_id:
                 continue
