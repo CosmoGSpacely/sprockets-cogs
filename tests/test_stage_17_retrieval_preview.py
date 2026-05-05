@@ -53,6 +53,32 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
         self.assertEqual(preview.results, (node,))
         self.assertEqual(preview.trace, trace)
 
+    def test_preview_retrieval_can_use_graph_gated_memory(self):
+        node = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/phase-3.md"),
+        )
+        experimental = ExperimentalRetriever(
+            name="memory-embedding-graph-gated-vault",
+            nodes=(node,),
+            retriever=lambda _query: (node,),
+            trace_provider=lambda _query: None,
+        )
+
+        with patch("retrieval_preview.build_experimental_retriever") as mock_build:
+            mock_build.return_value = experimental
+            preview = preview_retrieval(
+                "Find Phase 3",
+                Path("/vault"),
+                retriever_name="memory-embedding-graph-gated-vault",
+            )
+
+        mock_build.assert_called_once_with("memory-embedding-graph-gated-vault", Path("/vault"))
+        self.assertEqual(preview.retriever_name, "memory-embedding-graph-gated-vault")
+        self.assertEqual(preview.results, (node,))
+
     def test_format_preview_lists_results_and_trace(self):
         node = RetrievalNode(
             node_id="notes/reflection-on-phase-2---hierarchy",

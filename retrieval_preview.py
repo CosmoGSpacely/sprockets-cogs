@@ -297,7 +297,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--retriever",
-        choices=("memory-vault", "memory-embedding-gated-vault"),
+        choices=(
+            "memory-vault",
+            "memory-embedding-gated-vault",
+            "memory-embedding-graph-gated-vault",
+        ),
         default=DEFAULT_RETRIEVER,
         help="Read-only preview retriever. Defaults to gated embedded memory.",
     )
