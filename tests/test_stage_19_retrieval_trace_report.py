@@ -83,6 +83,8 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
 
         self.assertIn("Sprockets-Cogs memory guard log report", output)
         self.assertIn("- events: 2", output)
+        self.assertIn("- selected: 1", output)
+        self.assertIn("- skipped: 1", output)
         self.assertIn("selected", output)
         self.assertIn("parent: Production", output)
         self.assertIn("parent node: projects/production [sprockets/project]", output)
@@ -110,10 +112,37 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
         self.assertNotIn("parent: First", output)
         self.assertIn("parent: Second", output)
 
+    def test_format_memory_guard_report_can_filter_by_decision(self):
+        events = parse_memory_guard_log([
+            (
+                "2026-05-04T10:01:02-0400 host python[123]: "
+                "Memory parent guard selected: parent='Production' "
+                "node_id=projects/production node_type=sprockets/project retrieved=3"
+            ),
+            (
+                "2026-05-04T10:03:04-0400 host python[123]: "
+                "Memory parent guard skipped: "
+                "reason=no hierarchy parent in retrieved nodes "
+                "top_node_id=contacts/tom-reilly "
+                "top_node_type=sprockets/contact retrieved=5"
+            ),
+        ])
+
+        output = format_memory_guard_report(events, decision="skipped")
+
+        self.assertIn("- events: 1", output)
+        self.assertIn("- selected: 0", output)
+        self.assertIn("- skipped: 1", output)
+        self.assertIn("- decision filter: skipped", output)
+        self.assertNotIn("parent: Production", output)
+        self.assertIn("top node: contacts/tom-reilly [sprockets/contact]", output)
+
     def test_format_memory_guard_report_handles_empty_events(self):
         output = format_memory_guard_report(())
 
         self.assertIn("- events: 0", output)
+        self.assertIn("- selected: 0", output)
+        self.assertIn("- skipped: 0", output)
         self.assertIn("no selected/skipped memory parent guard events found", output)
 
 

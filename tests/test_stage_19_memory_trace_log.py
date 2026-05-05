@@ -118,6 +118,7 @@ class Stage19MemoryTraceLogTests(unittest.TestCase):
         output = format_memory_guard_jsonl_report(lines)
 
         self.assertIn("- events: 1", output)
+        self.assertIn("- selected: 1", output)
         self.assertIn("2026-05-04T12:04:00+00:00 selected", output)
         self.assertIn("parent: Production", output)
         self.assertIn("parent node: projects/production [sprockets/project]", output)
