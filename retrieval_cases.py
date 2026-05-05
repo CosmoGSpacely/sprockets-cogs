@@ -243,6 +243,21 @@ def stage_15_real_vault_cases() -> tuple[RetrievalCase, ...]:
     )
 
 
+def stage_22_packet_vault_cases() -> tuple[RetrievalCase, ...]:
+    """Return packet-specific cases grounded in the current real vault contents."""
+
+    return (
+        RetrievalCase(
+            name="phase-3-packet-overview",
+            category="memory_packet",
+            query="What is the current shape of Phase 3 Memory Enhancement?",
+            expected_ids=frozenset({"packets/projects/phase-3-memory-enhancement"}),
+            avoid_ids=frozenset({"packets/projects/phase-2-hardening"}),
+            reason="Packet retrieval should be able to return a compact project summary packet directly.",
+        ),
+    )
+
+
 def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...]:
     """Choose fixture or real-vault cases for a benchmark run."""
 
@@ -250,6 +265,8 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
         return stage_15_cases()
     if case_set == "real-vault":
         return stage_15_real_vault_cases()
+    if case_set == "packet-vault":
+        return stage_22_packet_vault_cases()
     if retriever_name in {
         "lexical-vault",
         "memory-vault",

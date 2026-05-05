@@ -23,6 +23,7 @@ from retrieval_eval import (
     stage_15_cases,
     stage_15_fixture_nodes,
     stage_15_real_vault_cases,
+    stage_22_packet_vault_cases,
 )
 
 
@@ -147,6 +148,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertEqual(select_cases("auto", "current"), stage_15_cases())
         self.assertEqual(select_cases("fixture", "lexical-vault"), stage_15_cases())
         self.assertEqual(select_cases("real-vault", "current"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("packet-vault", "current"), stage_22_packet_vault_cases())
 
     def test_semantic_query_hints_expand_known_production_readiness_language(self):
         hints = retrieval_eval._semantic_query_hints(
