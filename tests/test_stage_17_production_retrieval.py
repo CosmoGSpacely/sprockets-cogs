@@ -59,6 +59,24 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
                 "hybrid-graph-intent-vault",
             )
 
+    def test_configured_memory_retriever_rejects_graph_aware_benchmark_mode(self):
+        with patch.dict(
+            os.environ,
+            {production_retrieval.RETRIEVER_ENV: "memory-embedding-graph-gated-vault"},
+            clear=True,
+        ):
+            self.assertEqual(
+                production_retrieval.configured_memory_retriever(),
+                "memory-embedding-gated-vault",
+            )
+            status = production_retrieval.production_retrieval_status(Path("/vault"))
+
+        self.assertEqual(
+            status.raw_retriever_name,
+            "memory-embedding-graph-gated-vault",
+        )
+        self.assertFalse(status.retriever_env_accepted)
+
     def test_production_retrieval_status_reports_flag_retriever_and_vault(self):
         with patch.dict(
             os.environ,
