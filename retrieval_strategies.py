@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 import re
 
-from retrieval_types import RetrievalNode, SemanticQueryHint
+from retrieval_types import GraphRetrievalTrace, RetrievalNode, SemanticQueryHint
 
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -123,8 +123,23 @@ def expand_retrieval_neighbors(
 ) -> list[RetrievalNode]:
     """Interleave retrieved nodes with nearby parent/child/title-mention nodes."""
 
+    expanded, _reasons = expand_retrieval_neighbors_with_reasons(
+        ranked_nodes,
+        all_nodes,
+        limit=limit,
+    )
+    return expanded
+
+
+def expand_retrieval_neighbors_with_reasons(
+    ranked_nodes: Iterable[RetrievalNode],
+    all_nodes: Iterable[RetrievalNode],
+    limit: int = 5,
+) -> tuple[list[RetrievalNode], dict[str, str]]:
+    """Interleave retrieved nodes and return compact graph expansion reasons."""
+
     if limit < 1:
-        return []
+        return [], {}
 
     all_node_tuple = tuple(all_nodes)
     by_id = {node.node_id: node for node in all_node_tuple}
@@ -135,27 +150,32 @@ def expand_retrieval_neighbors(
             children_by_parent.setdefault(parent_slug, []).append(node)
 
     expanded: list[RetrievalNode] = []
+    reasons: dict[str, str] = {}
     seen: set[str] = set()
 
-    def add(node: RetrievalNode) -> None:
+    def add(node: RetrievalNode, reason: str) -> None:
         if node.node_id not in seen:
             seen.add(node.node_id)
             expanded.append(node)
+            reasons[node.node_id] = reason
 
-    delayed_neighbors: list[RetrievalNode] = []
+    delayed_neighbors: list[tuple[RetrievalNode, str]] = []
     for node in ranked_nodes:
-        add(node)
+        add(node, "direct")
         relation_text = node_search_text(node).lower()
         mention_neighbors: list[RetrievalNode] = []
-        hierarchy_neighbors: list[RetrievalNode] = []
+        hierarchy_neighbors: list[tuple[RetrievalNode, str]] = []
         for parent_slug in node.parent_slugs:
             parent = by_slug.get(parent_slug)
             if parent:
-                hierarchy_neighbors.append(parent)
-        hierarchy_neighbors.extend(children_by_parent.get(node_slug(node), []))
+                hierarchy_neighbors.append((parent, f"parent of {node.node_id}"))
+        hierarchy_neighbors.extend(
+            (child, f"child of {node.node_id}")
+            for child in children_by_parent.get(node_slug(node), [])
+        )
         for parent_slug in node.parent_slugs:
             hierarchy_neighbors.extend(
-                sibling
+                (sibling, f"sibling of {node.node_id} via {parent_slug}")
                 for sibling in children_by_parent.get(parent_slug, [])
                 if sibling.node_id != node.node_id
             )
@@ -169,15 +189,16 @@ def expand_retrieval_neighbors(
         mention_neighbors.sort(key=lambda item: (node_type_priority(item), item.node_id))
         for neighbor in mention_neighbors:
             if neighbor.node_id in by_id:
-                add(neighbor)
+                add(neighbor, f"title mention in {node.node_id}")
         delayed_neighbors.extend(hierarchy_neighbors)
 
-    delayed_neighbors.sort(key=lambda item: (node_type_priority(item), item.node_id))
-    for neighbor in delayed_neighbors:
+    delayed_neighbors.sort(key=lambda item: (node_type_priority(item[0]), item[0].node_id))
+    for neighbor, reason in delayed_neighbors:
         if neighbor.node_id in by_id:
-            add(neighbor)
+            add(neighbor, reason)
 
-    return expanded[:limit]
+    limited = expanded[:limit]
+    return limited, {node.node_id: reasons[node.node_id] for node in limited}
 
 
 def query_preferred_node_types(query: str) -> tuple[str, ...]:
@@ -235,6 +256,50 @@ def hybrid_retrieve(
     if apply_intent_filter:
         results = filter_by_query_intent(query, results, limit=limit)
     return results
+
+
+def hybrid_retrieve_with_trace(
+    query: str,
+    nodes: Iterable[RetrievalNode],
+    embedding_retriever: Callable[[str], Iterable[RetrievalNode]],
+    limit: int = 5,
+    expand_graph: bool = False,
+    apply_intent_filter: bool = False,
+    retriever_name: str = "hybrid",
+) -> tuple[list[RetrievalNode], GraphRetrievalTrace]:
+    """Return hybrid retrieval results with compact benchmark trace details."""
+
+    node_tuple = tuple(nodes)
+    lexical_results = lexical_retrieve(query, node_tuple, limit=limit)
+    embedding_results = tuple(embedding_retriever(query))
+    fused_results = rank_fusion((lexical_results, embedding_results), limit=limit)
+    reasons = {node.node_id: "direct" for node in fused_results}
+    results = fused_results
+    notes = (
+        f"lexical results: {len(lexical_results)}",
+        f"embedding results: {len(embedding_results)}",
+    )
+    if expand_graph:
+        results, reasons = expand_retrieval_neighbors_with_reasons(
+            fused_results,
+            node_tuple,
+            limit=limit,
+        )
+        notes = notes + ("graph expansion applied",)
+    if apply_intent_filter:
+        results = filter_by_query_intent(query, results, limit=limit)
+        reasons = {node.node_id: reasons.get(node.node_id, "direct") for node in results}
+        notes = notes + ("intent filter applied",)
+    return results, GraphRetrievalTrace(
+        query=query,
+        retriever_name=retriever_name,
+        result_ids=tuple(node.node_id for node in results),
+        notes=notes,
+        result_summaries=tuple(
+            f"{node.node_id} graph={reasons.get(node.node_id, 'direct')}"
+            for node in results
+        ),
+    )
 
 
 def semantic_query_hints(query: str) -> tuple[SemanticQueryHint, ...]:
