@@ -179,6 +179,38 @@ def load_memory_packets(
     return tuple(packets)
 
 
+def memory_packet_to_retrieval_node(packet: MemoryPacket) -> RetrievalNode:
+    """Represent a memory packet as a benchmark-only retrieval node."""
+
+    return RetrievalNode(
+        node_id=f"packets/{packet.node_id}",
+        title=packet.title,
+        node_type="memory/packet",
+        path=packet.path,
+        parent_slugs=packet.parent_slugs,
+        text=packet.packet_text,
+    )
+
+
+def load_memory_packet_retrieval_nodes(
+    vault_dir: Path,
+    include_recent_cogs: bool = True,
+    child_limit: int = 8,
+    excerpt_chars: int = 280,
+) -> tuple[RetrievalNode, ...]:
+    """Load memory packets as benchmark-only retrieval nodes."""
+
+    return tuple(
+        memory_packet_to_retrieval_node(packet)
+        for packet in load_memory_packets(
+            vault_dir,
+            child_limit=child_limit,
+            excerpt_chars=excerpt_chars,
+            include_recent_cogs=include_recent_cogs,
+        )
+    )
+
+
 def load_hierarchy_memory_packets(
     vault_dir: Path,
     node_types: tuple[str, ...] = DEFAULT_PACKET_NODE_TYPES,
