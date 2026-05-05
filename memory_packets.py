@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 
 from retrieval_nodes import load_retrieval_nodes
@@ -77,6 +78,51 @@ def build_memory_packets(
     return tuple(sorted(packets, key=lambda packet: packet.node_id))
 
 
+def build_recent_cogs_packet(
+    nodes: Iterable[RetrievalNode],
+    today: date | None = None,
+    day_limit: int = 7,
+    excerpt_chars: int = 420,
+) -> MemoryPacket | None:
+    """Build one read-only packet summarizing recent daily Cogs notes."""
+
+    current_date = today or date.today()
+    daily_nodes = tuple(
+        sorted(
+            (
+                node
+                for node in nodes
+                if node.node_type == "cogs/daily"
+                and retrieval_daily_date(node) <= current_date
+            ),
+            key=lambda node: retrieval_daily_date(node),
+            reverse=True,
+        )
+    )
+    if not daily_nodes or day_limit < 1:
+        return None
+
+    selected = daily_nodes[:day_limit]
+    excerpt_source = " ".join(
+        f"{node.title}: {_first_meaningful_line(node.text)}"
+        for node in selected
+        if _first_meaningful_line(node.text)
+    )
+    newest = retrieval_daily_date(selected[0])
+    oldest = retrieval_daily_date(selected[-1])
+    return MemoryPacket(
+        node_id="memory/recent-cogs",
+        title=f"Recent Cogs history ({oldest.isoformat()} to {newest.isoformat()})",
+        node_type="memory/recent-cogs",
+        path=Path("Cogs/daily"),
+        parent_slugs=(),
+        child_ids=tuple(node.node_id for node in selected),
+        child_titles=tuple(node.title for node in selected),
+        child_type_counts=(("cogs/daily", len(selected)),),
+        excerpt=_compact_excerpt(excerpt_source, excerpt_chars),
+    )
+
+
 def memory_packet_for_node(
     node: RetrievalNode,
     children: Iterable[RetrievalNode] = (),
@@ -108,8 +154,38 @@ def load_memory_packets(
     node_types: tuple[str, ...] = DEFAULT_PACKET_NODE_TYPES,
     child_limit: int = 8,
     excerpt_chars: int = 280,
+    include_recent_cogs: bool = False,
+    recent_day_limit: int = 7,
 ) -> tuple[MemoryPacket, ...]:
     """Load retrieval nodes from the vault and build read-only memory packets."""
+
+    nodes = load_retrieval_nodes(vault_dir)
+    packets = list(
+        build_memory_packets(
+            nodes,
+            node_types=node_types,
+            child_limit=child_limit,
+            excerpt_chars=excerpt_chars,
+        )
+    )
+    if include_recent_cogs:
+        recent_packet = build_recent_cogs_packet(
+            nodes,
+            day_limit=recent_day_limit,
+            excerpt_chars=excerpt_chars,
+        )
+        if recent_packet:
+            packets.append(recent_packet)
+    return tuple(packets)
+
+
+def load_hierarchy_memory_packets(
+    vault_dir: Path,
+    node_types: tuple[str, ...] = DEFAULT_PACKET_NODE_TYPES,
+    child_limit: int = 8,
+    excerpt_chars: int = 280,
+) -> tuple[MemoryPacket, ...]:
+    """Load only hierarchy packets from the vault."""
 
     return build_memory_packets(
         load_retrieval_nodes(vault_dir),
@@ -179,3 +255,28 @@ def _compact_excerpt(text: str, limit: int) -> str:
     if len(normalized) <= limit:
         return normalized
     return normalized[: max(limit - 3, 0)].rstrip() + "..."
+
+
+def retrieval_daily_date(node: RetrievalNode) -> date:
+    """Return a sortable date for a daily retrieval node."""
+
+    if node.node_id.startswith("daily/"):
+        try:
+            return datetime.strptime(node.node_id.removeprefix("daily/"), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    return date.min
+
+
+def _first_meaningful_line(text: str) -> str:
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        for index, line in enumerate(lines[1:], start=1):
+            if line.strip() == "---":
+                lines = lines[index + 1:]
+                break
+    for line in lines:
+        cleaned = line.strip()
+        if cleaned and not cleaned.startswith("#") and cleaned != "---":
+            return cleaned
+    return ""
