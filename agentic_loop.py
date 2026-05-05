@@ -18,6 +18,7 @@ from watchdog.observers import Observer
 
 from entity_state import get_entities_by_tier, upsert_entity
 import memory_guards
+from memory_trace_log import append_memory_parent_trace
 from models import Confidence, NodeBase, validate_node
 from openai_fallback import (
     classify_nodes_with_openai_fallback,
@@ -46,6 +47,8 @@ PROCESSING_DIR = Path(os.environ.get("SPROCKETS_COGS_PROCESSING_DIR", str(SC_ROO
 ARCHIVE_DIR    = Path(os.environ.get("SPROCKETS_COGS_ARCHIVE_DIR", str(SC_ROOT / "archive")))
 OUTPUT_DIR     = Path(os.environ.get("SPROCKETS_COGS_OUTPUT_DIR", str(SC_ROOT / "output")))
 VAULT_DIR      = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", "/home/cosmo/vault"))
+MEMORY_TRACE_PATH_ENV = "SPROCKETS_COGS_MEMORY_TRACE_PATH"
+MEMORY_TRACE_FILENAME = "memory-parent-traces.jsonl"
 
 DAILY_DIR      = VAULT_DIR / "Cogs" / "daily"
 REVIEW_DIR     = VAULT_DIR / "review"
@@ -721,6 +724,26 @@ def log_memory_parent_trace(trace: memory_guards.MemoryParentTrace) -> None:
         log.debug("Memory parent guard skipped: %s", trace.reason)
 
 
+def write_memory_parent_trace(trace: memory_guards.MemoryParentTrace) -> None:
+    """Append the memory parent decision to the operational JSONL trace log."""
+    path = memory_trace_path()
+    if not path.parent.exists() or not os.access(path.parent, os.W_OK):
+        log.debug("Memory parent trace path unavailable: %s", path)
+        return
+    try:
+        append_memory_parent_trace(trace, path)
+    except OSError as exc:
+        log.warning("Memory parent trace write failed: %s", exc)
+
+
+def memory_trace_path() -> Path:
+    """Return the current memory trace JSONL path."""
+    return Path(os.environ.get(
+        MEMORY_TRACE_PATH_ENV,
+        str(OUTPUT_DIR / MEMORY_TRACE_FILENAME),
+    ))
+
+
 def apply_memory_parent_title(classified: list[dict], parent_title: str) -> list[dict]:
     """Attach an already-selected memory parent title to suitable nodes."""
     before = [node.get("parent_hint", "") for node in classified]
@@ -837,6 +860,7 @@ def process_input(file_path: Path) -> None:
         classified = ensure_hierarchy_tasks(raw_nodes, classified)
         memory_trace = memory_parent_trace(content)
         log_memory_parent_trace(memory_trace)
+        write_memory_parent_trace(memory_trace)
         memory_parent = memory_trace.parent_title
         classified = ensure_memory_hierarchy_tasks(raw_nodes, classified, memory_parent)
         classified = apply_memory_parent_title(classified, memory_parent)
