@@ -387,6 +387,43 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
 
         self.assertEqual(title, "Learn how to bring a project to production")
 
+    def test_memory_parent_trace_uses_retrieved_nodes(self):
+        project = RetrievalNode(
+            node_id="projects/production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+
+        with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[project]):
+            trace = agentic_loop.memory_parent_trace("run beyond laptop")
+
+        self.assertTrue(trace.selected)
+        self.assertEqual(trace.parent_title, "Learn how to bring a project to production")
+        self.assertEqual(trace.parent_node_id, "projects/production")
+
+    def test_memory_parent_trace_selects_hierarchy_after_existing_task(self):
+        task = RetrievalNode(
+            node_id="tasks/deployment-checklist",
+            title="Draft deployment checklist",
+            node_type="sprockets/task",
+            path=Path("/vault/Sprockets/tasks/deployment-checklist.md"),
+        )
+        project = RetrievalNode(
+            node_id="projects/production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+
+        with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[task, project]):
+            trace = agentic_loop.memory_parent_trace("run beyond laptop")
+
+        self.assertTrue(trace.selected)
+        self.assertEqual(trace.top_node_id, "tasks/deployment-checklist")
+        self.assertEqual(trace.parent_node_id, "projects/production")
+        self.assertEqual(trace.parent_title, "Learn how to bring a project to production")
+
     def test_memory_parent_title_ignores_non_hierarchy_top_result(self):
         contact = RetrievalNode(
             node_id="contacts/tom-reilly",

@@ -688,10 +688,37 @@ def apply_memory_parent_hints(input_text: str, classified: list[dict]) -> list[d
 
 def memory_parent_title(input_text: str) -> str:
     """Return the top retrieved hierarchy title for an input, if one exists."""
-    return memory_guards.top_hierarchy_parent_title(
+    return memory_parent_trace(input_text).parent_title
+
+
+def memory_parent_trace(input_text: str) -> memory_guards.MemoryParentTrace:
+    """Return a compact trace of memory parent selection for an input."""
+    return memory_guards.memory_parent_trace(
         retrieve_relevant_nodes(input_text),
         HIERARCHY_PARENT_NODE_TYPES,
     )
+
+
+def log_memory_parent_trace(trace: memory_guards.MemoryParentTrace) -> None:
+    """Log the memory parent decision without logging the raw input text."""
+    if trace.selected:
+        log.info(
+            "Memory parent guard selected: parent=%r node_id=%s node_type=%s retrieved=%d",
+            trace.parent_title,
+            trace.parent_node_id,
+            trace.parent_node_type,
+            trace.retrieved_count,
+        )
+    elif trace.retrieved_count:
+        log.info(
+            "Memory parent guard skipped: reason=%s top_node_id=%s top_node_type=%s retrieved=%d",
+            trace.reason,
+            trace.top_node_id,
+            trace.top_node_type,
+            trace.retrieved_count,
+        )
+    else:
+        log.debug("Memory parent guard skipped: %s", trace.reason)
 
 
 def apply_memory_parent_title(classified: list[dict], parent_title: str) -> list[dict]:
@@ -808,7 +835,9 @@ def process_input(file_path: Path) -> None:
         classified = classify_nodes(raw_nodes, context)
         classified = apply_explicit_hierarchy_hints(raw_nodes, classified)
         classified = ensure_hierarchy_tasks(raw_nodes, classified)
-        memory_parent = memory_parent_title(content)
+        memory_trace = memory_parent_trace(content)
+        log_memory_parent_trace(memory_trace)
+        memory_parent = memory_trace.parent_title
         classified = ensure_memory_hierarchy_tasks(raw_nodes, classified, memory_parent)
         classified = apply_memory_parent_title(classified, memory_parent)
         classified = ensure_cogs_companions(classified)

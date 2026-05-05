@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Protocol
 
 
@@ -13,17 +14,76 @@ class HierarchyNode(Protocol):
     title: str
 
 
+@dataclass(frozen=True)
+class MemoryParentTrace:
+    """Compact trace of the retrieved node considered for parent linking."""
+
+    retrieved_count: int
+    top_node_id: str = ""
+    top_node_type: str = ""
+    top_title: str = ""
+    parent_node_id: str = ""
+    parent_node_type: str = ""
+    parent_title: str = ""
+
+    @property
+    def selected(self) -> bool:
+        return bool(self.parent_title)
+
+    @property
+    def reason(self) -> str:
+        if self.parent_title:
+            if self.parent_node_id == self.top_node_id:
+                return "top retrieval result is a hierarchy parent"
+            return "first hierarchy result selected after non-hierarchy result"
+        if self.retrieved_count:
+            return "no hierarchy parent in retrieved nodes"
+        return "no retrieved nodes"
+
+
 def top_hierarchy_parent_title(
     retrieved_nodes: Iterable[object],
     hierarchy_parent_node_types: Iterable[str],
 ) -> str:
     """Return the first retrieved hierarchy title, if present."""
 
+    return memory_parent_trace(
+        retrieved_nodes,
+        hierarchy_parent_node_types,
+    ).parent_title
+
+
+def memory_parent_trace(
+    retrieved_nodes: Iterable[object],
+    hierarchy_parent_node_types: Iterable[str],
+) -> MemoryParentTrace:
+    """Return a compact parent-selection trace for retrieved memory."""
+
+    nodes = tuple(retrieved_nodes)
     allowed_types = set(hierarchy_parent_node_types)
-    top = next(iter(retrieved_nodes), None)
-    if not top or getattr(top, "node_type", "") not in allowed_types:
-        return ""
-    return getattr(top, "title", "").strip()
+    top = nodes[0] if nodes else None
+    if not top:
+        return MemoryParentTrace(retrieved_count=0)
+
+    top_node_type = getattr(top, "node_type", "")
+    top_title = getattr(top, "title", "").strip()
+    parent = next(
+        (
+            node for node in nodes
+            if getattr(node, "node_type", "") in allowed_types
+            and getattr(node, "title", "").strip()
+        ),
+        None,
+    )
+    return MemoryParentTrace(
+        retrieved_count=len(nodes),
+        top_node_id=getattr(top, "node_id", ""),
+        top_node_type=top_node_type,
+        top_title=top_title,
+        parent_node_id=getattr(parent, "node_id", "") if parent else "",
+        parent_node_type=getattr(parent, "node_type", "") if parent else "",
+        parent_title=getattr(parent, "title", "").strip() if parent else "",
+    )
 
 
 def apply_memory_parent_title(classified: list[dict], parent_title: str) -> list[dict]:
