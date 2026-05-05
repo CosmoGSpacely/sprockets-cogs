@@ -306,9 +306,11 @@ def _score_record(
 def _result_summary(result: ScoredMemoryResult) -> str:
     parts = ", ".join(f"{name}={value:.3g}" for name, value in result.score_parts)
     reasons = ",".join(result.reasons) if result.reasons else "none"
+    kind = "packet" if result.record.metadata.node_type == "memory/packet" else "source"
+    prefix = f"{result.node_id} kind={kind}"
     if parts:
-        return f"{result.node_id} score={result.score:.3g} reasons={reasons} parts={parts}"
-    return f"{result.node_id} score={result.score:.3g} reasons={reasons}"
+        return f"{prefix} score={result.score:.3g} reasons={reasons} parts={parts}"
+    return f"{prefix} score={result.score:.3g} reasons={reasons}"
 
 
 def _quality_flags(

@@ -348,7 +348,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             trace.result_summaries,
             (
                 "projects/phase-3-memory-enhancement "
-                "score=14 reasons=title,node_id parts=title=8, node_id=6",
+                "kind=source score=14 reasons=title,node_id parts=title=8, node_id=6",
             ),
         )
 

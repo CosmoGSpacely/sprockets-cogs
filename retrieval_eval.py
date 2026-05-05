@@ -15,6 +15,7 @@ from retrieval_cases import (
     stage_15_cases,
     stage_15_fixture_nodes,
     stage_15_real_vault_cases,
+    stage_22_packet_vault_cases,
 )
 from retrieval_memory import build_memory_index_retriever as _build_memory_index_retriever
 from retrieval_nodes import load_retrieval_nodes, retrieval_node_counts
@@ -341,7 +342,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--case-set",
-        choices=("auto", "fixture", "real-vault"),
+        choices=("auto", "fixture", "real-vault", "packet-vault"),
         default="auto",
         help="Benchmark cases to run. Auto uses real-vault cases for vault-backed retrievers and fixture cases otherwise.",
     )
