@@ -1,0 +1,137 @@
+import unittest
+from pathlib import Path
+
+from retrieval_strategies import expand_retrieval_neighbors
+from retrieval_types import RetrievalNode
+
+
+class Stage20GraphRetrievalTests(unittest.TestCase):
+    def test_graph_expansion_adds_project_parent_and_children(self):
+        goal = RetrievalNode(
+            node_id="goals/build-sprockets-cogs",
+            title="Build Sprockets-Cogs",
+            node_type="sprockets/goal",
+            path=Path("build-sprockets-cogs.md"),
+        )
+        project = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+            parent_slugs=("build-sprockets-cogs",),
+        )
+        task = RetrievalNode(
+            node_id="tasks/add-memory-index-maintenance",
+            title="Add memory index maintenance",
+            node_type="sprockets/task",
+            path=Path("add-memory-index-maintenance.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+        note = RetrievalNode(
+            node_id="notes/phase-3-memory-notes",
+            title="Phase 3 memory notes",
+            node_type="sprockets/note",
+            path=Path("phase-3-memory-notes.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+
+        expanded = expand_retrieval_neighbors(
+            (project,),
+            (goal, project, task, note),
+            limit=4,
+        )
+
+        self.assertEqual(
+            [node.node_id for node in expanded],
+            [
+                "projects/phase-3-memory-enhancement",
+                "goals/build-sprockets-cogs",
+                "tasks/add-memory-index-maintenance",
+                "notes/phase-3-memory-notes",
+            ],
+        )
+
+    def test_graph_expansion_adds_sibling_tasks_and_notes(self):
+        project = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+        )
+        seed_task = RetrievalNode(
+            node_id="tasks/add-retrieval-traces",
+            title="Add retrieval traces",
+            node_type="sprockets/task",
+            path=Path("add-retrieval-traces.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+        sibling_task = RetrievalNode(
+            node_id="tasks/add-graph-aware-retrieval",
+            title="Add graph-aware retrieval",
+            node_type="sprockets/task",
+            path=Path("add-graph-aware-retrieval.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+        sibling_note = RetrievalNode(
+            node_id="notes/phase-3-memory-notes",
+            title="Phase 3 memory notes",
+            node_type="sprockets/note",
+            path=Path("phase-3-memory-notes.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+
+        expanded = expand_retrieval_neighbors(
+            (seed_task,),
+            (project, seed_task, sibling_task, sibling_note),
+            limit=4,
+        )
+
+        self.assertEqual(
+            [node.node_id for node in expanded],
+            [
+                "tasks/add-retrieval-traces",
+                "projects/phase-3-memory-enhancement",
+                "tasks/add-graph-aware-retrieval",
+                "notes/phase-3-memory-notes",
+            ],
+        )
+
+    def test_graph_expansion_keeps_sibling_results_bounded(self):
+        project = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+        )
+        seed_task = RetrievalNode(
+            node_id="tasks/add-retrieval-traces",
+            title="Add retrieval traces",
+            node_type="sprockets/task",
+            path=Path("add-retrieval-traces.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+        sibling_task = RetrievalNode(
+            node_id="tasks/add-graph-aware-retrieval",
+            title="Add graph-aware retrieval",
+            node_type="sprockets/task",
+            path=Path("add-graph-aware-retrieval.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+
+        expanded = expand_retrieval_neighbors(
+            (seed_task,),
+            (project, seed_task, sibling_task),
+            limit=2,
+        )
+
+        self.assertEqual(
+            [node.node_id for node in expanded],
+            [
+                "tasks/add-retrieval-traces",
+                "projects/phase-3-memory-enhancement",
+            ],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
