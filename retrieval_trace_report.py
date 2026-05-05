@@ -9,6 +9,8 @@ import re
 import subprocess
 from typing import Iterable
 
+from memory_trace_log import read_memory_parent_trace_records
+
 
 SERVICE_NAME = "sprockets-cogs.service"
 DEFAULT_SINCE = "24 hours ago"
@@ -140,6 +142,29 @@ def format_memory_guard_report(
     return "\n".join(lines)
 
 
+def format_memory_guard_jsonl_report(
+    lines: Iterable[str],
+    limit: int | None = None,
+) -> str:
+    """Format memory guard events from the durable JSONL trace sink."""
+
+    events = tuple(
+        MemoryGuardLogEvent(
+            timestamp=record.created_at,
+            decision=record.decision,
+            parent_title=record.parent_title,
+            parent_node_id=record.parent_node_id,
+            parent_node_type=record.parent_node_type,
+            reason=record.reason,
+            top_node_id=record.top_node_id,
+            top_node_type=record.top_node_type,
+            retrieved_count=record.retrieved_count,
+        )
+        for record in read_memory_parent_trace_records(lines)
+    )
+    return format_memory_guard_report(events, limit=limit)
+
+
 def _timestamp_from_line(line: str) -> str:
     """Extract the journal timestamp prefix without assuming one output format."""
 
@@ -191,8 +216,21 @@ def main() -> None:
         type=Path,
         help="Parse a log file instead of calling journalctl.",
     )
+    parser.add_argument(
+        "--jsonl",
+        type=Path,
+        help="Parse a durable memory trace JSONL file instead of service logs.",
+    )
     args = parser.parse_args()
 
+    if args.jsonl:
+        lines = (
+            args.jsonl.read_text(encoding="utf-8").splitlines()
+            if args.jsonl.exists()
+            else ()
+        )
+        print(format_memory_guard_jsonl_report(lines, limit=args.limit))
+        return
     if args.file:
         lines = args.file.read_text(encoding="utf-8").splitlines()
     else:
