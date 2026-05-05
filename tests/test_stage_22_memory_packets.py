@@ -7,6 +7,7 @@ from memory_packets import (
     build_recent_cogs_packet,
     format_memory_packet,
     format_memory_packet_inventory,
+    memory_packet_to_retrieval_node,
     memory_packet_for_node,
 )
 from retrieval_types import RetrievalNode
@@ -146,6 +147,25 @@ class Stage22MemoryPacketTests(unittest.TestCase):
         packet = build_recent_cogs_packet((), today=date(2026, 5, 5))
 
         self.assertIsNone(packet)
+
+    def test_memory_packet_to_retrieval_node_uses_packet_text(self):
+        packet = memory_packet_for_node(
+            RetrievalNode(
+                node_id="projects/phase-3-memory-enhancement",
+                title="Phase 3 - Memory Enhancement",
+                node_type="sprockets/project",
+                path=Path("projects/phase-3-memory-enhancement.md"),
+                parent_slugs=("build-sprockets-cogs",),
+                text="Memory work.",
+            )
+        )
+
+        node = memory_packet_to_retrieval_node(packet)
+
+        self.assertEqual(node.node_id, "packets/projects/phase-3-memory-enhancement")
+        self.assertEqual(node.node_type, "memory/packet")
+        self.assertIn("Phase 3 - Memory Enhancement", node.text)
+        self.assertIn("parents: build-sprockets-cogs", node.text)
 
 
 if __name__ == "__main__":

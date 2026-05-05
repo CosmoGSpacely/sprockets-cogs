@@ -139,6 +139,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertEqual(select_cases("auto", "memory-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "memory-embedding-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "memory-embedding-gated-vault"), stage_15_real_vault_cases())
+        self.assertEqual(select_cases("auto", "memory-packet-embedding-gated-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "embedding-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-vault"), stage_15_real_vault_cases())
         self.assertEqual(select_cases("auto", "hybrid-graph-vault"), stage_15_real_vault_cases())
@@ -768,6 +769,45 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertNotIn("confidence gate withheld low-confidence results", trace.notes)
         mock_build_index.assert_called_once()
         self.assertTrue(mock_embed_text.called)
+
+    def test_memory_packet_embedding_gated_vault_adds_packet_nodes_without_production_wiring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "goals",
+                "build-sprockets-cogs",
+                "node_type: sprockets/goal\n"
+                "title: Build Sprockets-Cogs\n",
+            )
+            write_node(
+                vault,
+                "projects",
+                "phase-3-memory-enhancement",
+                "node_type: sprockets/project\n"
+                "title: Phase 3 - Memory Enhancement\n"
+                "parent: [[build-sprockets-cogs]]\n",
+                "Improve retrieval and memory behavior.",
+            )
+            daily = vault / "Cogs" / "daily" / "Mon 04 May 2026.md"
+            daily.parent.mkdir(parents=True, exist_ok=True)
+            daily.write_text("- [ ] Review memory packet indexing\n")
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                mock_build_index.return_value = ()
+
+                retriever = build_experimental_retriever(
+                    "memory-packet-embedding-gated-vault",
+                    vault,
+                )
+
+        node_ids = {node.node_id for node in retriever.nodes}
+        self.assertEqual(retriever.name, "memory-packet-embedding-gated-vault")
+        self.assertIn("projects/phase-3-memory-enhancement", node_ids)
+        self.assertIn("packets/projects/phase-3-memory-enhancement", node_ids)
+        self.assertIn("packets/memory/recent-cogs", node_ids)
+        self.assertTrue(any(node.node_type == "memory/packet" for node in retriever.nodes))
+        mock_build_index.assert_called_once()
 
     def test_build_experimental_retriever_builds_hybrid_graph_intent_interface(self):
         with tempfile.TemporaryDirectory() as tmp:

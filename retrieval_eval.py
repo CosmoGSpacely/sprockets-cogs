@@ -231,6 +231,24 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
             trace_provider=trace_provider,
         )
 
+    if name == "memory-packet-embedding-gated-vault":
+        from memory_packets import load_memory_packet_retrieval_nodes
+
+        source_nodes = tuple(load_retrieval_nodes(vault_dir))
+        packet_nodes = load_memory_packet_retrieval_nodes(vault_dir)
+        scan_nodes = source_nodes + packet_nodes
+        retriever, trace_provider = _build_memory_index_retriever(
+            scan_nodes,
+            use_embeddings=True,
+            gate_low_confidence=True,
+        )
+        return ExperimentalRetriever(
+            name=name,
+            nodes=scan_nodes,
+            retriever=retriever,
+            trace_provider=trace_provider,
+        )
+
     if name in {
         "embedding-vault",
         "hybrid-vault",
@@ -306,6 +324,7 @@ def main() -> None:
             "memory-embedding-vault",
             "memory-embedding-gated-vault",
             "memory-embedding-graph-gated-vault",
+            "memory-packet-embedding-gated-vault",
             "embedding-vault",
             "hybrid-vault",
             "hybrid-graph-vault",
@@ -357,6 +376,7 @@ def main() -> None:
         "memory-embedding-vault",
         "memory-embedding-gated-vault",
         "memory-embedding-graph-gated-vault",
+        "memory-packet-embedding-gated-vault",
         "embedding-vault",
         "hybrid-vault",
         "hybrid-graph-vault",
