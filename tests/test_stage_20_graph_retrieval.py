@@ -1,6 +1,11 @@
 import unittest
 from pathlib import Path
+import tempfile
+from unittest.mock import patch
 
+import embeddings
+from retrieval_eval import build_experimental_retriever
+from retrieval_memory import expand_top_memory_result_graph
 from retrieval_strategies import (
     expand_retrieval_neighbors,
     expand_retrieval_neighbors_with_reasons,
@@ -8,6 +13,13 @@ from retrieval_strategies import (
     hybrid_retrieve_with_trace,
 )
 from retrieval_types import RetrievalNode
+
+
+def write_node(vault: Path, folder: str, slug: str, metadata: str = "", body: str = "") -> Path:
+    path = vault / "Sprockets" / folder / f"{slug}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"---\n{metadata}---\n\n{body}\n")
+    return path
 
 
 class Stage20GraphRetrievalTests(unittest.TestCase):
@@ -260,6 +272,166 @@ class Stage20GraphRetrievalTests(unittest.TestCase):
             "projects/phase-3-memory-enhancement graph=parent of tasks/add-retrieval-traces",
             trace.result_summaries,
         )
+
+    def test_memory_embedding_graph_gated_vault_expands_parent_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            project_path = write_node(
+                vault,
+                "projects",
+                "phase-3-memory-enhancement",
+                "node_type: sprockets/project\n"
+                "title: Phase 3 - Memory Enhancement\n",
+            )
+            task_path = write_node(
+                vault,
+                "tasks",
+                "write-retrieval-trace-notes",
+                "node_type: sprockets/task\n"
+                "title: Write retrieval trace notes\n"
+                "parent: [[phase-3-memory-enhancement]]\n",
+            )
+            project = RetrievalNode(
+                node_id="projects/phase-3-memory-enhancement",
+                title="Phase 3 - Memory Enhancement",
+                node_type="sprockets/project",
+                path=project_path,
+            )
+            task = RetrievalNode(
+                node_id="tasks/write-retrieval-trace-notes",
+                title="Write retrieval trace notes",
+                node_type="sprockets/task",
+                path=task_path,
+                parent_slugs=("phase-3-memory-enhancement",),
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.embed_text") as mock_embed_text:
+                    mock_build_index.return_value = (
+                        embeddings.EmbeddedNode(node=task, vector=(1.0, 0.0)),
+                    )
+                    mock_embed_text.return_value = [1.0, 0.0]
+
+                    retriever = build_experimental_retriever(
+                        "memory-embedding-graph-gated-vault",
+                        vault,
+                    )
+                    results = list(retriever.retrieve("retrieval trace notes"))
+                    trace = retriever.trace("retrieval trace notes")
+
+        self.assertEqual(retriever.name, "memory-embedding-graph-gated-vault")
+        self.assertEqual(results[0].node_id, "tasks/write-retrieval-trace-notes")
+        self.assertIn("projects/phase-3-memory-enhancement", [node.node_id for node in results])
+        self.assertIn("graph expansion applied", trace.notes)
+        self.assertIn(
+            "projects/phase-3-memory-enhancement graph=parent of tasks/write-retrieval-trace-notes",
+            trace.result_summaries,
+        )
+
+    def test_memory_embedding_graph_gated_vault_still_withholds_low_confidence_results(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            project_path = write_node(
+                vault,
+                "projects",
+                "phase-3-memory-enhancement",
+                "node_type: sprockets/project\n"
+                "title: Phase 3 - Memory Enhancement\n",
+            )
+            note_path = write_node(
+                vault,
+                "notes",
+                "unanchored-note",
+                "node_type: sprockets/note\n"
+                "title: Unanchored note\n",
+            )
+            project = RetrievalNode(
+                node_id="projects/phase-3-memory-enhancement",
+                title="Phase 3 - Memory Enhancement",
+                node_type="sprockets/project",
+                path=project_path,
+            )
+            note = RetrievalNode(
+                node_id="notes/unanchored-note",
+                title="Unanchored note",
+                node_type="sprockets/note",
+                path=note_path,
+            )
+
+            with patch("embeddings.build_embedding_index") as mock_build_index:
+                with patch("embeddings.embed_text") as mock_embed_text:
+                    mock_build_index.return_value = (
+                        embeddings.EmbeddedNode(node=project, vector=(1.0, 0.0)),
+                        embeddings.EmbeddedNode(node=note, vector=(0.99, 0.01)),
+                    )
+                    mock_embed_text.return_value = [1.0, 0.0]
+
+                    retriever = build_experimental_retriever(
+                        "memory-embedding-graph-gated-vault",
+                        vault,
+                    )
+                    results = list(retriever.retrieve("What deserves attention next?"))
+                    trace = retriever.trace("What deserves attention next?")
+
+        self.assertEqual(results, [])
+        self.assertEqual(trace.result_ids, ())
+        self.assertIn("confidence gate withheld low-confidence results", trace.notes)
+        self.assertNotIn("graph expansion applied", trace.notes)
+
+    def test_top_memory_graph_expansion_preserves_direct_hits_before_siblings(self):
+        project = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+        )
+        seed_task = RetrievalNode(
+            node_id="tasks/write-retrieval-trace-notes",
+            title="Write retrieval trace notes",
+            node_type="sprockets/task",
+            path=Path("write-retrieval-trace-notes.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+        direct_project = RetrievalNode(
+            node_id="projects/learn-how-to-bring-a-project-to-production",
+            title="Learn how to bring a project to production",
+            node_type="sprockets/project",
+            path=Path("learn-how-to-bring-a-project-to-production.md"),
+        )
+        direct_note = RetrievalNode(
+            node_id="notes/idea-build-a-weekly-review-template",
+            title="Idea: build a weekly review template",
+            node_type="sprockets/note",
+            path=Path("idea-build-a-weekly-review-template.md"),
+        )
+        sibling_task = RetrievalNode(
+            node_id="tasks/review-stage-19-trace-reporting",
+            title="Review Stage 19 trace reporting",
+            node_type="sprockets/task",
+            path=Path("review-stage-19-trace-reporting.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+
+        expanded, reasons = expand_top_memory_result_graph(
+            [seed_task, direct_project, direct_note],
+            (project, seed_task, direct_project, direct_note, sibling_task),
+            limit=4,
+        )
+
+        self.assertEqual(
+            [node.node_id for node in expanded],
+            [
+                "tasks/write-retrieval-trace-notes",
+                "projects/phase-3-memory-enhancement",
+                "projects/learn-how-to-bring-a-project-to-production",
+                "notes/idea-build-a-weekly-review-template",
+            ],
+        )
+        self.assertEqual(
+            reasons["projects/phase-3-memory-enhancement"],
+            "parent of tasks/write-retrieval-trace-notes",
+        )
+        self.assertNotIn("tasks/review-stage-19-trace-reporting", reasons)
 
 
 if __name__ == "__main__":

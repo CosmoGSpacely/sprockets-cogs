@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import date, datetime
 
 from retrieval_strategies import (
+    expand_retrieval_neighbors_with_reasons,
     query_preferred_node_types,
     semantic_query_hints,
 )
@@ -19,6 +20,7 @@ def build_memory_index_retriever(
     nodes: tuple[RetrievalNode, ...],
     use_embeddings: bool = False,
     gate_low_confidence: bool = False,
+    expand_graph: bool = False,
 ) -> tuple[Retriever, Callable[[str], object]]:
     """Build an in-memory benchmark retriever backed by MemoryIndex."""
 
@@ -78,7 +80,15 @@ def build_memory_index_retriever(
             return list(recent_daily_nodes[:memory_query.limit])
         if gate_low_confidence and confidence_gate_blocks(retrieval_trace):
             return []
-        return [by_id[result.node_id] for result in results if result.node_id in by_id]
+        result_nodes = [by_id[result.node_id] for result in results if result.node_id in by_id]
+        if expand_graph:
+            expanded_nodes, _reasons = expand_top_memory_result_graph(
+                result_nodes,
+                nodes,
+                limit=memory_query.limit,
+            )
+            return expanded_nodes
+        return result_nodes
 
     def trace(query: str) -> object:
         results, retrieval_trace, memory_query = query_memory(query)
@@ -100,11 +110,28 @@ def build_memory_index_retriever(
                     reasons=("daily recency fallback",),
                 ),
             )
+            return retrieval_trace
         if gate_low_confidence and confidence_gate_blocks(retrieval_trace):
             return replace(
                 retrieval_trace,
                 result_ids=(),
                 notes=retrieval_trace.notes + ("confidence gate withheld low-confidence results",),
+            )
+        if expand_graph:
+            result_nodes = [by_id[result.node_id] for result in results if result.node_id in by_id]
+            expanded_nodes, reasons = expand_top_memory_result_graph(
+                result_nodes,
+                nodes,
+                limit=memory_query.limit,
+            )
+            return replace(
+                retrieval_trace,
+                result_ids=tuple(node.node_id for node in expanded_nodes),
+                notes=retrieval_trace.notes + ("graph expansion applied",),
+                result_summaries=tuple(
+                    f"{node.node_id} graph={reasons.get(node.node_id, 'direct')}"
+                    for node in expanded_nodes
+                ),
             )
         return retrieval_trace
 
@@ -141,6 +168,52 @@ def build_memory_index_retriever(
         return results, retrieval_trace, memory_query
 
     return retrieve, trace
+
+
+def expand_top_memory_result_graph(
+    result_nodes: list[RetrievalNode],
+    all_nodes: tuple[RetrievalNode, ...],
+    limit: int,
+) -> tuple[list[RetrievalNode], dict[str, str]]:
+    """Expand graph context around the strongest memory result, preserving direct hits."""
+
+    if limit < 1 or not result_nodes:
+        return [], {}
+
+    expanded_nodes, reasons = expand_retrieval_neighbors_with_reasons(
+        result_nodes[:1],
+        all_nodes,
+        limit=limit,
+    )
+
+    ordered: list[RetrievalNode] = []
+    seen: set[str] = set()
+
+    def add(node: RetrievalNode, reason: str) -> None:
+        if len(ordered) >= limit or node.node_id in seen:
+            return
+        ordered.append(node)
+        reasons[node.node_id] = reason
+        seen.add(node.node_id)
+
+    add(result_nodes[0], "direct")
+    preferred_graph_nodes = [
+        node
+        for node in expanded_nodes[1:]
+        if reasons.get(node.node_id, "").startswith(("parent of ", "title mention in "))
+    ]
+    delayed_graph_nodes = [
+        node
+        for node in expanded_nodes[1:]
+        if node not in preferred_graph_nodes
+    ]
+    for node in preferred_graph_nodes:
+        add(node, reasons[node.node_id])
+    for node in result_nodes[1:]:
+        add(node, "direct")
+    for node in delayed_graph_nodes:
+        add(node, reasons[node.node_id])
+    return ordered, {node.node_id: reasons[node.node_id] for node in ordered}
 
 
 def confidence_gate_blocks(trace: object) -> bool:

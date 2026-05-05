@@ -255,6 +255,7 @@ def select_cases(case_set: str, retriever_name: str) -> tuple[RetrievalCase, ...
         "memory-vault",
         "memory-embedding-vault",
         "memory-embedding-gated-vault",
+        "memory-embedding-graph-gated-vault",
         "embedding-vault",
         "hybrid-vault",
         "hybrid-graph-vault",
