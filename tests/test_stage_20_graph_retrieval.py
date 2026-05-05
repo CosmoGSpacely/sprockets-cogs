@@ -1,7 +1,11 @@
 import unittest
 from pathlib import Path
 
-from retrieval_strategies import expand_retrieval_neighbors
+from retrieval_strategies import (
+    expand_retrieval_neighbors,
+    expand_retrieval_neighbors_with_reasons,
+    hybrid_retrieve_with_trace,
+)
 from retrieval_types import RetrievalNode
 
 
@@ -130,6 +134,90 @@ class Stage20GraphRetrievalTests(unittest.TestCase):
                 "tasks/add-retrieval-traces",
                 "projects/phase-3-memory-enhancement",
             ],
+        )
+
+    def test_graph_expansion_reports_compact_reasons(self):
+        project = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+        )
+        seed_task = RetrievalNode(
+            node_id="tasks/add-retrieval-traces",
+            title="Add retrieval traces",
+            node_type="sprockets/task",
+            path=Path("add-retrieval-traces.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+        sibling_note = RetrievalNode(
+            node_id="notes/phase-3-memory-notes",
+            title="Phase 3 memory notes",
+            node_type="sprockets/note",
+            path=Path("phase-3-memory-notes.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+
+        expanded, reasons = expand_retrieval_neighbors_with_reasons(
+            (seed_task,),
+            (project, seed_task, sibling_note),
+            limit=3,
+        )
+
+        self.assertEqual(
+            [node.node_id for node in expanded],
+            [
+                "tasks/add-retrieval-traces",
+                "projects/phase-3-memory-enhancement",
+                "notes/phase-3-memory-notes",
+            ],
+        )
+        self.assertEqual(reasons["tasks/add-retrieval-traces"], "direct")
+        self.assertEqual(
+            reasons["projects/phase-3-memory-enhancement"],
+            "parent of tasks/add-retrieval-traces",
+        )
+        self.assertEqual(
+            reasons["notes/phase-3-memory-notes"],
+            "sibling of tasks/add-retrieval-traces via phase-3-memory-enhancement",
+        )
+
+    def test_hybrid_graph_trace_explains_graph_results(self):
+        project = RetrievalNode(
+            node_id="projects/phase-3-memory-enhancement",
+            title="Phase 3 - Memory Enhancement",
+            node_type="sprockets/project",
+            path=Path("phase-3-memory-enhancement.md"),
+        )
+        task = RetrievalNode(
+            node_id="tasks/add-retrieval-traces",
+            title="Add retrieval traces",
+            node_type="sprockets/task",
+            path=Path("add-retrieval-traces.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+        note = RetrievalNode(
+            node_id="notes/phase-3-memory-notes",
+            title="Phase 3 memory notes",
+            node_type="sprockets/note",
+            path=Path("phase-3-memory-notes.md"),
+            parent_slugs=("phase-3-memory-enhancement",),
+        )
+
+        results, trace = hybrid_retrieve_with_trace(
+            "retrieval traces",
+            (project, task, note),
+            lambda _query: [task],
+            expand_graph=True,
+            retriever_name="hybrid-graph-vault",
+        )
+
+        self.assertEqual(trace.retriever_name, "hybrid-graph-vault")
+        self.assertEqual(trace.result_ids, tuple(node.node_id for node in results))
+        self.assertIn("graph expansion applied", trace.notes)
+        self.assertIn(
+            "projects/phase-3-memory-enhancement graph=parent of tasks/add-retrieval-traces",
+            trace.result_summaries,
         )
 
 

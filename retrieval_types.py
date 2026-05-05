@@ -39,3 +39,14 @@ class SemanticQueryHint:
     @property
     def expansion_text(self) -> str:
         return " ".join(self.expansion_terms)
+
+
+@dataclass(frozen=True)
+class GraphRetrievalTrace:
+    """Compact trace for benchmark graph-expanded retrieval results."""
+
+    query: str
+    retriever_name: str
+    result_ids: tuple[str, ...]
+    notes: tuple[str, ...] = ()
+    result_summaries: tuple[str, ...] = ()

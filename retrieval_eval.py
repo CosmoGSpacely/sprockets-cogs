@@ -22,6 +22,7 @@ from retrieval_strategies import (
     expand_retrieval_neighbors,
     filter_by_query_intent,
     hybrid_retrieve,
+    hybrid_retrieve_with_trace,
     lexical_retrieve,
     semantic_query_hints as _semantic_query_hints,
 )
@@ -228,22 +229,32 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
 
         if name == "embedding-vault":
             retriever = lambda query: retrieve_by_embedding(query, index)
+            trace_provider = None
         else:
-            retriever = lambda query: hybrid_retrieve(
-                query,
-                scan_nodes,
-                lambda embedding_query: retrieve_by_embedding(embedding_query, index),
-                expand_graph=name in {
-                    "hybrid-graph-vault",
-                    "hybrid-graph-intent-vault",
-                },
-                apply_intent_filter=name == "hybrid-graph-intent-vault",
-            )
+            expand_graph = name in {
+                "hybrid-graph-vault",
+                "hybrid-graph-intent-vault",
+            }
+            apply_intent_filter = name == "hybrid-graph-intent-vault"
+
+            def hybrid_result_and_trace(query: str) -> tuple[list[RetrievalNode], object]:
+                return hybrid_retrieve_with_trace(
+                    query,
+                    scan_nodes,
+                    lambda embedding_query: retrieve_by_embedding(embedding_query, index),
+                    expand_graph=expand_graph,
+                    apply_intent_filter=apply_intent_filter,
+                    retriever_name=name,
+                )
+
+            retriever = lambda query: hybrid_result_and_trace(query)[0]
+            trace_provider = lambda query: hybrid_result_and_trace(query)[1]
 
         return ExperimentalRetriever(
             name=name,
             nodes=scan_nodes,
             retriever=retriever,
+            trace_provider=trace_provider,
         )
 
     if name == "current":
