@@ -353,21 +353,21 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
 
     def test_apply_memory_parent_hints_ignores_non_hierarchy_top_result(self):
         contact = RetrievalNode(
-            node_id="contacts/tom-reilly",
-            title="Tom Reilly",
+            node_id="contacts/taylor-reed",
+            title="Taylor Reed",
             node_type="sprockets/contact",
-            path=Path("/vault/Sprockets/contacts/tom-reilly.md"),
+            path=Path("/vault/Sprockets/contacts/taylor-reed.md"),
         )
         classified = [
             {
                 "node_type": "sprockets/task",
-                "title": "Call Tom",
+                "title": "Call Taylor",
                 "confidence": "high",
             }
         ]
 
         with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[contact]):
-            result = agentic_loop.apply_memory_parent_hints("call Tom", classified)
+            result = agentic_loop.apply_memory_parent_hints("call Taylor", classified)
 
         self.assertNotIn("parent_hint", result[0])
 
@@ -444,14 +444,14 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
 
     def test_memory_parent_title_ignores_non_hierarchy_top_result(self):
         contact = RetrievalNode(
-            node_id="contacts/tom-reilly",
-            title="Tom Reilly",
+            node_id="contacts/taylor-reed",
+            title="Taylor Reed",
             node_type="sprockets/contact",
-            path=Path("/vault/Sprockets/contacts/tom-reilly.md"),
+            path=Path("/vault/Sprockets/contacts/taylor-reed.md"),
         )
 
         with patch.object(agentic_loop, "retrieve_relevant_nodes", return_value=[contact]):
-            title = agentic_loop.memory_parent_title("call Tom")
+            title = agentic_loop.memory_parent_title("call Taylor")
 
         self.assertEqual(title, "")
 

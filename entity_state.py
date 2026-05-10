@@ -16,7 +16,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-SC_ROOT = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", "/home/cosmo/sc"))
+SC_ROOT = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", str(Path.home() / "sc")))
 STATE_PATH = Path(
     os.environ.get("SPROCKETS_COGS_ENTITY_STATE_PATH", str(SC_ROOT / "entity_state.json"))
 )

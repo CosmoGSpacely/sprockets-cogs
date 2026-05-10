@@ -20,7 +20,7 @@ import frontmatter
 from vault import CogsBlock, append_cogs_item_text, mark_block_state, parse_cogs_blocks
 
 
-VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", "/home/cosmo/vault"))
+VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(Path.home() / "vault")))
 DAILY_DIR = VAULT_DIR / "Cogs" / "daily"
 
 

@@ -11,17 +11,17 @@ def stage_15_fixture_nodes() -> tuple[RetrievalNode, ...]:
 
     return (
         RetrievalNode(
-            node_id="contacts/jordan-mack",
-            title="Jordan Mack",
+            node_id="contacts/alex-rivera",
+            title="Alex Rivera",
             node_type="sprockets/contact",
-            path=Path("contacts/jordan-mack.md"),
+            path=Path("contacts/alex-rivera.md"),
             text="Proposal follow-up contact for current product feedback.",
         ),
         RetrievalNode(
-            node_id="contacts/jordan-lee",
-            title="Jordan Lee",
+            node_id="contacts/alex-lee",
+            title="Alex Lee",
             node_type="sprockets/contact",
-            path=Path("contacts/jordan-lee.md"),
+            path=Path("contacts/alex-lee.md"),
             text="Unrelated contact for legal filings.",
         ),
         RetrievalNode(
@@ -114,9 +114,9 @@ def stage_15_cases() -> tuple[RetrievalCase, ...]:
         RetrievalCase(
             name="named-contact-followup",
             category="named_entity",
-            query="Remind me to ask Jordan about the proposal follow-up.",
-            expected_ids=frozenset({"contacts/jordan-mack"}),
-            avoid_ids=frozenset({"contacts/jordan-lee"}),
+            query="Remind me to ask Alex about the proposal follow-up.",
+            expected_ids=frozenset({"contacts/alex-rivera"}),
+            avoid_ids=frozenset({"contacts/alex-lee"}),
             reason="Named people must retrieve the right contact without grabbing a similarly named contact.",
         ),
         RetrievalCase(
@@ -179,10 +179,10 @@ def stage_15_real_vault_cases() -> tuple[RetrievalCase, ...]:
         RetrievalCase(
             name="named-contact-followup",
             category="named_entity",
-            query="Call Tom Reilly at GlobalTech about the invoice.",
+            query="Call Taylor Reed at ExampleCorp about the invoice.",
             expected_ids=frozenset({
-                "contacts/tom-reilly",
-                "entities/globaltech",
+                "contacts/taylor-reed",
+                "entities/examplecorp",
             }),
             avoid_ids=frozenset({
                 "contacts/sandra-cho",

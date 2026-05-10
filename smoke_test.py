@@ -30,24 +30,24 @@ def main() -> int:
             "---\n"
             "session_id: smoke-test\n"
             "---\n\n"
-            "Call Jordan about the proposal today.\n"
+            "Call Alex about the proposal today.\n"
         )
 
         raw_nodes = [
-            {"raw": "Call Jordan about the proposal today", "type_hint": "task"},
-            {"raw": "Jordan", "type_hint": "contact"},
+            {"raw": "Call Alex about the proposal today", "type_hint": "task"},
+            {"raw": "Alex", "type_hint": "contact"},
         ]
         classified = [
             {
                 "node_type": "sprockets/task",
-                "title": "Call Jordan about the proposal",
+                "title": "Call Alex about the proposal",
                 "date": "2026-05-02",
                 "status": "active",
                 "confidence": "high",
             },
             {
                 "node_type": "sprockets/contact",
-                "title": "Jordan",
+                "title": "Alex",
                 "confidence": "high",
             },
         ]
@@ -58,8 +58,8 @@ def main() -> int:
 
         expected_paths = [
             agentic_loop.ARCHIVE_DIR / "smoke.input",
-            vault_dir / "Sprockets" / "tasks" / "call-jordan-about-the-proposal.md",
-            vault_dir / "Sprockets" / "contacts" / "jordan.md",
+            vault_dir / "Sprockets" / "tasks" / "call-alex-about-the-proposal.md",
+            vault_dir / "Sprockets" / "contacts" / "alex.md",
             vault_dir / "Cogs" / "daily" / "Sat 02 May 2026.md",
             sc_root / "entity_state.json",
         ]

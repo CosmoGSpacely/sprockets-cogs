@@ -124,19 +124,19 @@ class Stage16EmbeddingTests(unittest.TestCase):
 
     def test_node_embedding_text_omits_empty_optional_fields(self):
         node = RetrievalNode(
-            node_id="contacts/jordan-mack",
-            title="Jordan Mack",
+            node_id="contacts/alex-rivera",
+            title="Alex Rivera",
             node_type="sprockets/contact",
-            path="jordan-mack.md",
+            path="alex-rivera.md",
         )
 
         text = embeddings.node_embedding_text(node)
 
         self.assertEqual(
             text,
-            "id: contacts/jordan-mack\n"
+            "id: contacts/alex-rivera\n"
             "type: sprockets/contact\n"
-            "title: Jordan Mack",
+            "title: Alex Rivera",
         )
 
     @patch("embeddings.embed_text")
@@ -171,10 +171,10 @@ class Stage16EmbeddingTests(unittest.TestCase):
                 path="phase-3-memory-enhancement.md",
             ),
             RetrievalNode(
-                node_id="contacts/jordan-mack",
-                title="Jordan Mack",
+                node_id="contacts/alex-rivera",
+                title="Alex Rivera",
                 node_type="sprockets/contact",
-                path="jordan-mack.md",
+                path="alex-rivera.md",
             ),
         ]
         mock_embed_text.side_effect = [[1, 0], [0, 1]]
@@ -183,7 +183,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
 
         self.assertEqual([item.node.node_id for item in index], [
             "projects/phase-3-memory-enhancement",
-            "contacts/jordan-mack",
+            "contacts/alex-rivera",
         ])
         self.assertEqual(index[0].vector, (1.0, 0.0))
         self.assertEqual(index[1].vector, (0.0, 1.0))
@@ -194,9 +194,9 @@ class Stage16EmbeddingTests(unittest.TestCase):
             model="test-embed-model",
         )
         mock_embed_text.assert_any_call(
-            "id: contacts/jordan-mack\n"
+            "id: contacts/alex-rivera\n"
             "type: sprockets/contact\n"
-            "title: Jordan Mack",
+            "title: Alex Rivera",
             model="test-embed-model",
         )
 
@@ -272,10 +272,10 @@ class Stage16EmbeddingTests(unittest.TestCase):
             path="phase-3-memory-enhancement.md",
         )
         contact = RetrievalNode(
-            node_id="contacts/jordan-mack",
-            title="Jordan Mack",
+            node_id="contacts/alex-rivera",
+            title="Alex Rivera",
             node_type="sprockets/contact",
-            path="jordan-mack.md",
+            path="alex-rivera.md",
         )
         index = (
             embeddings.EmbeddedNode(node=contact, vector=(0.0, 1.0)),

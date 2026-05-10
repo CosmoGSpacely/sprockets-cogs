@@ -44,9 +44,9 @@ CASES = [
         name="relative-date-task",
         reason="retry failed: cogs/daily: date must be YYYY-MM-DD",
         context="Already in today's note: (none)",
-        raw_nodes=[{"raw": "call Jordan next Thursday", "type_hint": "task"}],
+        raw_nodes=[{"raw": "call Alex next Thursday", "type_hint": "task"}],
         expected_node_types=["sprockets/task", "cogs/daily"],
-        required_text=["Jordan"],
+        required_text=["Alex"],
     ),
     FallbackEvalCase(
         name="specific-two-day-setting",

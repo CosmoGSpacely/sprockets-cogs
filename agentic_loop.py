@@ -41,12 +41,15 @@ DEFAULT_MODEL = "qwen3.5:9b-32k-cosmo"
 MODEL = os.environ.get("SPROCKETS_COGS_MODEL", DEFAULT_MODEL)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-SC_ROOT        = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", "/home/cosmo/sc"))
+DEFAULT_SC_ROOT = Path.home() / "sc"
+DEFAULT_VAULT_DIR = Path.home() / "vault"
+
+SC_ROOT        = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", str(DEFAULT_SC_ROOT)))
 INPUT_DIR      = Path(os.environ.get("SPROCKETS_COGS_INPUT_DIR", str(SC_ROOT / "input")))
 PROCESSING_DIR = Path(os.environ.get("SPROCKETS_COGS_PROCESSING_DIR", str(SC_ROOT / "processing")))
 ARCHIVE_DIR    = Path(os.environ.get("SPROCKETS_COGS_ARCHIVE_DIR", str(SC_ROOT / "archive")))
 OUTPUT_DIR     = Path(os.environ.get("SPROCKETS_COGS_OUTPUT_DIR", str(SC_ROOT / "output")))
-VAULT_DIR      = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", "/home/cosmo/vault"))
+VAULT_DIR      = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(DEFAULT_VAULT_DIR)))
 MEMORY_TRACE_PATH_ENV = "SPROCKETS_COGS_MEMORY_TRACE_PATH"
 MEMORY_TRACE_FILENAME = "memory-parent-traces.jsonl"
 

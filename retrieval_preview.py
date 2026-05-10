@@ -22,7 +22,7 @@ from production_retrieval import (
 from retrieval_eval import RetrievalNode, build_experimental_retriever
 
 
-DEFAULT_VAULT_DIR = Path("/home/cosmo/vault")
+DEFAULT_VAULT_DIR = Path.home() / "vault"
 DEFAULT_RETRIEVER = "memory-embedding-gated-vault"
 
 
@@ -293,7 +293,7 @@ def main() -> None:
         "--vault-dir",
         type=Path,
         default=DEFAULT_VAULT_DIR,
-        help="Vault directory. Defaults to /home/cosmo/vault.",
+        help="Vault directory. Defaults to ~/vault.",
     )
     parser.add_argument(
         "--retriever",

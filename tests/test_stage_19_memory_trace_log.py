@@ -39,7 +39,7 @@ class Stage19MemoryTraceLogTests(unittest.TestCase):
 
     def test_memory_parent_trace_record_captures_skipped_parent(self):
         trace = MemoryParentTrace(
-            top_node_id="contacts/tom-reilly",
+            top_node_id="contacts/taylor-reed",
             top_node_type="sprockets/contact",
             retrieved_count=4,
         )
@@ -51,7 +51,7 @@ class Stage19MemoryTraceLogTests(unittest.TestCase):
 
         self.assertEqual(record.decision, "skipped")
         self.assertEqual(record.reason, "no hierarchy parent in retrieved nodes")
-        self.assertEqual(record.top_node_id, "contacts/tom-reilly")
+        self.assertEqual(record.top_node_id, "contacts/taylor-reed")
         self.assertEqual(record.top_node_type, "sprockets/contact")
         self.assertEqual(record.retrieved_count, 4)
         self.assertEqual(record.parent_title, "")
@@ -91,7 +91,7 @@ class Stage19MemoryTraceLogTests(unittest.TestCase):
                 "decision": "skipped",
                 "retrieved_count": 2,
                 "reason": "no hierarchy parent in retrieved nodes",
-                "top_node_id": "contacts/tom-reilly",
+                "top_node_id": "contacts/taylor-reed",
                 "top_node_type": "sprockets/contact",
             }),
         ]
@@ -100,7 +100,7 @@ class Stage19MemoryTraceLogTests(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].decision, "skipped")
-        self.assertEqual(records[0].top_node_id, "contacts/tom-reilly")
+        self.assertEqual(records[0].top_node_id, "contacts/taylor-reed")
 
     def test_format_memory_guard_jsonl_report_uses_durable_records(self):
         lines = [

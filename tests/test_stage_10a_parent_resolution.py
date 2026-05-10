@@ -114,14 +114,14 @@ class Stage10AParentResolutionTests(unittest.TestCase):
     def test_find_node_by_title_can_limit_parent_candidates_by_node_type(self):
         graph = nx.DiGraph()
         graph.add_node(
-            "jordan-mack",
-            title="Jordan Mack",
+            "alex-rivera",
+            title="Alex Rivera",
             uuid="contact-1",
             node_type="sprockets/contact",
         )
         graph.add_node(
             "jordan-project",
-            title="Jordan Project",
+            title="Alex Project",
             uuid="project-1",
             node_type="sprockets/project",
         )
@@ -129,7 +129,7 @@ class Stage10AParentResolutionTests(unittest.TestCase):
         self.assertEqual(
             vault_graph.find_node_by_title(
                 graph,
-                "Jordan",
+                "Alex",
                 allowed_node_types=vault_graph.HIERARCHY_PARENT_NODE_TYPES,
             ),
             ("jordan-project", "project-1"),
@@ -199,14 +199,14 @@ class Stage10AParentResolutionTests(unittest.TestCase):
     def test_resolve_parents_ignores_non_hierarchy_title_matches(self):
         node = validate_node({
             "node_type": "sprockets/task",
-            "title": "Call Jordan",
-            "parent_hint": "Jordan Mack",
+            "title": "Call Alex",
+            "parent_hint": "Alex Rivera",
             "confidence": "high",
         })
         graph = nx.DiGraph()
         graph.add_node(
-            "jordan-mack",
-            title="Jordan Mack",
+            "alex-rivera",
+            title="Alex Rivera",
             uuid="contact-1",
             node_type="sprockets/contact",
         )
@@ -240,7 +240,7 @@ class Stage10AParentResolutionTests(unittest.TestCase):
     def test_resolve_parents_leaves_unmatched_hint_unlinked(self):
         node = validate_node({
             "node_type": "sprockets/task",
-            "title": "Call Jordan",
+            "title": "Call Alex",
             "parent_hint": "Does Not Exist",
             "confidence": "high",
         })
@@ -255,7 +255,7 @@ class Stage10AParentResolutionTests(unittest.TestCase):
     def test_resolve_parents_is_noop_when_graph_is_empty(self):
         node = validate_node({
             "node_type": "sprockets/task",
-            "title": "Call Jordan",
+            "title": "Call Alex",
             "parent_hint": "Known Project",
             "confidence": "high",
         })
