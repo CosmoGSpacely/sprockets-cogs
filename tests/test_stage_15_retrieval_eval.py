@@ -39,31 +39,31 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
     def test_evaluate_retriever_passes_when_expected_ids_are_returned(self):
         case = RetrievalCase(
             name="contact",
-            query="Ask Jordan about the proposal.",
-            expected_ids=frozenset({"contacts/jordan-mack"}),
-            avoid_ids=frozenset({"contacts/jordan-lee"}),
+            query="Ask Alex about the proposal.",
+            expected_ids=frozenset({"contacts/alex-rivera"}),
+            avoid_ids=frozenset({"contacts/alex-lee"}),
         )
 
-        result = evaluate_retriever([case], lambda _query: ["contacts/jordan-mack"])
+        result = evaluate_retriever([case], lambda _query: ["contacts/alex-rivera"])
 
         self.assertTrue(result.passed)
         self.assertEqual(result.passed_count, 1)
         self.assertEqual(result.total_count, 1)
-        self.assertEqual(result.results[0].retrieved_ids, ("contacts/jordan-mack",))
+        self.assertEqual(result.results[0].retrieved_ids, ("contacts/alex-rivera",))
 
     def test_evaluate_retriever_flags_missing_and_forbidden_ids(self):
         case = RetrievalCase(
             name="ambiguous-contact",
-            query="Ask Jordan about the proposal.",
-            expected_ids=frozenset({"contacts/jordan-mack"}),
-            avoid_ids=frozenset({"contacts/jordan-lee"}),
+            query="Ask Alex about the proposal.",
+            expected_ids=frozenset({"contacts/alex-rivera"}),
+            avoid_ids=frozenset({"contacts/alex-lee"}),
         )
 
-        result = evaluate_retriever([case], lambda _query: ["contacts/jordan-lee"])
+        result = evaluate_retriever([case], lambda _query: ["contacts/alex-lee"])
 
         self.assertFalse(result.passed)
-        self.assertEqual(result.results[0].missing_ids, frozenset({"contacts/jordan-mack"}))
-        self.assertEqual(result.results[0].forbidden_ids, frozenset({"contacts/jordan-lee"}))
+        self.assertEqual(result.results[0].missing_ids, frozenset({"contacts/alex-rivera"}))
+        self.assertEqual(result.results[0].forbidden_ids, frozenset({"contacts/alex-lee"}))
 
     def test_evaluate_retriever_accepts_retrieval_nodes_and_deduplicates_ids(self):
         case = RetrievalCase(
@@ -351,10 +351,10 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             path=Path("learn-how-to-bring-a-project-to-production.md"),
         )
         contact = RetrievalNode(
-            node_id="contacts/tom-reilly",
-            title="Tom Reilly",
+            node_id="contacts/taylor-reed",
+            title="Taylor Reed",
             node_type="sprockets/contact",
-            path=Path("tom-reilly.md"),
+            path=Path("taylor-reed.md"),
         )
 
         results = hybrid_retrieve(
@@ -367,7 +367,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertEqual([node.node_id for node in results], [
             "projects/learn-how-to-bring-a-project-to-production",
             "projects/phase-3-memory-enhancement",
-            "contacts/tom-reilly",
+            "contacts/taylor-reed",
         ])
 
     def test_hybrid_retriever_returns_empty_for_non_positive_limit(self):
@@ -397,22 +397,22 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             parent_slugs=("build-sprockets-cogs",),
         )
         task = RetrievalNode(
-            node_id="tasks/call-tom-reilly-at-globaltech-about-the-invoice",
-            title="Call Tom Reilly at GlobalTech about the invoice",
+            node_id="tasks/call-taylor-reed-at-examplecorp-about-the-invoice",
+            title="Call Taylor Reed at ExampleCorp about the invoice",
             node_type="sprockets/task",
-            path=Path("call-tom-reilly-at-globaltech-about-the-invoice.md"),
+            path=Path("call-taylor-reed-at-examplecorp-about-the-invoice.md"),
         )
         contact = RetrievalNode(
-            node_id="contacts/tom-reilly",
-            title="Tom Reilly",
+            node_id="contacts/taylor-reed",
+            title="Taylor Reed",
             node_type="sprockets/contact",
-            path=Path("tom-reilly.md"),
+            path=Path("taylor-reed.md"),
         )
         entity = RetrievalNode(
-            node_id="entities/globaltech",
-            title="GlobalTech",
+            node_id="entities/examplecorp",
+            title="ExampleCorp",
             node_type="sprockets/entity",
-            path=Path("globaltech.md"),
+            path=Path("examplecorp.md"),
         )
 
         expanded = expand_retrieval_neighbors(
@@ -422,44 +422,44 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         )
 
         self.assertEqual([node.node_id for node in expanded], [
-            "tasks/call-tom-reilly-at-globaltech-about-the-invoice",
-            "contacts/tom-reilly",
-            "entities/globaltech",
+            "tasks/call-taylor-reed-at-examplecorp-about-the-invoice",
+            "contacts/taylor-reed",
+            "entities/examplecorp",
             "projects/phase-3-memory-enhancement",
             "goals/build-sprockets-cogs",
         ])
 
     def test_hybrid_retriever_can_expand_graph_neighbors(self):
         task = RetrievalNode(
-            node_id="tasks/call-tom-reilly-at-globaltech-about-the-invoice",
-            title="Call Tom Reilly at GlobalTech about the invoice",
+            node_id="tasks/call-taylor-reed-at-examplecorp-about-the-invoice",
+            title="Call Taylor Reed at ExampleCorp about the invoice",
             node_type="sprockets/task",
-            path=Path("call-tom-reilly-at-globaltech-about-the-invoice.md"),
+            path=Path("call-taylor-reed-at-examplecorp-about-the-invoice.md"),
         )
         contact = RetrievalNode(
-            node_id="contacts/tom-reilly",
-            title="Tom Reilly",
+            node_id="contacts/taylor-reed",
+            title="Taylor Reed",
             node_type="sprockets/contact",
-            path=Path("tom-reilly.md"),
+            path=Path("taylor-reed.md"),
         )
         entity = RetrievalNode(
-            node_id="entities/globaltech",
-            title="GlobalTech",
+            node_id="entities/examplecorp",
+            title="ExampleCorp",
             node_type="sprockets/entity",
-            path=Path("globaltech.md"),
+            path=Path("examplecorp.md"),
         )
 
         results = hybrid_retrieve(
-            "Tom invoice",
+            "Taylor invoice",
             (task, contact, entity),
             lambda _query: [task],
             expand_graph=True,
         )
 
         self.assertEqual([node.node_id for node in results], [
-            "tasks/call-tom-reilly-at-globaltech-about-the-invoice",
-            "contacts/tom-reilly",
-            "entities/globaltech",
+            "tasks/call-taylor-reed-at-examplecorp-about-the-invoice",
+            "contacts/taylor-reed",
+            "entities/examplecorp",
         ])
 
     def test_filter_by_query_intent_prefers_notes_for_reflection_queries(self):
@@ -553,7 +553,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
     def test_build_experimental_retriever_builds_lexical_fixture_interface(self):
         retriever = build_experimental_retriever("lexical-fixture", Path("/unused"))
 
-        results = list(retriever.retrieve("Ask Jordan about the proposal follow-up."))
+        results = list(retriever.retrieve("Ask Alex about the proposal follow-up."))
 
         self.assertEqual(retriever.name, "lexical-fixture")
         self.assertEqual(len(retriever.nodes), len(stage_15_fixture_nodes()))
@@ -870,9 +870,9 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             write_node(
                 vault,
                 "contacts",
-                "jordan-mack",
+                "alex-rivera",
                 "node_type: sprockets/contact\n"
-                "title: Jordan Mack\n",
+                "title: Alex Rivera\n",
                 "Proposal follow-up contact for current product feedback.",
             )
 
@@ -895,7 +895,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
         self.assertIn("- nodes: 1", printed)
         self.assertIn("- sprockets/contact: 1", printed)
         self.assertIn("Target inventory", printed)
-        self.assertIn("contacts/tom-reilly", printed)
+        self.assertIn("contacts/taylor-reed", printed)
 
     def test_cli_memory_vault_mode_uses_memory_index_without_production_wiring(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1119,23 +1119,23 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             write_node(
                 vault,
                 "tasks",
-                "call-tom-reilly-at-globaltech-about-the-invoice",
+                "call-taylor-reed-at-examplecorp-about-the-invoice",
                 "node_type: sprockets/task\n"
-                "title: Call Tom Reilly at GlobalTech about the invoice\n",
+                "title: Call Taylor Reed at ExampleCorp about the invoice\n",
             )
             write_node(
                 vault,
                 "contacts",
-                "tom-reilly",
+                "taylor-reed",
                 "node_type: sprockets/contact\n"
-                "title: Tom Reilly\n",
+                "title: Taylor Reed\n",
             )
             write_node(
                 vault,
                 "entities",
-                "globaltech",
+                "examplecorp",
                 "node_type: sprockets/entity\n"
-                "title: GlobalTech\n",
+                "title: ExampleCorp\n",
             )
 
             with patch("embeddings.build_embedding_index") as mock_build_index:
@@ -1143,10 +1143,10 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                     mock_build_index.return_value = ("embedded-index",)
                     mock_retrieve_by_embedding.return_value = [
                         RetrievalNode(
-                            node_id="tasks/call-tom-reilly-at-globaltech-about-the-invoice",
-                            title="Call Tom Reilly at GlobalTech about the invoice",
+                            node_id="tasks/call-taylor-reed-at-examplecorp-about-the-invoice",
+                            title="Call Taylor Reed at ExampleCorp about the invoice",
                             node_type="sprockets/task",
-                            path=vault / "Sprockets" / "tasks" / "call-tom-reilly-at-globaltech-about-the-invoice.md",
+                            path=vault / "Sprockets" / "tasks" / "call-taylor-reed-at-examplecorp-about-the-invoice.md",
                         )
                     ]
 

@@ -1,7 +1,7 @@
 # sprockets-cogs — Code Repository
 
 Agentic loop that processes natural-language inputs and writes Obsidian-compatible
-Markdown files to the vault at /home/cosmo/vault/.
+Markdown files to a configured vault directory.
 
 ## Files
 - `agentic_loop.py` — file watcher + processing pipeline
@@ -20,7 +20,7 @@ Markdown files to the vault at /home/cosmo/vault/.
 - `requirements.txt`— Python dependencies
 
 ## Operational data
-Lives in /home/cosmo/sc/ — not in this repo.
+Lives under the configured SC runtime directory — not in this repo.
 
 Runtime paths can be overridden for tests/dry-runs with environment variables:
 `SPROCKETS_COGS_SC_ROOT`, `SPROCKETS_COGS_INPUT_DIR`,

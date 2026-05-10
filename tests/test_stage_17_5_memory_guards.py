@@ -52,10 +52,10 @@ class Stage175MemoryGuardTests(unittest.TestCase):
 
     def test_top_hierarchy_parent_title_ignores_non_hierarchy_node(self):
         contact = RetrievalNode(
-            node_id="contacts/tom-reilly",
-            title="Tom Reilly",
+            node_id="contacts/taylor-reed",
+            title="Taylor Reed",
             node_type="sprockets/contact",
-            path=Path("tom-reilly.md"),
+            path=Path("taylor-reed.md"),
         )
 
         title = memory_guards.top_hierarchy_parent_title(
@@ -67,10 +67,10 @@ class Stage175MemoryGuardTests(unittest.TestCase):
 
     def test_memory_parent_trace_selects_first_hierarchy_after_non_hierarchy_top(self):
         contact = RetrievalNode(
-            node_id="contacts/tom-reilly",
-            title="Tom Reilly",
+            node_id="contacts/taylor-reed",
+            title="Taylor Reed",
             node_type="sprockets/contact",
-            path=Path("tom-reilly.md"),
+            path=Path("taylor-reed.md"),
         )
         project = RetrievalNode(
             node_id="projects/production",
@@ -86,7 +86,7 @@ class Stage175MemoryGuardTests(unittest.TestCase):
 
         self.assertTrue(trace.selected)
         self.assertEqual(trace.retrieved_count, 2)
-        self.assertEqual(trace.top_node_id, "contacts/tom-reilly")
+        self.assertEqual(trace.top_node_id, "contacts/taylor-reed")
         self.assertEqual(trace.top_node_type, "sprockets/contact")
         self.assertEqual(trace.parent_node_id, "projects/production")
         self.assertEqual(trace.parent_node_type, "sprockets/project")
@@ -95,10 +95,10 @@ class Stage175MemoryGuardTests(unittest.TestCase):
 
     def test_memory_parent_trace_records_no_hierarchy_result(self):
         contact = RetrievalNode(
-            node_id="contacts/tom-reilly",
-            title="Tom Reilly",
+            node_id="contacts/taylor-reed",
+            title="Taylor Reed",
             node_type="sprockets/contact",
-            path=Path("tom-reilly.md"),
+            path=Path("taylor-reed.md"),
         )
 
         trace = memory_guards.memory_parent_trace(
@@ -108,7 +108,7 @@ class Stage175MemoryGuardTests(unittest.TestCase):
 
         self.assertFalse(trace.selected)
         self.assertEqual(trace.retrieved_count, 1)
-        self.assertEqual(trace.top_node_id, "contacts/tom-reilly")
+        self.assertEqual(trace.top_node_id, "contacts/taylor-reed")
         self.assertEqual(trace.parent_title, "")
         self.assertEqual(trace.reason, "no hierarchy parent in retrieved nodes")
 

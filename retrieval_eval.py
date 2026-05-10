@@ -337,8 +337,8 @@ def main() -> None:
     parser.add_argument(
         "--vault-dir",
         type=Path,
-        default=Path("/home/cosmo/vault"),
-        help="Vault directory for vault-backed retrievers. Defaults to /home/cosmo/vault.",
+        default=Path.home() / "vault",
+        help="Vault directory for vault-backed retrievers. Defaults to ~/vault.",
     )
     parser.add_argument(
         "--case-set",

@@ -16,7 +16,7 @@ import frontmatter
 import networkx as nx
 from rapidfuzz import fuzz
 
-VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", "/home/cosmo/vault"))
+VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(Path.home() / "vault")))
 SPROCKETS_SUBDIRS = [
     "areas",
     "goals",

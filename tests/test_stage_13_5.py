@@ -104,7 +104,7 @@ class Stage135HardeningTests(unittest.TestCase):
             },
             {
                 "node_type": "sprockets/contact",
-                "title": "Jordan Mack",
+                "title": "Alex Rivera",
                 "confidence": "low",
             },
             {
@@ -126,7 +126,7 @@ class Stage135HardeningTests(unittest.TestCase):
         classified = [
             {
                 "node_type": "sprockets/task",
-                "title": "Send proposal to Jordan",
+                "title": "Send proposal to Alex",
                 "date": "2026-05-04",
                 "status": "active",
                 "confidence": "high",
@@ -138,7 +138,7 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertEqual(len(result), 2)
         companion = result[1]
         self.assertEqual(companion["node_type"], "cogs/daily")
-        self.assertEqual(companion["item_text"], "Send proposal to Jordan")
+        self.assertEqual(companion["item_text"], "Send proposal to Alex")
         self.assertEqual(companion["date"], "2026-05-04")
 
     def test_ensure_cogs_companions_strips_invalid_task_date(self):
@@ -146,7 +146,7 @@ class Stage135HardeningTests(unittest.TestCase):
             {
                 "node_type": "sprockets/task",
                 "title": "Review memory context",
-                "date": "2026-05-04Already in today's note: Call Jordan",
+                "date": "2026-05-04Already in today's note: Call Alex",
                 "status": "active",
                 "confidence": "high",
             }
@@ -158,11 +158,11 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertNotIn("date", result[0])
 
     def test_openai_fallback_routes_valid_candidates_to_review(self):
-        raw_nodes = [{"raw": "call Jordan", "type_hint": "task"}]
+        raw_nodes = [{"raw": "call Alex", "type_hint": "task"}]
         candidates = [
             {
                 "node_type": "sprockets/task",
-                "title": "Call Jordan",
+                "title": "Call Alex",
                 "date": "2026-05-02",
                 "status": "active",
                 "confidence": "high",
@@ -197,7 +197,7 @@ class Stage135HardeningTests(unittest.TestCase):
 
     def test_openai_fallback_user_message_marks_candidates_for_review(self):
         message = openai_fallback._fallback_user_message(
-            [{"raw": "Call Jordan", "type_hint": "task"}],
+            [{"raw": "Call Alex", "type_hint": "task"}],
             "Already in today's note: (none)",
             "confidence: low",
         )
@@ -205,7 +205,7 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertIn("Reason: confidence: low", message)
         self.assertIn("review candidate", message)
         self.assertIn("never leave item_text empty", message)
-        self.assertIn("Call Jordan", message)
+        self.assertIn("Call Alex", message)
 
     def test_openai_fallback_normalizes_daily_item_text_from_title(self):
         nodes = openai_fallback._normalize_fallback_nodes([
@@ -278,8 +278,8 @@ class Stage135HardeningTests(unittest.TestCase):
         candidates = [
             {
                 "node_type": "sprockets/task",
-                "title": "Call Jordan",
-                "item_text": "Call Jordan",
+                "title": "Call Alex",
+                "item_text": "Call Alex",
                 "date": "2026-05-07",
                 "status": "active",
                 "confidence": "high",
@@ -307,8 +307,8 @@ class Stage135HardeningTests(unittest.TestCase):
         candidates = [
             {
                 "node_type": "sprockets/task",
-                "title": "Call Jordan",
-                "item_text": "Call Jordan",
+                "title": "Call Alex",
+                "item_text": "Call Alex",
                 "date": "2026-05-07",
                 "status": "active",
                 "confidence": "high",
@@ -316,8 +316,8 @@ class Stage135HardeningTests(unittest.TestCase):
             },
             {
                 "node_type": "cogs/daily",
-                "title": "Call Jordan",
-                "item_text": "Call Jordan",
+                "title": "Call Alex",
+                "item_text": "Call Alex",
                 "date": "2026-05-07",
                 "status": "active",
                 "confidence": "high",
@@ -368,7 +368,7 @@ class Stage135HardeningTests(unittest.TestCase):
         with patch.object(agentic_loop, "openai_fallback_enabled", return_value=False), \
              patch.object(agentic_loop, "classify_nodes_with_openai_fallback") as fallback:
             routed = agentic_loop.route_openai_fallback_to_review(
-                [{"raw": "call Jordan", "type_hint": "task"}],
+                [{"raw": "call Alex", "type_hint": "task"}],
                 "",
                 "retry failed",
             )
@@ -386,13 +386,13 @@ class Stage135HardeningTests(unittest.TestCase):
             daily_dir = root / "daily"
             input_dir.mkdir()
             input_path = input_dir / "low.input"
-            input_path.write_text("---\nsession_id: low-test\n---\n\nCall Jordan.\n")
+            input_path.write_text("---\nsession_id: low-test\n---\n\nCall Alex.\n")
 
-            raw_nodes = [{"raw": "Call Jordan", "type_hint": "task"}]
+            raw_nodes = [{"raw": "Call Alex", "type_hint": "task"}]
             low_classified = [
                 {
                     "node_type": "sprockets/task",
-                    "title": "Call Jordan",
+                    "title": "Call Alex",
                     "date": "2026-05-02",
                     "status": "active",
                     "confidence": "low",
@@ -401,7 +401,7 @@ class Stage135HardeningTests(unittest.TestCase):
             fallback_classified = [
                 {
                     "node_type": "sprockets/task",
-                    "title": "Call Jordan",
+                    "title": "Call Alex",
                     "date": "2026-05-02",
                     "status": "active",
                     "confidence": "high",
@@ -464,7 +464,7 @@ class Stage135HardeningTests(unittest.TestCase):
             review_dir = Path(tmp)
             raw = {
                 "node_type": "cogs/daily",
-                "item_text": "Call Jordan",
+                "item_text": "Call Alex",
                 "date": "2026-05-02",
                 "confidence": "low",
             }
@@ -506,8 +506,8 @@ class Stage135HardeningTests(unittest.TestCase):
             review_dir = Path(tmp)
             raw = {
                 "node_type": "sprockets/task",
-                "title": "Call Jordan",
-                "item_text": "Call Jordan",
+                "title": "Call Alex",
+                "item_text": "Call Alex",
                 "date": "2026-05-02",
                 "confidence": "high",
             }
@@ -543,7 +543,7 @@ class Stage135HardeningTests(unittest.TestCase):
             state_path = Path(tmp) / "entity_state.json"
             node = validate_node({
                 "node_type": "sprockets/contact",
-                "title": "Jordan Mack",
+                "title": "Alex Rivera",
                 "confidence": "high",
             })
 
@@ -552,7 +552,7 @@ class Stage135HardeningTests(unittest.TestCase):
                 hot = entity_state.get_entities_by_tier("hot")
 
             self.assertEqual(len(hot), 1)
-            self.assertEqual(hot[0]["title"], "Jordan Mack")
+            self.assertEqual(hot[0]["title"], "Alex Rivera")
             self.assertEqual(hot[0]["node_type"], "sprockets/contact")
 
 

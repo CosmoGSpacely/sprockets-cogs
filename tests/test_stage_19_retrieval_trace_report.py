@@ -10,7 +10,7 @@ from retrieval_trace_report import (
 class Stage19RetrievalTraceReportTests(unittest.TestCase):
     def test_parse_selected_memory_parent_guard_line(self):
         line = (
-            "2026-05-04T10:01:02-0400 CogswellCogs python[123]: "
+            "2026-05-04T10:01:02-0400 Workstation python[123]: "
             "Memory parent guard selected: "
             "parent='Phase 3 - Memory Enhancement' "
             "node_id=projects/phase-3-memory-enhancement "
@@ -30,10 +30,10 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
 
     def test_parse_skipped_memory_parent_guard_line(self):
         line = (
-            "May 04 10:03:04 CogswellCogs python[123]: "
+            "May 04 10:03:04 Workstation python[123]: "
             "Memory parent guard skipped: "
             "reason=no hierarchy parent in retrieved nodes "
-            "top_node_id=contacts/tom-reilly "
+            "top_node_id=contacts/taylor-reed "
             "top_node_type=sprockets/contact retrieved=5"
         )
 
@@ -44,7 +44,7 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
         self.assertEqual(event.timestamp, "May 04 10:03:04")
         self.assertEqual(event.decision, "skipped")
         self.assertEqual(event.reason, "no hierarchy parent in retrieved nodes")
-        self.assertEqual(event.top_node_id, "contacts/tom-reilly")
+        self.assertEqual(event.top_node_id, "contacts/taylor-reed")
         self.assertEqual(event.top_node_type, "sprockets/contact")
         self.assertEqual(event.retrieved_count, 5)
 
@@ -74,7 +74,7 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
                 "2026-05-04T10:03:04-0400 host python[123]: "
                 "Memory parent guard skipped: "
                 "reason=no hierarchy parent in retrieved nodes "
-                "top_node_id=contacts/tom-reilly "
+                "top_node_id=contacts/taylor-reed "
                 "top_node_type=sprockets/contact retrieved=5"
             ),
         ])
@@ -90,7 +90,7 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
         self.assertIn("parent node: projects/production [sprockets/project]", output)
         self.assertIn("skipped", output)
         self.assertIn("reason: no hierarchy parent in retrieved nodes", output)
-        self.assertIn("top node: contacts/tom-reilly [sprockets/contact]", output)
+        self.assertIn("top node: contacts/taylor-reed [sprockets/contact]", output)
 
     def test_format_memory_guard_report_applies_limit_to_recent_events(self):
         events = parse_memory_guard_log([
@@ -123,7 +123,7 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
                 "2026-05-04T10:03:04-0400 host python[123]: "
                 "Memory parent guard skipped: "
                 "reason=no hierarchy parent in retrieved nodes "
-                "top_node_id=contacts/tom-reilly "
+                "top_node_id=contacts/taylor-reed "
                 "top_node_type=sprockets/contact retrieved=5"
             ),
         ])
@@ -135,7 +135,7 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
         self.assertIn("- skipped: 1", output)
         self.assertIn("- decision filter: skipped", output)
         self.assertNotIn("parent: Production", output)
-        self.assertIn("top node: contacts/tom-reilly [sprockets/contact]", output)
+        self.assertIn("top node: contacts/taylor-reed [sprockets/contact]", output)
 
     def test_format_memory_guard_report_handles_empty_events(self):
         output = format_memory_guard_report(())

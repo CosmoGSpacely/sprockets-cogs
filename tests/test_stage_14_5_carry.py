@@ -25,12 +25,12 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             path = vault.ensure_daily_note("2026-05-04", daily_dir)
-            path.write_text(path.read_text() + "- [>] Call Jordan\n")
+            path.write_text(path.read_text() + "- [>] Call Alex\n")
 
-            appended = vault.append_cogs_item_text("2026-05-04", "Call Jordan", daily_dir)
+            appended = vault.append_cogs_item_text("2026-05-04", "Call Alex", daily_dir)
 
             self.assertFalse(appended)
-            self.assertEqual(path.read_text().count("Call Jordan"), 1)
+            self.assertEqual(path.read_text().count("Call Alex"), 1)
 
     def test_parse_cogs_blocks_keeps_child_lines_with_parent(self):
         content = (
@@ -40,7 +40,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             "  - [ ] return battery\n"
             "  - [ ] buy vitamins\n"
             "- [x] Done thing\n"
-            "- [ ] Call Jordan\n"
+            "- [ ] Call Alex\n"
             "plain note\n"
         )
 
@@ -53,7 +53,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             "  - [ ] return battery",
             "  - [ ] buy vitamins",
         ))
-        self.assertEqual(blocks[1].item_text, "Call Jordan")
+        self.assertEqual(blocks[1].item_text, "Call Alex")
 
     def test_parse_cogs_blocks_can_include_carried_and_cancelled_states(self):
         content = "- [>] Carried\n- [-] Cancelled\n- [ ] Open\n"
@@ -71,10 +71,10 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         self.assertEqual(marked, "- [>] WALMART\n  - [ ] return battery\n")
 
     def test_mark_block_state_rejects_unknown_state(self):
-        block = vault.parse_cogs_blocks("- [ ] Call Jordan\n")[0]
+        block = vault.parse_cogs_blocks("- [ ] Call Alex\n")[0]
 
         with self.assertRaises(ValueError):
-            vault.mark_block_state("- [ ] Call Jordan\n", block, "?")
+            vault.mark_block_state("- [ ] Call Alex\n", block, "?")
 
     def test_scan_daily_notes_lists_open_blocks_through_cutoff(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -103,7 +103,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            note.write_text(note.read_text() + "- [ ] Call Alex\n")
             candidate = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")[0]
             stream = StringIO()
 
@@ -113,7 +113,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             output = stream.getvalue()
             self.assertIn("1 open Cogs carry candidate", output)
             self.assertIn("2026-05-01", output)
-            self.assertIn("- [ ] Call Jordan", output)
+            self.assertIn("- [ ] Call Alex", output)
 
     def test_print_candidates_handles_empty_scan(self):
         stream = StringIO()
@@ -127,7 +127,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            note.write_text(note.read_text() + "- [ ] Call Alex\n")
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
 
             decisions = carry.build_default_plan(candidates, "2026-05-04")
@@ -140,7 +140,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            original = note.read_text() + "- [ ] Call Jordan\n"
+            original = note.read_text() + "- [ ] Call Alex\n"
             note.write_text(original)
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
             decisions = carry.build_default_plan(candidates, "2026-05-04")
@@ -150,14 +150,14 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             self.assertIn("1 carry decision", preview)
             self.assertIn("carry", preview)
             self.assertIn("-> 2026-05-04", preview)
-            self.assertIn("Call Jordan", preview)
+            self.assertIn("Call Alex", preview)
             self.assertEqual(note.read_text(), original)
 
     def test_validate_decision_rejects_bad_carry_actions(self):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            note.write_text(note.read_text() + "- [ ] Call Alex\n")
             candidate = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")[0]
 
             with self.assertRaises(ValueError):
@@ -171,7 +171,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            note.write_text(note.read_text() + "- [ ] Call Alex\n")
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
 
             plan = carry.build_plan_document(candidates, "2026-05-04")
@@ -181,7 +181,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             self.assertEqual(len(plan["items"]), 1)
             self.assertEqual(plan["items"][0]["action"], "carry")
             self.assertEqual(plan["items"][0]["destination_date"], "2026-05-04")
-            self.assertEqual(plan["items"][0]["item_text"], "Call Jordan")
+            self.assertEqual(plan["items"][0]["item_text"], "Call Alex")
             self.assertEqual(carry.validate_plan_document(plan), [])
 
     def test_plan_document_round_trips_to_disk_without_vault_writes(self):
@@ -189,7 +189,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             daily_dir = Path(tmp) / "daily"
             daily_dir.mkdir()
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            original = note.read_text() + "- [ ] Call Jordan\n"
+            original = note.read_text() + "- [ ] Call Alex\n"
             note.write_text(original)
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
             plan = carry.build_plan_document(candidates, "2026-05-04")
@@ -211,8 +211,8 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
                     "action": "carry",
                     "destination_date": "",
                     "source": {"date": "2026-05-01", "path": "/tmp/a.md", "line": 1},
-                    "item_text": "Call Jordan",
-                    "lines": ["- [ ] Call Jordan"],
+                    "item_text": "Call Alex",
+                    "lines": ["- [ ] Call Alex"],
                 },
                 {
                     "id": "two",
@@ -234,7 +234,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            note.write_text(note.read_text() + "- [ ] Call Jordan\n- [ ] Archive receipt\n")
+            note.write_text(note.read_text() + "- [ ] Call Alex\n- [ ] Archive receipt\n")
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
             plan = carry.build_plan_document(candidates, "2026-05-04")
             plan["items"][1]["action"] = "drop"
@@ -254,7 +254,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
             original = (
                 note.read_text()
-                + "- [ ] Call Jordan\n"
+                + "- [ ] Call Alex\n"
                   "- [ ] Archive receipt\n"
                   "- [ ] Finish report\n"
             )
@@ -270,7 +270,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
 
             self.assertIn("3 carry action", preview)
             self.assertIn("mark [>] in 2026-05-01", preview)
-            self.assertIn("append [ ] to 2026-05-04: Call Jordan", preview)
+            self.assertIn("append [ ] to 2026-05-04: Call Alex", preview)
             self.assertIn("mark [-] in 2026-05-01", preview)
             self.assertIn("mark [x] in 2026-05-01", preview)
             self.assertEqual(note.read_text(), original)
@@ -279,7 +279,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            note.write_text(note.read_text() + "- [ ] Call Alex\n")
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
             plan = carry.build_plan_document(candidates, "2026-05-04")
 
@@ -289,10 +289,10 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            note.write_text(note.read_text() + "- [ ] Call Jordan\n")
+            note.write_text(note.read_text() + "- [ ] Call Alex\n")
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
             plan = carry.build_plan_document(candidates, "2026-05-04")
-            note.write_text(note.read_text().replace("Call Jordan", "Call Taylor"))
+            note.write_text(note.read_text().replace("Call Alex", "Call Taylor"))
 
             issues = carry.check_plan_sources(plan)
 
@@ -303,7 +303,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             note = vault.ensure_daily_note("2026-05-01", daily_dir)
-            original = note.read_text() + "- [ ] Call Jordan\n"
+            original = note.read_text() + "- [ ] Call Alex\n"
             note.write_text(original)
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
             plan = carry.build_plan_document(candidates, "2026-05-04")
@@ -318,7 +318,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             source = vault.ensure_daily_note("2026-05-01", daily_dir)
-            source.write_text(source.read_text() + "- [ ] Call Jordan\n")
+            source.write_text(source.read_text() + "- [ ] Call Alex\n")
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
             plan = carry.build_plan_document(candidates, "2026-05-04")
 
@@ -326,8 +326,8 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
 
             destination = vault.daily_note_path("2026-05-04", daily_dir)
             self.assertIn("carried", results[0])
-            self.assertIn("- [>] Call Jordan", source.read_text())
-            self.assertIn("- [ ] Call Jordan", destination.read_text())
+            self.assertIn("- [>] Call Alex", source.read_text())
+            self.assertIn("- [ ] Call Alex", destination.read_text())
 
     def test_apply_plan_document_marks_drop_done_and_skip(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -363,11 +363,11 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
             source = vault.ensure_daily_note("2026-05-01", daily_dir)
-            original = source.read_text() + "- [ ] Call Jordan\n"
+            original = source.read_text() + "- [ ] Call Alex\n"
             source.write_text(original)
             candidates = carry.scan_daily_notes(daily_dir, through_date="2026-05-03")
             plan = carry.build_plan_document(candidates, "2026-05-04")
-            source.write_text(original.replace("Call Jordan", "Call Taylor"))
+            source.write_text(original.replace("Call Alex", "Call Taylor"))
 
             with self.assertRaises(ValueError):
                 carry.apply_plan_document(plan)

@@ -36,14 +36,14 @@ class Stage17MemoryIndexTests(unittest.TestCase):
     def test_memory_record_exposes_node_id_from_metadata(self):
         record = MemoryRecord(
             metadata=MemoryNodeMetadata(
-                node_id="contacts/tom-reilly",
-                path=Path("Sprockets/contacts/tom-reilly.md"),
+                node_id="contacts/taylor-reed",
+                path=Path("Sprockets/contacts/taylor-reed.md"),
                 node_type="sprockets/contact",
-                title="Tom Reilly",
+                title="Taylor Reed",
             )
         )
 
-        self.assertEqual(record.node_id, "contacts/tom-reilly")
+        self.assertEqual(record.node_id, "contacts/taylor-reed")
 
     def test_vector_metadata_for_records_dimension_model_and_hash(self):
         metadata = vector_metadata_for("nomic-embed-text", "hash-1", [0.1, 0.2, 0.3])
@@ -100,7 +100,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
 
     def test_query_and_trace_hold_filters_and_ranked_results(self):
         query = MemoryQuery(
-            text="Call Tom at GlobalTech",
+            text="Call Taylor at ExampleCorp",
             limit=3,
             node_types=("sprockets/contact", "sprockets/entity"),
             parent_slugs=("build-sprockets-cogs",),
@@ -108,10 +108,10 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         )
         record = MemoryRecord(
             metadata=MemoryNodeMetadata(
-                node_id="contacts/tom-reilly",
-                path=Path("contacts/tom-reilly.md"),
+                node_id="contacts/taylor-reed",
+                path=Path("contacts/taylor-reed.md"),
                 node_type="sprockets/contact",
-                title="Tom Reilly",
+                title="Taylor Reed",
             )
         )
         result = ScoredMemoryResult(
@@ -126,7 +126,7 @@ class Stage17MemoryIndexTests(unittest.TestCase):
             result_ids=(result.node_id,),
             filters_applied={"node_types": query.node_types},
             notes=("graph expansion skipped",),
-            result_summaries=("contacts/tom-reilly score=0.84 reasons=name match parts=title=0.84",),
+            result_summaries=("contacts/taylor-reed score=0.84 reasons=name match parts=title=0.84",),
             quality_flags=("low top margin: 0.01",),
             confidence=RetrievalConfidence(
                 level="medium",
@@ -137,14 +137,14 @@ class Stage17MemoryIndexTests(unittest.TestCase):
 
         self.assertEqual(query.limit, 3)
         self.assertEqual(query.query_vector, (0.1, 0.2))
-        self.assertEqual(result.node_id, "contacts/tom-reilly")
+        self.assertEqual(result.node_id, "contacts/taylor-reed")
         self.assertEqual(result.reasons, ("name match",))
         self.assertEqual(result.score_parts, (("title", 0.84),))
-        self.assertEqual(trace.result_ids, ("contacts/tom-reilly",))
+        self.assertEqual(trace.result_ids, ("contacts/taylor-reed",))
         self.assertEqual(trace.filters_applied["node_types"], query.node_types)
         self.assertEqual(
             trace.result_summaries,
-            ("contacts/tom-reilly score=0.84 reasons=name match parts=title=0.84",),
+            ("contacts/taylor-reed score=0.84 reasons=name match parts=title=0.84",),
         )
         self.assertEqual(trace.quality_flags, ("low top margin: 0.01",))
         self.assertEqual(trace.confidence.level, "medium")
@@ -215,10 +215,10 @@ class Stage17MemoryIndexTests(unittest.TestCase):
     def test_in_memory_index_deletes_records_missing_from_active_ids(self):
         keep = MemoryRecord(
             metadata=MemoryNodeMetadata(
-                node_id="contacts/tom-reilly",
-                path=Path("contacts/tom-reilly.md"),
+                node_id="contacts/taylor-reed",
+                path=Path("contacts/taylor-reed.md"),
                 node_type="sprockets/contact",
-                title="Tom Reilly",
+                title="Taylor Reed",
             )
         )
         delete = MemoryRecord(
@@ -231,10 +231,10 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         )
         index = InMemoryMemoryIndex([delete, keep])
 
-        deleted = index.delete_missing_node_ids(["contacts/tom-reilly"])
+        deleted = index.delete_missing_node_ids(["contacts/taylor-reed"])
 
         self.assertEqual(deleted, ("contacts/sandra-cho",))
-        self.assertEqual(index.get("contacts/tom-reilly"), keep)
+        self.assertEqual(index.get("contacts/taylor-reed"), keep)
         self.assertIsNone(index.get("contacts/sandra-cho"))
 
     def test_in_memory_index_query_scores_and_filters_records(self):
@@ -258,10 +258,10 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         )
         contact = MemoryRecord(
             metadata=MemoryNodeMetadata(
-                node_id="contacts/tom-reilly",
-                path=Path("contacts/tom-reilly.md"),
+                node_id="contacts/taylor-reed",
+                path=Path("contacts/taylor-reed.md"),
                 node_type="sprockets/contact",
-                title="Tom Reilly",
+                title="Taylor Reed",
             )
         )
         index = InMemoryMemoryIndex([contact, note, project])
@@ -311,10 +311,10 @@ class Stage17MemoryIndexTests(unittest.TestCase):
         )
         contact = MemoryRecord(
             metadata=MemoryNodeMetadata(
-                node_id="contacts/tom-reilly",
-                path=Path("contacts/tom-reilly.md"),
+                node_id="contacts/taylor-reed",
+                path=Path("contacts/taylor-reed.md"),
                 node_type="sprockets/contact",
-                title="Tom Reilly",
+                title="Taylor Reed",
             )
         )
         query = MemoryQuery(

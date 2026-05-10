@@ -12,7 +12,7 @@ from memory_packets import (
 )
 
 
-DEFAULT_VAULT_DIR = Path("/home/cosmo/vault")
+DEFAULT_VAULT_DIR = Path.home() / "vault"
 
 
 def main() -> None:
@@ -23,7 +23,7 @@ def main() -> None:
         "--vault",
         type=Path,
         default=DEFAULT_VAULT_DIR,
-        help="Vault directory. Defaults to /home/cosmo/vault.",
+        help="Vault directory. Defaults to ~/vault.",
     )
     parser.add_argument(
         "--node-type",

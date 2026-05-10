@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DEFAULT_VAULT_DIR = Path("/home/cosmo/vault")
+DEFAULT_VAULT_DIR = Path.home() / "vault"
 DEFAULT_DAILY_DIR = DEFAULT_VAULT_DIR / "Cogs" / "daily"
 
 TASK_LINE_RE = re.compile(r"^(?P<indent>\s*)- \[(?P<state>[ x>\-])\] (?P<text>.*)$")

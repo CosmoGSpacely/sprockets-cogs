@@ -82,8 +82,8 @@ def main() -> int:
     parser.add_argument(
         "--vault",
         type=Path,
-        default=Path("/home/cosmo/vault"),
-        help="Obsidian vault root. Default: /home/cosmo/vault",
+        default=Path.home() / "vault",
+        help="Obsidian vault root. Default: ~/vault",
     )
     args = parser.parse_args()
 

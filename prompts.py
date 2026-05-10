@@ -86,15 +86,15 @@ EXTRACT_EXAMPLES = [
     },
     {
         "role": "user",
-        "content": "Extract all items from this text:\n\nMet Jordan Mack from Meridian Group today. Her email is jordan@meridiangroup.io. She wants a proposal by next Friday."
+        "content": "Extract all items from this text:\n\nMet Alex Rivera from Example Group today. Her preferred contact is alex at example dot test. She wants a proposal by next Friday."
     },
     {
         "role": "assistant",
         "content": '{"items": ['
-                    '{"raw": "met Jordan Mack from Meridian Group today", "type_hint": "appointment"}, '
-                    '{"raw": "Jordan Mack, email jordan@meridiangroup.io", "type_hint": "contact"}, '
-                    '{"raw": "Meridian Group", "type_hint": "entity"}, '
-                    '{"raw": "send proposal to Jordan Mack (Meridian Group) by next Friday", "type_hint": "task"}]}'
+                    '{"raw": "met Alex Rivera from Example Group today", "type_hint": "appointment"}, '
+                    '{"raw": "Alex Rivera, email alex at example dot test", "type_hint": "contact"}, '
+                    '{"raw": "Example Group", "type_hint": "entity"}, '
+                    '{"raw": "send proposal to Alex Rivera (Example Group) by next Friday", "type_hint": "task"}]}'
     },
 ]
 
@@ -252,10 +252,10 @@ CLASSIFY_EXAMPLES = [
         "content": (
             "Today: 2026-04-23 (Thursday)\n\n"
             "Extracted:\n"
-            '[{"raw": "met Jordan Mack from Meridian Group today", "type_hint": "appointment"}, '
-            '{"raw": "Jordan Mack, email jordan@meridiangroup.io", "type_hint": "contact"}, '
-            '{"raw": "Meridian Group", "type_hint": "entity"}, '
-            '{"raw": "send proposal to Jordan Mack (Meridian Group) by next Friday", "type_hint": "task"}]\n\n'
+            '[{"raw": "met Alex Rivera from Example Group today", "type_hint": "appointment"}, '
+            '{"raw": "Alex Rivera, email alex at example dot test", "type_hint": "contact"}, '
+            '{"raw": "Example Group", "type_hint": "entity"}, '
+            '{"raw": "send proposal to Alex Rivera (Example Group) by next Friday", "type_hint": "task"}]\n\n'
             "Classify each item."
         )
     },
@@ -263,11 +263,11 @@ CLASSIFY_EXAMPLES = [
         "role": "assistant",
         "content": (
             '{"nodes": ['
-            '{"node_type": "cogs/daily", "title": "Met Jordan Mack (Meridian Group)", "item_text": "Met Jordan Mack (Meridian Group)", "date": "2026-04-23", "confidence": "high"}, '
-            '{"node_type": "sprockets/contact", "title": "Jordan Mack", "item_text": "Jordan Mack, email jordan@meridiangroup.io", "date": "2026-04-23", "confidence": "high"}, '
-            '{"node_type": "sprockets/entity", "title": "Meridian Group", "item_text": "Meridian Group", "date": "2026-04-23", "confidence": "high"}, '
-            '{"node_type": "sprockets/task", "title": "Send proposal to Jordan Mack (Meridian Group)", "item_text": "Send proposal to Jordan Mack (Meridian Group)", "date": "2026-04-25", "status": "active", "confidence": "high"}, '
-            '{"node_type": "cogs/daily", "title": "Proposal for Jordan (Meridian Group)", "item_text": "Proposal for Jordan (Meridian Group)", "date": "2026-04-25", "confidence": "high"}'
+            '{"node_type": "cogs/daily", "title": "Met Alex Rivera (Example Group)", "item_text": "Met Alex Rivera (Example Group)", "date": "2026-04-23", "confidence": "high"}, '
+            '{"node_type": "sprockets/contact", "title": "Alex Rivera", "item_text": "Alex Rivera, email alex at example dot test", "date": "2026-04-23", "confidence": "high"}, '
+            '{"node_type": "sprockets/entity", "title": "Example Group", "item_text": "Example Group", "date": "2026-04-23", "confidence": "high"}, '
+            '{"node_type": "sprockets/task", "title": "Send proposal to Alex Rivera (Example Group)", "item_text": "Send proposal to Alex Rivera (Example Group)", "date": "2026-04-25", "status": "active", "confidence": "high"}, '
+            '{"node_type": "cogs/daily", "title": "Proposal for Alex (Example Group)", "item_text": "Proposal for Alex (Example Group)", "date": "2026-04-25", "confidence": "high"}'
             ']}'
         )
     },
