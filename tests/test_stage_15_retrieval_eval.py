@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -602,8 +603,10 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
     def test_memory_vault_recency_fallback_ignores_future_daily_notes(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            future = vault / "Cogs" / "daily" / "Wed 06 May 2026.md"
-            current = vault / "Cogs" / "daily" / "Mon 04 May 2026.md"
+            future_date = date.today() + timedelta(days=2)
+            current_date = date.today() - timedelta(days=1)
+            future = vault / "Cogs" / "daily" / future_date.strftime("%a %d %b %Y.md")
+            current = vault / "Cogs" / "daily" / current_date.strftime("%a %d %b %Y.md")
             future.parent.mkdir(parents=True, exist_ok=True)
             future.write_text("- [ ] Future note\n")
             current.write_text("- [ ] Current note\n")
@@ -611,8 +614,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             retriever = build_experimental_retriever("memory-vault", vault)
             results = list(retriever.retrieve("Continue the note from today."))
 
-        self.assertEqual(results[0].node_id, "daily/2026-05-04")
-        self.assertNotIn("daily/2026-05-06", [node.node_id for node in results])
+        self.assertEqual(results[0].node_id, f"daily/{current_date.isoformat()}")
+        self.assertNotIn(f"daily/{future_date.isoformat()}", [node.node_id for node in results])
 
     def test_build_experimental_retriever_builds_memory_embedding_vault_interface(self):
         with tempfile.TemporaryDirectory() as tmp:
