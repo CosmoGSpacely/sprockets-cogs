@@ -5,8 +5,8 @@ turnkey public application.
 
 ## Current Maturity
 
-The project has completed its Phase 2 hardening work and most of the Phase 3
-memory groundwork:
+The project has completed its Phase 2 hardening work, Phase 3 memory groundwork,
+and Stage 25 public-readiness MVP:
 
 - typed Sprockets/Cogs writes;
 - deterministic smoke test and unit tests;
@@ -14,9 +14,8 @@ memory groundwork:
 - semantic memory benchmark harness;
 - guarded production retrieval;
 - retrieval traces and reports;
-- memory tool-call readiness probe.
-
-Stage 25 is focused on public and portfolio readiness.
+- memory tool-call readiness probe;
+- public README, design note, license, CI workflow, and sensitive-data audit.
 
 ## Current Runtime Posture
 
@@ -35,7 +34,7 @@ Stage 25 is focused on public and portfolio readiness.
 - Higher-level hierarchy nodes are human-authored or review-approved.
 - Native local tool calling is not production-ready for the current model tag.
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.
-- The project still needs a sensitive-data audit before a public repository flip.
+- The sensitive-data audit passed before the public repository flip.
 
 ## Verification
 
@@ -45,5 +44,5 @@ The main local gate is:
 scripts/check
 ```
 
-At the start of Stage 25, this gate covered unit tests, smoke test, fallback
-contract, and review count.
+The latest Stage 25 gate covers unit tests, smoke test, fallback contract, and
+review count.
