@@ -1,4 +1,4 @@
-# sprockets-cogs — Code Repository
+# Sprockets-Cogs Development
 
 Agentic loop that processes natural-language inputs and writes Obsidian-compatible
 Markdown files to a configured vault directory.
