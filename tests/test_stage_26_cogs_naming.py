@@ -180,6 +180,56 @@ class Stage26CogsNamingTests(unittest.TestCase):
         self.assertIn("# 2026-05", cogs_planning.format_template_preview("monthly", "2026-05"))
         self.assertIn("# 2026", cogs_planning.format_template_preview("annual", "2026"))
 
+    def test_create_plan_for_date_previews_week_month_and_year_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+
+            plan = cogs_planning.build_create_plan(cogs_dir, "2026-05-13")
+
+            self.assertEqual([item.kind for item in plan], ["weekly", "monthly", "annual"])
+            self.assertEqual([item.status for item in plan], ["create", "create", "create"])
+            self.assertEqual(plan[0].path, cogs_dir / "weekly" / "2026-W20.md")
+            self.assertEqual(plan[1].path, cogs_dir / "monthly" / "2026-05.md")
+            self.assertEqual(plan[2].path, cogs_dir / "annual" / "2026.md")
+            self.assertFalse(plan[0].path.exists())
+            self.assertIn("node_type: cogs/weekly", plan[0].template)
+
+    def test_create_plan_for_month_previews_month_and_year(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+
+            plan = cogs_planning.build_create_plan(cogs_dir, "2026-05")
+
+            self.assertEqual([item.kind for item in plan], ["monthly", "annual"])
+            self.assertEqual(plan[0].path, cogs_dir / "monthly" / "2026-05.md")
+            self.assertEqual(plan[1].path, cogs_dir / "annual" / "2026.md")
+
+    def test_create_plan_marks_existing_targets_without_overwriting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            monthly = cogs_dir / "monthly" / "2026-05.md"
+            monthly.parent.mkdir(parents=True)
+            monthly.write_text("existing\n")
+
+            plan = cogs_planning.build_create_plan(cogs_dir, "2026-05")
+
+            self.assertEqual(plan[0].status, "exists")
+            self.assertEqual(plan[0].reason, "target already exists")
+            self.assertEqual(monthly.read_text(), "existing\n")
+
+    def test_create_plan_preview_reports_summary_and_no_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+
+            output = cogs_planning.format_create_plan(cogs_dir, "2026-05-13")
+
+            self.assertIn("Planning-note create preview for 2026-05-13", output)
+            self.assertIn("Summary: create: 3", output)
+            self.assertIn("create weekly", output)
+            self.assertIn("create monthly", output)
+            self.assertIn("create annual", output)
+            self.assertIn("No files written.", output)
+
 
 if __name__ == "__main__":
     unittest.main()

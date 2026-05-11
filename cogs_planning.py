@@ -43,6 +43,15 @@ class CogsPlanningInventory:
     current_5wow_anchor: str
 
 
+@dataclass(frozen=True)
+class PlanningCreatePlanItem:
+    kind: str
+    path: Path
+    status: str
+    reason: str
+    template: str
+
+
 def _count_markdown_files(path: Path) -> int:
     if not path.exists():
         return 0
@@ -288,6 +297,65 @@ def format_template_preview(template: str, value: str) -> str:
     raise ValueError(f"Unsupported template: {template!r}")
 
 
+def _template_line_count(template: str) -> int:
+    return len(template.splitlines())
+
+
+def _plan_item(kind: str, path: Path, template: str) -> PlanningCreatePlanItem:
+    if path.exists():
+        return PlanningCreatePlanItem(kind, path, "exists", "target already exists", template)
+    return PlanningCreatePlanItem(kind, path, "create", "missing planning note", template)
+
+
+def build_create_plan(cogs_dir: Path, value: str) -> list[PlanningCreatePlanItem]:
+    """Build a read-only planning-note creation plan.
+
+    YYYY-MM-DD previews weekly, monthly, and annual notes for that date.
+    YYYY-MM previews monthly and annual notes for that month.
+    """
+    monthly_dir = cogs_dir / "monthly"
+    annual_dir = cogs_dir / "annual"
+    if len(value) == 7:
+        month_start = parse_month(value)
+        month = value
+        year = month_start.year
+        return [
+            _plan_item(
+                "monthly",
+                monthly_dir / monthly_filename(month_start.isoformat()),
+                render_monthly_note_template(month),
+            ),
+            _plan_item("annual", annual_dir / annual_filename(month_start.isoformat()), render_annual_note_template(year)),
+        ]
+
+    date_value = datetime.strptime(value, "%Y-%m-%d").date()
+    month = date_value.strftime("%Y-%m")
+    weekly_dir = cogs_dir / "weekly"
+    return [
+        _plan_item("weekly", weekly_dir / weekly_filename(value), render_weekly_note_template(value)),
+        _plan_item("monthly", monthly_dir / monthly_filename(value), render_monthly_note_template(month)),
+        _plan_item("annual", annual_dir / annual_filename(value), render_annual_note_template(date_value.year)),
+    ]
+
+
+def format_create_plan(cogs_dir: Path = DEFAULT_COGS_DIR, value: str | None = None) -> str:
+    if not value:
+        value = date.today().isoformat()
+    plan = build_create_plan(cogs_dir, value)
+    counts: dict[str, int] = {}
+    for item in plan:
+        counts[item.status] = counts.get(item.status, 0) + 1
+    summary = ", ".join(f"{status}: {count}" for status, count in sorted(counts.items()))
+    lines = [f"Planning-note create preview for {value}", f"Cogs dir: {cogs_dir}", f"Summary: {summary}"]
+    for item in plan:
+        lines.append(
+            f"- {item.status:<6} {item.kind:<7} {item.path} "
+            f"({item.reason}; {len(item.template)} chars, {_template_line_count(item.template)} lines)"
+        )
+    lines.append("No files written.")
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -314,6 +382,13 @@ def main() -> None:
         "--template",
         choices=("weekly", "monthly", "annual"),
         help="Preview a full planning-note Markdown template without writing.",
+    )
+    parser.add_argument(
+        "--preview-create",
+        nargs="?",
+        const="",
+        metavar="YYYY-MM-DD|YYYY-MM",
+        help="Preview planning-note files to create for a date or month without writing.",
     )
     parser.add_argument(
         "--for",
@@ -350,8 +425,11 @@ def main() -> None:
             parser.error("--template requires --for")
         print(format_template_preview(args.template, args.template_value), end="")
         return
+    if args.preview_create is not None:
+        print(format_create_plan(Path(args.cogs_dir), args.preview_create or None))
+        return
 
-    parser.error("choose --names, --daily-rename-plan, --inventory, --month, or --template")
+    parser.error("choose --names, --daily-rename-plan, --inventory, --month, --template, or --preview-create")
 
 
 if __name__ == "__main__":
