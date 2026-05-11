@@ -4,6 +4,7 @@ __pycache__/
 .env
 entity_state.json
 *.log
+carry-plan*.json
 backup/
 backups/
 /tmp/

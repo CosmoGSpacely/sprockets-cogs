@@ -26,7 +26,7 @@ and Stage 25 public-readiness MVP:
 - OpenAI fallback is review-first when configured.
 - Semantic memory retrieval can be enabled for compact post-classification guards.
 - Prompt-appended memory context remains disabled.
-- Nightly Cogs carry exists as a script but is not scheduled by the service.
+- Nightly Cogs carry is scheduled by a user-level systemd timer.
 - `scripts/cogs-planning` previews Stage 26 naming choices, planning inventory,
   monthly seven-day calendar grids plus vertical 5WOW tables,
   weekly/monthly/annual templates, planning-note creation plans, and daily
@@ -48,16 +48,16 @@ and Stage 25 public-readiness MVP:
 - `scripts/job-supervisor --preview-disable nightly` and
   `--preview-recovery nightly` show pause/recovery commands before live
   scheduling exists.
+- `sprockets-cogs-nightly.timer` is installed and enabled as a user timer. The
+  next run can be inspected with `scripts/job-status`.
 
 ## Known Limitations
 
 - Public setup and configuration examples are intentionally deferred.
 - Weekly, monthly, annual, and 5WOW planning notes are maintained manually or
   through `scripts/cogs-planning`; they are not maintained by the live loop.
-- The nightly user timer is not installed yet. Stage 27A-E only add observation,
-  preflight reporting, committed templates, install preview, and
-  recovery/disable previews; scheduling remains disabled until an explicit live
-  install slice.
+- The nightly timer is now installed and enabled. Prompt-appended memory context
+  remains disabled, and planning-note maintenance is still manual/script-driven.
 - ISO-first daily naming is preview-only. Existing daily-note writes still use
   compatible lookup and preserve current legacy naming unless an ISO-first file
   already exists.
@@ -78,5 +78,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 27E gate passed 300 tests, smoke test, fallback contract, and
+The latest Stage 27F gate passed 301 tests, smoke test, fallback contract, and
 review count 0.
