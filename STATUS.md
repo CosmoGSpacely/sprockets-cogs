@@ -35,12 +35,17 @@ and Stage 25 public-readiness MVP:
   notes and refuses to overwrite existing files.
 - `scripts/cogs-planning --ensure-current` creates the current weekly, monthly,
   and annual planning notes when missing and preserves existing files.
+- `scripts/job-status` reports read-only maintenance job supervision state. It
+  currently tracks the planned nightly user service/timer and shows the dry-run
+  and log commands without installing or enabling automation.
 
 ## Known Limitations
 
 - Public setup and configuration examples are intentionally deferred.
 - Weekly, monthly, annual, and 5WOW planning notes are maintained manually or
   through `scripts/cogs-planning`; they are not maintained by the live loop.
+- The nightly user timer is not installed yet. Stage 27A only adds observation;
+  scheduling remains disabled until preview/install/recovery slices are built.
 - ISO-first daily naming is preview-only. Existing daily-note writes still use
   compatible lookup and preserve current legacy naming unless an ISO-first file
   already exists.
@@ -61,5 +66,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 26 gate passed 291 tests, smoke test, fallback contract, and
+The latest Stage 27A gate passed 294 tests, smoke test, fallback contract, and
 review count 0.
