@@ -147,6 +147,39 @@ class Stage26CogsNamingTests(unittest.TestCase):
         self.assertIn("| Week | Mon | Tue | Wed | Thu | Fri |", output)
         self.assertIn("| 1 |  |  |  |  | 01 |", output)
 
+    def test_weekly_template_preview_uses_iso_week_and_day_sections(self):
+        output = cogs_planning.render_weekly_note_template("2026-05-13")
+
+        self.assertIn("node_type: cogs/weekly", output)
+        self.assertIn("week: 2026-W20", output)
+        self.assertIn("# 2026-W20", output)
+        self.assertIn("### Mon 2026-05-11", output)
+        self.assertIn("### Sun 2026-05-17", output)
+
+    def test_monthly_template_preview_includes_5wow_and_day_sections(self):
+        output = cogs_planning.render_monthly_note_template("2026-05")
+
+        self.assertIn("node_type: cogs/monthly", output)
+        self.assertIn("month: 2026-05", output)
+        self.assertIn("## 5WOW", output)
+        self.assertIn("| 1 |  |  |  |  | 01 |", output)
+        self.assertIn("### Fri 2026-05-01", output)
+        self.assertIn("### Sun 2026-05-31", output)
+
+    def test_annual_template_preview_includes_month_sections(self):
+        output = cogs_planning.render_annual_note_template(2026)
+
+        self.assertIn("node_type: cogs/annual", output)
+        self.assertIn("year: 2026", output)
+        self.assertIn("# 2026", output)
+        self.assertIn("### 2026-01", output)
+        self.assertIn("### 2026-12", output)
+
+    def test_template_preview_dispatches_by_template_kind(self):
+        self.assertIn("# 2026-W20", cogs_planning.format_template_preview("weekly", "2026-05-13"))
+        self.assertIn("# 2026-05", cogs_planning.format_template_preview("monthly", "2026-05"))
+        self.assertIn("# 2026", cogs_planning.format_template_preview("annual", "2026"))
+
 
 if __name__ == "__main__":
     unittest.main()

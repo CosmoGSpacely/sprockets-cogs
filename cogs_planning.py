@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import calendar
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from cogs_naming import (
@@ -20,6 +20,7 @@ from vault import DEFAULT_DAILY_DIR
 
 DEFAULT_COGS_DIR = DEFAULT_DAILY_DIR.parent
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri")
+FULL_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
 @dataclass(frozen=True)
@@ -195,6 +196,98 @@ def format_month_preview(month: str) -> str:
     return "\n".join(lines)
 
 
+def _frontmatter(node_type: str, period: str, date_value: str) -> str:
+    return (
+        "---\n"
+        f"node_type: {node_type}\n"
+        f"{period}: {date_value}\n"
+        f"tags: [{node_type}]\n"
+        "---\n"
+    )
+
+
+def _week_start(date_iso: str) -> date:
+    dt = datetime.strptime(date_iso, "%Y-%m-%d").date()
+    return dt - timedelta(days=dt.weekday())
+
+
+def render_weekly_note_template(date_iso: str) -> str:
+    start = _week_start(date_iso)
+    iso_year, iso_week, _ = start.isocalendar()
+    lines = [
+        _frontmatter("cogs/weekly", "week", f"{iso_year}-W{iso_week:02d}"),
+        f"# {iso_year}-W{iso_week:02d}",
+        "",
+        "## Carry In",
+        "",
+        "## Weekdays",
+        "",
+    ]
+    for index, label in enumerate(FULL_WEEKDAYS):
+        day = start + timedelta(days=index)
+        lines.append(f"### {label} {day:%Y-%m-%d}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _five_wow_table(month: str) -> list[str]:
+    lines = ["| Week | Mon | Tue | Wed | Thu | Fri |", "|---|---|---|---|---|---|"]
+    for index, row in enumerate(five_wow_grid(month), start=1):
+        cells = " | ".join(row)
+        lines.append(f"| {index} | {cells} |")
+    return lines
+
+
+def render_monthly_note_template(month: str) -> str:
+    first = parse_month(month)
+    lines = [
+        _frontmatter("cogs/monthly", "month", month),
+        f"# {month}",
+        "",
+        "## 5WOW",
+        "",
+        *_five_wow_table(month),
+        "",
+        "## Carry In",
+        "",
+        "## Dates",
+        "",
+    ]
+    _, days_in_month = calendar.monthrange(first.year, first.month)
+    for day_number in range(1, days_in_month + 1):
+        day = date(first.year, first.month, day_number)
+        lines.append(f"### {day:%a %Y-%m-%d}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_annual_note_template(year: int) -> str:
+    lines = [
+        _frontmatter("cogs/annual", "year", str(year)),
+        f"# {year}",
+        "",
+        "## Carry In",
+        "",
+        "## Months",
+        "",
+    ]
+    for month_number in range(1, 13):
+        lines.append(f"### {year}-{month_number:02d}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def format_template_preview(template: str, value: str) -> str:
+    if template == "weekly":
+        return render_weekly_note_template(value)
+    if template == "monthly":
+        return render_monthly_note_template(value)
+    if template == "annual":
+        year = int(value)
+        return render_annual_note_template(year)
+    raise ValueError(f"Unsupported template: {template!r}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -216,6 +309,17 @@ def main() -> None:
         "--month",
         metavar="YYYY-MM",
         help="Preview a monthly planning note and 5WOW section shape.",
+    )
+    parser.add_argument(
+        "--template",
+        choices=("weekly", "monthly", "annual"),
+        help="Preview a full planning-note Markdown template without writing.",
+    )
+    parser.add_argument(
+        "--for",
+        dest="template_value",
+        metavar="DATE",
+        help="Template value: weekly YYYY-MM-DD, monthly YYYY-MM, annual YYYY.",
     )
     parser.add_argument(
         "--cogs-dir",
@@ -241,8 +345,13 @@ def main() -> None:
     if args.month:
         print(format_month_preview(args.month))
         return
+    if args.template:
+        if not args.template_value:
+            parser.error("--template requires --for")
+        print(format_template_preview(args.template, args.template_value), end="")
+        return
 
-    parser.error("choose --names, --daily-rename-plan, --inventory, or --month")
+    parser.error("choose --names, --daily-rename-plan, --inventory, --month, or --template")
 
 
 if __name__ == "__main__":
