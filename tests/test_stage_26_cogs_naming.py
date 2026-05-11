@@ -283,6 +283,39 @@ class Stage26CogsNamingTests(unittest.TestCase):
             self.assertEqual(results, [f"exists monthly: {monthly}"])
             self.assertEqual(monthly.read_text(), "manual\n")
 
+    def test_ensure_current_planning_notes_creates_current_week_month_and_year(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+
+            results = cogs_planning.ensure_current_planning_notes(cogs_dir, "2026-05-13")
+
+            weekly = cogs_dir / "weekly" / "2026-W20.md"
+            monthly = cogs_dir / "monthly" / "2026-05.md"
+            annual = cogs_dir / "annual" / "2026.md"
+            self.assertEqual(
+                results,
+                [
+                    f"created weekly: {weekly}",
+                    f"created monthly: {monthly}",
+                    f"created annual: {annual}",
+                ],
+            )
+            self.assertTrue(weekly.exists())
+            self.assertTrue(monthly.exists())
+            self.assertTrue(annual.exists())
+
+    def test_ensure_current_planning_notes_preserves_existing_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            monthly = cogs_dir / "monthly" / "2026-05.md"
+            monthly.parent.mkdir(parents=True)
+            monthly.write_text("manual\n")
+
+            results = cogs_planning.ensure_current_planning_notes(cogs_dir, "2026-05-13")
+
+            self.assertIn(f"exists monthly: {monthly}", results)
+            self.assertEqual(monthly.read_text(), "manual\n")
+
 
 if __name__ == "__main__":
     unittest.main()

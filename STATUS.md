@@ -16,7 +16,8 @@ and Stage 25 public-readiness MVP:
 - retrieval traces and reports;
 - memory tool-call readiness probe;
 - public README, design note, license, CI workflow, and sensitive-data audit.
-- Stage 26 naming/preview helpers for ISO-first Cogs planning notes.
+- Stage 26 planning-note maintenance helpers for current weekly/monthly/annual
+  notes.
 
 ## Current Runtime Posture
 
@@ -32,18 +33,21 @@ and Stage 25 public-readiness MVP:
   rename plans without writing to the vault.
 - `scripts/cogs-planning --create ... --kind ...` can create missing planning
   notes and refuses to overwrite existing files.
+- `scripts/cogs-planning --ensure-current` creates the current weekly, monthly,
+  and annual planning notes when missing and preserves existing files.
 
 ## Known Limitations
 
 - Public setup and configuration examples are intentionally deferred.
-- Weekly, monthly, annual, and 5WOW planning notes are not maintained by the live
-  loop.
+- Weekly, monthly, annual, and 5WOW planning notes are maintained manually or
+  through `scripts/cogs-planning`; they are not maintained by the live loop.
 - ISO-first daily naming is preview-only. Existing daily-note writes still use
   compatible lookup and preserve current legacy naming unless an ISO-first file
   already exists.
-- The first live monthly planning note exists at
-  `/home/cosmo/vault/Cogs/monthly/2026-05.md`, with the seven-day `Calendar`
-  grid before the vertical weekday `5WOW` table.
+- Current live planning notes exist at `/home/cosmo/vault/Cogs/weekly/2026-W20.md`,
+  `/home/cosmo/vault/Cogs/monthly/2026-05.md`, and
+  `/home/cosmo/vault/Cogs/annual/2026.md`. The monthly note puts the seven-day
+  `Calendar` grid before the vertical weekday `5WOW` table.
 - Higher-level hierarchy nodes are human-authored or review-approved.
 - Native local tool calling is not production-ready for the current model tag.
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.
@@ -57,5 +61,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 26 gate covers unit tests, smoke test, fallback contract, and
-review count.
+The latest Stage 26 gate passed 291 tests, smoke test, fallback contract, and
+review count 0.

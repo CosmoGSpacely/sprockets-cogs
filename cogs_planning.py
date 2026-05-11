@@ -1,4 +1,4 @@
-"""Read-only Cogs planning-note and filename previews."""
+"""Cogs planning-note previews and guarded creation helpers."""
 
 from __future__ import annotations
 
@@ -430,6 +430,11 @@ def create_planning_notes(
     return results
 
 
+def ensure_current_planning_notes(cogs_dir: Path, reference_date: str | None = None) -> list[str]:
+    """Ensure weekly, monthly, and annual notes exist for the reference date."""
+    return create_planning_notes(cogs_dir, reference_date or date.today().isoformat(), "all")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -468,6 +473,11 @@ def main() -> None:
         "--create",
         metavar="YYYY-MM-DD|YYYY-MM",
         help="Create missing planning-note files for a date or month.",
+    )
+    parser.add_argument(
+        "--ensure-current",
+        action="store_true",
+        help="Create missing weekly, monthly, and annual notes for today.",
     )
     parser.add_argument(
         "--kind",
@@ -516,8 +526,14 @@ def main() -> None:
     if args.create:
         print("\n".join(create_planning_notes(Path(args.cogs_dir), args.create, args.kind)))
         return
+    if args.ensure_current:
+        print("\n".join(ensure_current_planning_notes(Path(args.cogs_dir))))
+        return
 
-    parser.error("choose --names, --daily-rename-plan, --inventory, --month, --template, --preview-create, or --create")
+    parser.error(
+        "choose --names, --daily-rename-plan, --inventory, --month, --template, "
+        "--preview-create, --create, or --ensure-current"
+    )
 
 
 if __name__ == "__main__":
