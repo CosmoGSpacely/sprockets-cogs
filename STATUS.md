@@ -36,13 +36,14 @@ and Stage 25 public-readiness MVP:
 - `scripts/cogs-planning --ensure-current` creates the current weekly, monthly,
   and annual planning notes when missing and preserves existing files.
 - `scripts/job-status` reports read-only maintenance job supervision state. It
-  currently tracks the planned nightly user service/timer and shows the report,
-  dry-run, and log commands without installing or enabling automation.
+  tracks the installed nightly user service/timer and shows the report,
+  dry-run, and log commands. If the user systemd bus is unavailable from a
+  sandboxed process, it now reports that explicitly instead of implying the
+  timer is missing.
 - `scripts/nightly --report` summarizes the nightly carry plan without writing:
   daily directory, through/destination dates, candidate count, source counts,
   planned actions, and the exact dry-run/apply commands.
-- User-systemd templates for the future nightly timer live in `systemd/user/`.
-  They are committed for review but are not installed or enabled yet.
+- User-systemd templates for the nightly timer live in `systemd/user/`.
 - `scripts/job-supervisor --preview-install nightly` shows the exact future
   install targets and `systemctl --user` commands without writing.
 - `scripts/job-supervisor --preview-disable nightly` and
@@ -50,6 +51,9 @@ and Stage 25 public-readiness MVP:
   scheduling exists.
 - `sprockets-cogs-nightly.timer` is installed and enabled as a user timer. The
   next run can be inspected with `scripts/job-status`.
+- Stage 27G host verification confirmed the timer is loaded, enabled, and
+  active/waiting for `2026-05-12 04:30 EDT`; the manual oneshot service result
+  remains `success` with exit status 0.
 
 ## Known Limitations
 
@@ -78,5 +82,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 27F gate passed 301 tests, smoke test, fallback contract, and
+The latest Stage 27G gate passed 302 tests, smoke test, fallback contract, and
 review count 0.

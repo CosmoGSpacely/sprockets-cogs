@@ -158,7 +158,11 @@ def format_job_status(status: MaintenanceJobStatus) -> str:
         f"dry run: {_format_command(status.job.dry_run_command)}",
         f"logs: {_format_command(status.job.log_command)}",
     ]
-    if not status.timer.exists:
+    if status.service.error or status.timer.error:
+        lines.append(
+            "next: user systemd status is unavailable from this process; inspect with systemctl --user from the host shell."
+        )
+    elif not status.timer.exists:
         lines.append("next: timer is not installed; keep using the dry-run command before enabling automation.")
     elif status.timer.active_state != "active":
         lines.append("next: timer exists but is not active; inspect status before relying on automation.")

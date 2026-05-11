@@ -65,8 +65,8 @@ Current boundaries:
   prompt contamination risk.
 - Native Ollama tool calls are not wired into production for the current local
   model endpoint.
-- Weekly/monthly/annual planning notes are roadmap work, not current loop output.
-- The nightly carry script exists, but scheduling is not part of the service yet.
+- Weekly/monthly/annual planning notes are maintained by script, not current loop output.
+- Nightly carry is supervised by a user-level systemd timer on the local deployment.
 - Public setup examples and external deployment polish are still in progress.
 
 ## Repository Map

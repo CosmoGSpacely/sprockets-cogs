@@ -59,6 +59,25 @@ class Stage27JobStatusTests(unittest.TestCase):
         self.assertIn("logs: journalctl --user -u sprockets-cogs-nightly.service", output)
         self.assertIn("timer is not installed", output)
 
+    def test_format_job_status_distinguishes_unavailable_systemd_bus(self):
+        status = job_status.MaintenanceJobStatus(
+            job=job_status.NIGHTLY_JOB,
+            service=job_status.unavailable_unit_status(
+                "sprockets-cogs-nightly.service",
+                "Failed to connect to bus: Operation not permitted",
+            ),
+            timer=job_status.unavailable_unit_status(
+                "sprockets-cogs-nightly.timer",
+                "Failed to connect to bus: Operation not permitted",
+            ),
+        )
+
+        output = job_status.format_job_status(status)
+
+        self.assertIn("unavailable (Failed to connect to bus", output)
+        self.assertIn("user systemd status is unavailable", output)
+        self.assertNotIn("timer is not installed", output)
+
     def test_nightly_systemd_templates_are_conservative_user_units(self):
         service = job_status.NIGHTLY_JOB.service_template.read_text()
         timer = job_status.NIGHTLY_JOB.timer_template.read_text()
