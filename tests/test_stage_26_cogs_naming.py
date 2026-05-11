@@ -230,6 +230,39 @@ class Stage26CogsNamingTests(unittest.TestCase):
             self.assertIn("create annual", output)
             self.assertIn("No files written.", output)
 
+    def test_filter_create_plan_can_limit_to_monthly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            plan = cogs_planning.build_create_plan(cogs_dir, "2026-05-13")
+
+            filtered = cogs_planning.filter_create_plan(plan, "monthly")
+
+            self.assertEqual([item.kind for item in filtered], ["monthly"])
+
+    def test_create_planning_notes_writes_missing_monthly_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+
+            results = cogs_planning.create_planning_notes(cogs_dir, "2026-05", "monthly")
+
+            monthly = cogs_dir / "monthly" / "2026-05.md"
+            self.assertEqual(results, [f"created monthly: {monthly}"])
+            self.assertTrue(monthly.exists())
+            self.assertIn("## 5WOW", monthly.read_text())
+            self.assertFalse((cogs_dir / "annual" / "2026.md").exists())
+
+    def test_create_planning_notes_refuses_to_overwrite_existing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            monthly = cogs_dir / "monthly" / "2026-05.md"
+            monthly.parent.mkdir(parents=True)
+            monthly.write_text("manual\n")
+
+            results = cogs_planning.create_planning_notes(cogs_dir, "2026-05", "monthly")
+
+            self.assertEqual(results, [f"exists monthly: {monthly}"])
+            self.assertEqual(monthly.read_text(), "manual\n")
+
 
 if __name__ == "__main__":
     unittest.main()

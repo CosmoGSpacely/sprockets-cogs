@@ -29,6 +29,8 @@ and Stage 25 public-readiness MVP:
 - `scripts/cogs-planning` previews Stage 26 naming choices, planning inventory,
   monthly 5WOW grids, weekly/monthly/annual templates, planning-note creation
   plans, and daily rename plans without writing to the vault.
+- `scripts/cogs-planning --create ... --kind ...` can create missing planning
+  notes and refuses to overwrite existing files.
 
 ## Known Limitations
 
@@ -38,6 +40,8 @@ and Stage 25 public-readiness MVP:
 - ISO-first daily naming is preview-only. Existing daily-note writes still use
   compatible lookup and preserve current legacy naming unless an ISO-first file
   already exists.
+- The first live monthly planning note exists at
+  `/home/cosmo/vault/Cogs/monthly/2026-05.md`.
 - Higher-level hierarchy nodes are human-authored or review-approved.
 - Native local tool calling is not production-ready for the current model tag.
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.

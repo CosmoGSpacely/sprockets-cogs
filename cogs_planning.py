@@ -338,6 +338,17 @@ def build_create_plan(cogs_dir: Path, value: str) -> list[PlanningCreatePlanItem
     ]
 
 
+def filter_create_plan(
+    plan: list[PlanningCreatePlanItem],
+    kind: str,
+) -> list[PlanningCreatePlanItem]:
+    if kind == "all":
+        return plan
+    if kind not in {"weekly", "monthly", "annual"}:
+        raise ValueError(f"Unsupported planning-note kind: {kind!r}")
+    return [item for item in plan if item.kind == kind]
+
+
 def format_create_plan(cogs_dir: Path = DEFAULT_COGS_DIR, value: str | None = None) -> str:
     if not value:
         value = date.today().isoformat()
@@ -354,6 +365,24 @@ def format_create_plan(cogs_dir: Path = DEFAULT_COGS_DIR, value: str | None = No
         )
     lines.append("No files written.")
     return "\n".join(lines)
+
+
+def create_planning_notes(
+    cogs_dir: Path,
+    value: str,
+    kind: str = "all",
+) -> list[str]:
+    """Create missing planning notes from templates. Refuses to overwrite."""
+    plan = filter_create_plan(build_create_plan(cogs_dir, value), kind)
+    results: list[str] = []
+    for item in plan:
+        if item.status == "exists":
+            results.append(f"exists {item.kind}: {item.path}")
+            continue
+        item.path.parent.mkdir(parents=True, exist_ok=True)
+        item.path.write_text(item.template)
+        results.append(f"created {item.kind}: {item.path}")
+    return results
 
 
 def main() -> None:
@@ -389,6 +418,17 @@ def main() -> None:
         const="",
         metavar="YYYY-MM-DD|YYYY-MM",
         help="Preview planning-note files to create for a date or month without writing.",
+    )
+    parser.add_argument(
+        "--create",
+        metavar="YYYY-MM-DD|YYYY-MM",
+        help="Create missing planning-note files for a date or month.",
+    )
+    parser.add_argument(
+        "--kind",
+        choices=("weekly", "monthly", "annual", "all"),
+        default="all",
+        help="Limit --create to one planning-note kind. Defaults to all.",
     )
     parser.add_argument(
         "--for",
@@ -428,8 +468,11 @@ def main() -> None:
     if args.preview_create is not None:
         print(format_create_plan(Path(args.cogs_dir), args.preview_create or None))
         return
+    if args.create:
+        print("\n".join(create_planning_notes(Path(args.cogs_dir), args.create, args.kind)))
+        return
 
-    parser.error("choose --names, --daily-rename-plan, --inventory, --month, --template, or --preview-create")
+    parser.error("choose --names, --daily-rename-plan, --inventory, --month, --template, --preview-create, or --create")
 
 
 if __name__ == "__main__":
