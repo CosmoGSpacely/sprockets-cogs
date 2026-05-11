@@ -185,6 +185,41 @@ def five_wow_grid(month: str) -> list[list[str]]:
     return rows
 
 
+def calendar_grid(month: str) -> list[list[str]]:
+    """Return a month-shaped seven-day calendar grid, Monday through Sunday."""
+    first = parse_month(month)
+    _, days_in_month = calendar.monthrange(first.year, first.month)
+    rows: list[list[str]] = []
+    row = ["" for _ in FULL_WEEKDAYS]
+    for day_number in range(1, days_in_month + 1):
+        day = date(first.year, first.month, day_number)
+        weekday = day.weekday()
+        row[weekday] = f"{day_number:02d}"
+        if weekday == 6:
+            rows.append(row)
+            row = ["" for _ in FULL_WEEKDAYS]
+    if any(row):
+        rows.append(row)
+    return rows
+
+
+def five_wow_rows(month: str) -> list[tuple[int, str, str]]:
+    """Return vertical 5WOW weekday rows: week number, day label, ISO date."""
+    first = parse_month(month)
+    _, days_in_month = calendar.monthrange(first.year, first.month)
+    rows: list[tuple[int, str, str]] = []
+    week = 1
+    for day_number in range(1, days_in_month + 1):
+        day = date(first.year, first.month, day_number)
+        weekday = day.weekday()
+        if weekday >= 5:
+            continue
+        if day_number != 1 and weekday == 0 and rows:
+            week += 1
+        rows.append((week, WEEKDAYS[weekday], day.isoformat()))
+    return rows
+
+
 def format_month_preview(month: str) -> str:
     first = parse_month(month)
     date_iso = first.isoformat()
@@ -195,14 +230,21 @@ def format_month_preview(month: str) -> str:
     lines.append(f"- monthly note: {monthly_name}")
     lines.append(f"- annual note: {annual_name}")
     lines.append(f"- first ISO week: {weekly_name}")
-    lines.append("- 5WOW section: monthly Mon-Fri grid")
+    lines.append("- calendar section: monthly Mon-Sun grid")
+    lines.append("- 5WOW section: vertical weekday planning view")
     lines.append("")
-    lines.append("| Week | Mon | Tue | Wed | Thu | Fri |")
-    lines.append("|---|---|---|---|---|---|")
-    for index, row in enumerate(five_wow_grid(month), start=1):
+    lines.extend(_calendar_table(month))
+    lines.append("")
+    lines.extend(_five_wow_vertical_table(month))
+    return "\n".join(lines)
+
+
+def _calendar_table(month: str) -> list[str]:
+    lines = ["| Week | Mon | Tue | Wed | Thu | Fri | Sat | Sun |", "|---|---|---|---|---|---|---|---|"]
+    for index, row in enumerate(calendar_grid(month), start=1):
         cells = " | ".join(row)
         lines.append(f"| {index} | {cells} |")
-    return "\n".join(lines)
+    return lines
 
 
 def _frontmatter(node_type: str, period: str, date_value: str) -> str:
@@ -239,11 +281,10 @@ def render_weekly_note_template(date_iso: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _five_wow_table(month: str) -> list[str]:
-    lines = ["| Week | Mon | Tue | Wed | Thu | Fri |", "|---|---|---|---|---|---|"]
-    for index, row in enumerate(five_wow_grid(month), start=1):
-        cells = " | ".join(row)
-        lines.append(f"| {index} | {cells} |")
+def _five_wow_vertical_table(month: str) -> list[str]:
+    lines = ["| Week | Day | Date | Setting | Notes |", "|---|---|---|---|---|"]
+    for week, day_label, date_iso in five_wow_rows(month):
+        lines.append(f"| {week} | {day_label} | {date_iso} |  |  |")
     return lines
 
 
@@ -253,9 +294,13 @@ def render_monthly_note_template(month: str) -> str:
         _frontmatter("cogs/monthly", "month", month),
         f"# {month}",
         "",
+        "## Calendar",
+        "",
+        *_calendar_table(month),
+        "",
         "## 5WOW",
         "",
-        *_five_wow_table(month),
+        *_five_wow_vertical_table(month),
         "",
         "## Carry In",
         "",

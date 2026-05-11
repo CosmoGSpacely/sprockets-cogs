@@ -137,6 +137,20 @@ class Stage26CogsNamingTests(unittest.TestCase):
         self.assertEqual(grid[1], ["04", "05", "06", "07", "08"])
         self.assertEqual(grid[4], ["25", "26", "27", "28", "29"])
 
+    def test_calendar_grid_is_seven_day_month_view(self):
+        grid = cogs_planning.calendar_grid("2026-05")
+
+        self.assertEqual(grid[0], ["", "", "", "", "01", "02", "03"])
+        self.assertEqual(grid[1], ["04", "05", "06", "07", "08", "09", "10"])
+        self.assertEqual(grid[4], ["25", "26", "27", "28", "29", "30", "31"])
+
+    def test_five_wow_rows_are_vertical_weekday_view(self):
+        rows = cogs_planning.five_wow_rows("2026-05")
+
+        self.assertEqual(rows[0], (1, "Fri", "2026-05-01"))
+        self.assertEqual(rows[1], (2, "Mon", "2026-05-04"))
+        self.assertEqual(rows[-1], (5, "Fri", "2026-05-29"))
+
     def test_month_preview_includes_month_note_and_5wow_table(self):
         output = cogs_planning.format_month_preview("2026-05")
 
@@ -144,8 +158,12 @@ class Stage26CogsNamingTests(unittest.TestCase):
         self.assertIn("- monthly note: 2026-05.md", output)
         self.assertIn("- annual note: 2026.md", output)
         self.assertIn("- first ISO week: 2026-W18.md", output)
-        self.assertIn("| Week | Mon | Tue | Wed | Thu | Fri |", output)
-        self.assertIn("| 1 |  |  |  |  | 01 |", output)
+        self.assertIn("- calendar section: monthly Mon-Sun grid", output)
+        self.assertIn("- 5WOW section: vertical weekday planning view", output)
+        self.assertIn("| Week | Mon | Tue | Wed | Thu | Fri | Sat | Sun |", output)
+        self.assertIn("| 1 |  |  |  |  | 01 | 02 | 03 |", output)
+        self.assertIn("| Week | Day | Date | Setting | Notes |", output)
+        self.assertIn("| 1 | Fri | 2026-05-01 |  |  |", output)
 
     def test_weekly_template_preview_uses_iso_week_and_day_sections(self):
         output = cogs_planning.render_weekly_note_template("2026-05-13")
@@ -161,8 +179,10 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
         self.assertIn("node_type: cogs/monthly", output)
         self.assertIn("month: 2026-05", output)
+        self.assertIn("## Calendar", output)
+        self.assertIn("| 1 |  |  |  |  | 01 | 02 | 03 |", output)
         self.assertIn("## 5WOW", output)
-        self.assertIn("| 1 |  |  |  |  | 01 |", output)
+        self.assertIn("| 1 | Fri | 2026-05-01 |  |  |", output)
         self.assertIn("### Fri 2026-05-01", output)
         self.assertIn("### Sun 2026-05-31", output)
 

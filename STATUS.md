@@ -27,8 +27,9 @@ and Stage 25 public-readiness MVP:
 - Prompt-appended memory context remains disabled.
 - Nightly Cogs carry exists as a script but is not scheduled by the service.
 - `scripts/cogs-planning` previews Stage 26 naming choices, planning inventory,
-  monthly 5WOW grids, weekly/monthly/annual templates, planning-note creation
-  plans, and daily rename plans without writing to the vault.
+  monthly seven-day calendar grids plus vertical 5WOW tables,
+  weekly/monthly/annual templates, planning-note creation plans, and daily
+  rename plans without writing to the vault.
 - `scripts/cogs-planning --create ... --kind ...` can create missing planning
   notes and refuses to overwrite existing files.
 
@@ -41,7 +42,8 @@ and Stage 25 public-readiness MVP:
   compatible lookup and preserve current legacy naming unless an ISO-first file
   already exists.
 - The first live monthly planning note exists at
-  `/home/cosmo/vault/Cogs/monthly/2026-05.md`.
+  `/home/cosmo/vault/Cogs/monthly/2026-05.md`, with the seven-day `Calendar`
+  grid before the vertical weekday `5WOW` table.
 - Higher-level hierarchy nodes are human-authored or review-approved.
 - Native local tool calling is not production-ready for the current model tag.
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.
