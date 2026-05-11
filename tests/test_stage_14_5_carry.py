@@ -201,7 +201,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             self.assertEqual(loaded, plan)
             self.assertEqual(note.read_text(), original)
 
-    def test_validate_plan_document_rejects_bad_actions_and_dates(self):
+    def test_validate_plan_document_rejects_bad_carry_dates_but_allows_leftover_destination_for_terminal_actions(self):
         plan = {
             "kind": "sprockets-cogs/carry-plan",
             "version": 1,
@@ -228,7 +228,27 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
         issues = carry.validate_plan_document(plan)
 
         self.assertIn("items[1].destination_date is required for carry", issues)
-        self.assertIn("items[2].destination_date must be empty for skip", issues)
+        self.assertNotIn("items[2].destination_date must be empty for skip", issues)
+
+    def test_validate_plan_document_rejects_non_string_leftover_destination_for_terminal_actions(self):
+        plan = {
+            "kind": "sprockets-cogs/carry-plan",
+            "version": 1,
+            "items": [
+                {
+                    "id": "one",
+                    "action": "done",
+                    "destination_date": 123,
+                    "source": {"date": "2026-05-01", "path": "/tmp/a.md", "line": 1},
+                    "item_text": "Call Alex",
+                    "lines": ["- [ ] Call Alex"],
+                },
+            ],
+        }
+
+        issues = carry.validate_plan_document(plan)
+
+        self.assertIn("items[1].destination_date must be a string when present", issues)
 
     def test_preview_plan_document_lists_editable_decisions(self):
         with tempfile.TemporaryDirectory() as tmp:

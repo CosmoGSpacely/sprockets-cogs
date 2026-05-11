@@ -191,8 +191,8 @@ def validate_plan_document(plan: dict[str, Any]) -> list[str]:
                     datetime.strptime(destination_date, "%Y-%m-%d")
                 except ValueError:
                     issues.append(f"{prefix}.destination_date must be YYYY-MM-DD")
-        elif destination_date:
-            issues.append(f"{prefix}.destination_date must be empty for {action}")
+        elif destination_date and not isinstance(destination_date, str):
+            issues.append(f"{prefix}.destination_date must be a string when present")
 
         source = item.get("source")
         if not isinstance(source, dict):
