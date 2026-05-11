@@ -52,6 +52,7 @@ class Stage27JobStatusTests(unittest.TestCase):
         self.assertIn("nightly: Nightly Cogs carry safety net", output)
         self.assertIn("sprockets-cogs-nightly.service", output)
         self.assertIn("sprockets-cogs-nightly.timer", output)
+        self.assertIn("report: scripts/nightly --report", output)
         self.assertIn("dry run: scripts/nightly --dry-run", output)
         self.assertIn("logs: journalctl --user -u sprockets-cogs-nightly.service", output)
         self.assertIn("timer is not installed", output)

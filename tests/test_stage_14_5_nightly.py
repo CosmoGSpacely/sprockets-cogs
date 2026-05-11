@@ -59,6 +59,32 @@ class Stage145NightlyCarryTests(unittest.TestCase):
             self.assertIn("- [x] Done", old_text)
             self.assertIn("- [ ] Carry me", destination.read_text())
 
+    def test_nightly_report_summarizes_plan_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            old_note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            old_note.write_text(old_note.read_text() + "- [ ] Carry me\n")
+
+            plan = nightly.build_nightly_plan(
+                daily_dir=daily_dir,
+                through_date="2026-05-02",
+                destination_date="2026-05-04",
+            )
+            output = nightly.format_nightly_report(
+                plan,
+                daily_dir=daily_dir,
+                through_date="2026-05-02",
+                destination_date="2026-05-04",
+            )
+
+            self.assertIn("Nightly carry report", output)
+            self.assertIn("- open candidates: 1", output)
+            self.assertIn("- planned actions: carry: 1", output)
+            self.assertIn("- writes: no", output)
+            self.assertIn("scripts/nightly --dry-run --through 2026-05-02 --to 2026-05-04", output)
+            self.assertIn("scripts/nightly --through 2026-05-02 --to 2026-05-04", output)
+            self.assertIn("- [ ] Carry me", old_note.read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

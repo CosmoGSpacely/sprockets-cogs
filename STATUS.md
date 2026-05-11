@@ -36,8 +36,11 @@ and Stage 25 public-readiness MVP:
 - `scripts/cogs-planning --ensure-current` creates the current weekly, monthly,
   and annual planning notes when missing and preserves existing files.
 - `scripts/job-status` reports read-only maintenance job supervision state. It
-  currently tracks the planned nightly user service/timer and shows the dry-run
-  and log commands without installing or enabling automation.
+  currently tracks the planned nightly user service/timer and shows the report,
+  dry-run, and log commands without installing or enabling automation.
+- `scripts/nightly --report` summarizes the nightly carry plan without writing:
+  daily directory, through/destination dates, candidate count, source counts,
+  planned actions, and the exact dry-run/apply commands.
 
 ## Known Limitations
 
@@ -66,5 +69,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 27A gate passed 294 tests, smoke test, fallback contract, and
+The latest Stage 27B gate passed 295 tests, smoke test, fallback contract, and
 review count 0.

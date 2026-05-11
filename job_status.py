@@ -35,6 +35,7 @@ class MaintenanceJob:
     description: str
     service_unit: str
     timer_unit: str
+    report_command: tuple[str, ...]
     dry_run_command: tuple[str, ...]
     log_command: tuple[str, ...]
 
@@ -51,6 +52,7 @@ NIGHTLY_JOB = MaintenanceJob(
     description="Nightly Cogs carry safety net",
     service_unit="sprockets-cogs-nightly.service",
     timer_unit="sprockets-cogs-nightly.timer",
+    report_command=("scripts/nightly", "--report"),
     dry_run_command=("scripts/nightly", "--dry-run"),
     log_command=("journalctl", "--user", "-u", "sprockets-cogs-nightly.service", "--since", "24 hours ago"),
 )
@@ -146,6 +148,7 @@ def format_job_status(status: MaintenanceJobStatus) -> str:
         *_format_unit(status.service),
         "timer:",
         *_format_unit(status.timer),
+        f"report: {_format_command(status.job.report_command)}",
         f"dry run: {_format_command(status.job.dry_run_command)}",
         f"logs: {_format_command(status.job.log_command)}",
     ]
