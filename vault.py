@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
+
+from cogs_naming import daily_heading, preferred_daily_path
 
 
 DEFAULT_VAULT_DIR = Path.home() / "vault"
@@ -26,17 +27,14 @@ class CogsBlock:
 
 
 def daily_note_path(date_iso: str, daily_dir: Path = DEFAULT_DAILY_DIR) -> Path:
-    dt = datetime.strptime(date_iso, "%Y-%m-%d")
-    heading = dt.strftime("%a %d %b %Y")
-    return daily_dir / f"{heading}.md"
+    return preferred_daily_path(date_iso, daily_dir, style="legacy")
 
 
 def ensure_daily_note(date_iso: str, daily_dir: Path = DEFAULT_DAILY_DIR) -> Path:
     path = daily_note_path(date_iso, daily_dir)
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        dt = datetime.strptime(date_iso, "%Y-%m-%d")
-        heading = dt.strftime("%a %d %b %Y")
+        heading = daily_heading(date_iso)
         path.write_text(
             f"---\nnode_type: cogs/daily\ndate: {date_iso}\ntags: [cogs/daily]\n---\n\n"
             f"# {heading}\n\n"
