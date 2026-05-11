@@ -92,6 +92,61 @@ class Stage26CogsNamingTests(unittest.TestCase):
             self.assertIn("Summary: rename: 1", output)
             self.assertIn("rename Mon 11 May 2026.md -> 2026-05-11 Mon.md", output)
 
+    def test_inventory_counts_planning_notes_and_reports_current_periods(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            daily_dir = cogs_dir / "daily"
+            weekly_dir = cogs_dir / "weekly"
+            monthly_dir = cogs_dir / "monthly"
+            annual_dir = cogs_dir / "annual"
+            weekly_dir.mkdir(parents=True)
+            monthly_dir.mkdir(parents=True)
+            annual_dir.mkdir(parents=True)
+            vault.ensure_daily_note("2026-05-11", daily_dir)
+            (weekly_dir / "2026-W20.md").write_text("# Week\n")
+            (monthly_dir / "2026-05.md").write_text("# Month\n")
+            (annual_dir / "2026.md").write_text("# Year\n")
+
+            inventory = cogs_planning.build_inventory(cogs_dir, "2026-05-11")
+
+            self.assertEqual(inventory.daily_count, 1)
+            self.assertEqual(inventory.daily_legacy_count, 1)
+            self.assertEqual(inventory.weekly_count, 1)
+            self.assertTrue(inventory.current_weekly_exists)
+            self.assertTrue(inventory.current_monthly_exists)
+            self.assertTrue(inventory.current_annual_exists)
+            self.assertEqual(inventory.current_5wow_anchor, "2026-05")
+
+    def test_inventory_preview_reports_missing_current_planning_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+
+            output = cogs_planning.format_inventory(cogs_dir, "2026-05-11")
+
+            self.assertIn("Daily notes: 0 total", output)
+            self.assertIn("- weekly 2026-W20.md: missing", output)
+            self.assertIn("- monthly 2026-05.md: missing", output)
+            self.assertIn("- annual 2026.md: missing", output)
+            self.assertIn("- 5WOW monthly anchor: 2026-05", output)
+
+    def test_five_wow_grid_is_month_shaped_weekday_view(self):
+        grid = cogs_planning.five_wow_grid("2026-05")
+
+        self.assertEqual(len(grid), 5)
+        self.assertEqual(grid[0], ["", "", "", "", "01"])
+        self.assertEqual(grid[1], ["04", "05", "06", "07", "08"])
+        self.assertEqual(grid[4], ["25", "26", "27", "28", "29"])
+
+    def test_month_preview_includes_month_note_and_5wow_table(self):
+        output = cogs_planning.format_month_preview("2026-05")
+
+        self.assertIn("Cogs month preview for 2026-05", output)
+        self.assertIn("- monthly note: 2026-05.md", output)
+        self.assertIn("- annual note: 2026.md", output)
+        self.assertIn("- first ISO week: 2026-W18.md", output)
+        self.assertIn("| Week | Mon | Tue | Wed | Thu | Fri |", output)
+        self.assertIn("| 1 |  |  |  |  | 01 |", output)
+
 
 if __name__ == "__main__":
     unittest.main()

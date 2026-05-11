@@ -26,8 +26,8 @@ and Stage 25 public-readiness MVP:
 - Semantic memory retrieval can be enabled for compact post-classification guards.
 - Prompt-appended memory context remains disabled.
 - Nightly Cogs carry exists as a script but is not scheduled by the service.
-- `scripts/cogs-planning` previews Stage 26 naming choices and daily rename plans
-  without writing to the vault.
+- `scripts/cogs-planning` previews Stage 26 naming choices, planning inventory,
+  monthly 5WOW grids, and daily rename plans without writing to the vault.
 
 ## Known Limitations
 
