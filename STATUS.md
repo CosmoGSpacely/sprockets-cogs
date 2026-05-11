@@ -54,6 +54,10 @@ and Stage 25 public-readiness MVP:
 - Stage 27G host verification confirmed the timer is loaded, enabled, and
   active/waiting for `2026-05-12 04:30 EDT`; the manual oneshot service result
   remains `success` with exit status 0.
+- Stage 27H live rehearsal created one harmless test input, verified extraction
+  and classification through the live service, restarted the service to confirm
+  model/env reload, and left exactly one open Cogs item for the first scheduled
+  nightly timer run to carry.
 
 ## Known Limitations
 
@@ -82,5 +86,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 27G gate passed 302 tests, smoke test, fallback contract, and
-review count 0.
+The latest full Stage 27G gate passed 302 tests, smoke test, fallback contract,
+and review count 0. Stage 27H live rehearsal review count remained 0.
