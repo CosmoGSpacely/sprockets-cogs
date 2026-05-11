@@ -38,6 +38,37 @@ class Stage27JobSupervisorTests(unittest.TestCase):
             self.assertIn("systemctl --user enable --now sprockets-cogs-nightly.timer", output)
             self.assertIn("run the report and dry-run before installing", output)
 
+    def test_disable_preview_lists_safe_pause_commands_without_writing(self):
+        preview = job_supervisor.build_disable_preview(job_status.NIGHTLY_JOB)
+
+        output = job_supervisor.format_command_preview(preview)
+
+        self.assertIn("nightly: disable preview", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn("systemctl --user disable --now sprockets-cogs-nightly.timer", output)
+        self.assertIn("systemctl --user status sprockets-cogs-nightly.timer", output)
+        self.assertIn(
+            "systemctl --user reset-failed sprockets-cogs-nightly.service sprockets-cogs-nightly.timer",
+            output,
+        )
+        self.assertIn("automatic maintenance should pause", output)
+
+    def test_recovery_preview_lists_status_report_dry_run_and_logs(self):
+        preview = job_supervisor.build_recovery_preview(job_status.NIGHTLY_JOB)
+
+        output = job_supervisor.format_command_preview(preview)
+
+        self.assertIn("nightly: recovery preview", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn("scripts/job-status nightly", output)
+        self.assertIn("scripts/nightly --report", output)
+        self.assertIn("scripts/nightly --dry-run", output)
+        self.assertIn("journalctl --user -u sprockets-cogs-nightly.service --since 24 hours ago", output)
+        self.assertIn("systemctl --user status sprockets-cogs-nightly.timer", output)
+        self.assertIn("systemctl --user status sprockets-cogs-nightly.service", output)
+        self.assertIn("systemctl --user start sprockets-cogs-nightly.service", output)
+        self.assertIn("before manually starting the service", output)
+
 
 if __name__ == "__main__":
     unittest.main()

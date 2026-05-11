@@ -45,15 +45,19 @@ and Stage 25 public-readiness MVP:
   They are committed for review but are not installed or enabled yet.
 - `scripts/job-supervisor --preview-install nightly` shows the exact future
   install targets and `systemctl --user` commands without writing.
+- `scripts/job-supervisor --preview-disable nightly` and
+  `--preview-recovery nightly` show pause/recovery commands before live
+  scheduling exists.
 
 ## Known Limitations
 
 - Public setup and configuration examples are intentionally deferred.
 - Weekly, monthly, annual, and 5WOW planning notes are maintained manually or
   through `scripts/cogs-planning`; they are not maintained by the live loop.
-- The nightly user timer is not installed yet. Stage 27A-D only add observation,
-  preflight reporting, committed templates, and install preview; scheduling
-  remains disabled until explicit install/recovery slices are built.
+- The nightly user timer is not installed yet. Stage 27A-E only add observation,
+  preflight reporting, committed templates, install preview, and
+  recovery/disable previews; scheduling remains disabled until an explicit live
+  install slice.
 - ISO-first daily naming is preview-only. Existing daily-note writes still use
   compatible lookup and preserve current legacy naming unless an ISO-first file
   already exists.
@@ -74,5 +78,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 27D gate passed 298 tests, smoke test, fallback contract, and
+The latest Stage 27E gate passed 300 tests, smoke test, fallback contract, and
 review count 0.
