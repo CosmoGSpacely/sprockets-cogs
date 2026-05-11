@@ -1,0 +1,9 @@
+[Unit]
+Description=Sprockets-Cogs nightly carry safety net
+Documentation=https://github.com/CosmoGSpacely/sprockets-cogs
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/cosmo/sprockets-cogs
+ExecStart=/home/cosmo/sprockets-cogs/scripts/nightly
+NoNewPrivileges=true

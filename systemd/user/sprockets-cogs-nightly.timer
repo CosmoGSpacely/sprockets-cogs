@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Sprockets-Cogs nightly carry safety net
+Documentation=https://github.com/CosmoGSpacely/sprockets-cogs
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+Unit=sprockets-cogs-nightly.service
+
+[Install]
+WantedBy=timers.target

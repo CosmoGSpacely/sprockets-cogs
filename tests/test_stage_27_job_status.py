@@ -52,10 +52,25 @@ class Stage27JobStatusTests(unittest.TestCase):
         self.assertIn("nightly: Nightly Cogs carry safety net", output)
         self.assertIn("sprockets-cogs-nightly.service", output)
         self.assertIn("sprockets-cogs-nightly.timer", output)
+        self.assertIn("service template:", output)
+        self.assertIn("timer template:", output)
         self.assertIn("report: scripts/nightly --report", output)
         self.assertIn("dry run: scripts/nightly --dry-run", output)
         self.assertIn("logs: journalctl --user -u sprockets-cogs-nightly.service", output)
         self.assertIn("timer is not installed", output)
+
+    def test_nightly_systemd_templates_are_conservative_user_units(self):
+        service = job_status.NIGHTLY_JOB.service_template.read_text()
+        timer = job_status.NIGHTLY_JOB.timer_template.read_text()
+
+        self.assertIn("Type=oneshot", service)
+        self.assertIn("WorkingDirectory=/home/cosmo/sprockets-cogs", service)
+        self.assertIn("ExecStart=/home/cosmo/sprockets-cogs/scripts/nightly", service)
+        self.assertIn("NoNewPrivileges=true", service)
+        self.assertIn("OnCalendar=*-*-* 04:30:00", timer)
+        self.assertIn("Persistent=true", timer)
+        self.assertIn("Unit=sprockets-cogs-nightly.service", timer)
+        self.assertIn("WantedBy=timers.target", timer)
 
 
 if __name__ == "__main__":
