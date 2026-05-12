@@ -45,6 +45,7 @@ class RuntimeStatus:
 class SystemStatus:
     runtime: RuntimeStatus
     service: "ServiceStatus"
+    directories: "DirectoryStatus"
     review_report: dict
     retrieval_status: production_retrieval.ProductionRetrievalStatus
     jobs: tuple[job_status.MaintenanceJobStatus, ...]
@@ -56,6 +57,16 @@ class ServiceStatus:
     main_pid: int | None
     env: dict[str, str]
     env_error: str | None = None
+
+
+@dataclass(frozen=True)
+class DirectoryStatus:
+    pending_inputs: int
+    processing_files: int
+    archived_inputs: int
+    output_files: int
+    memory_trace_exists: bool
+    oldest_pending_input: str | None = None
 
 
 def build_runtime_status() -> RuntimeStatus:
@@ -70,6 +81,33 @@ def build_runtime_status() -> RuntimeStatus:
         embed_model=embeddings.EMBED_MODEL,
         embed_keep_alive=embeddings.EMBED_KEEP_ALIVE,
         embed_cache_path=embeddings.EMBED_CACHE_PATH,
+    )
+
+
+def _count_files(path: Path, pattern: str = "*") -> int:
+    if not path.exists():
+        return 0
+    return sum(1 for candidate in path.glob(pattern) if candidate.is_file())
+
+
+def _oldest_file_name(path: Path, pattern: str = "*") -> str | None:
+    if not path.exists():
+        return None
+    files = [candidate for candidate in path.glob(pattern) if candidate.is_file()]
+    if not files:
+        return None
+    return min(files, key=lambda candidate: candidate.stat().st_mtime).name
+
+
+def build_directory_status(runtime: RuntimeStatus) -> DirectoryStatus:
+    memory_trace_path = runtime.output_dir / agentic_loop.MEMORY_TRACE_FILENAME
+    return DirectoryStatus(
+        pending_inputs=_count_files(runtime.input_dir, "*.input"),
+        processing_files=_count_files(runtime.processing_dir),
+        archived_inputs=_count_files(runtime.archive_dir, "*.input"),
+        output_files=_count_files(runtime.output_dir),
+        memory_trace_exists=memory_trace_path.exists(),
+        oldest_pending_input=_oldest_file_name(runtime.input_dir, "*.input"),
     )
 
 
@@ -160,9 +198,11 @@ def build_service_status(name: str = SERVICE_UNIT) -> ServiceStatus:
 
 
 def build_system_status() -> SystemStatus:
+    runtime = build_runtime_status()
     return SystemStatus(
-        runtime=build_runtime_status(),
+        runtime=runtime,
         service=build_service_status(),
+        directories=build_directory_status(runtime),
         review_report=review.review_report(agentic_loop.REVIEW_DIR),
         retrieval_status=production_retrieval.production_retrieval_status(agentic_loop.VAULT_DIR),
         jobs=tuple(job_status.build_job_status(job) for job in job_status.KNOWN_JOBS.values()),
@@ -200,6 +240,20 @@ def _format_runtime_status(status: RuntimeStatus) -> list[str]:
     ]
 
 
+def _format_directory_status(status: DirectoryStatus) -> list[str]:
+    lines = [
+        "Runtime queues",
+        f"- pending .input files: {status.pending_inputs}",
+        f"- processing files: {status.processing_files}",
+        f"- archived .input files: {status.archived_inputs}",
+        f"- output files: {status.output_files}",
+        f"- memory trace file exists: {_yes_no(status.memory_trace_exists)}",
+    ]
+    if status.oldest_pending_input:
+        lines.append(f"- oldest pending input: {status.oldest_pending_input}")
+    return lines
+
+
 def _format_service_status(status: ServiceStatus) -> list[str]:
     lines = ["Service"]
     lines.extend(job_status._format_unit(status.unit))
@@ -220,6 +274,7 @@ def format_system_status(status: SystemStatus) -> str:
         "\n".join(["Sprockets-Cogs status", ""]),
         "\n".join(_format_runtime_status(status.runtime)),
         "\n".join(_format_service_status(status.service)),
+        "\n".join(_format_directory_status(status.directories)),
         "\n".join(_format_review_report(status.review_report)),
         format_retrieval_status(status.retrieval_status),
         job_status.format_all_statuses(list(status.jobs)),

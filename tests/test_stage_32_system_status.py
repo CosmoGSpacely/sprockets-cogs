@@ -54,6 +54,14 @@ class Stage32SystemStatusTests(unittest.TestCase):
                         "SPROCKETS_COGS_MEMORY_CONTEXT": "0",
                     },
                 ),
+                directories=system_status.DirectoryStatus(
+                    pending_inputs=1,
+                    processing_files=0,
+                    archived_inputs=12,
+                    output_files=1,
+                    memory_trace_exists=True,
+                    oldest_pending_input="capture.input",
+                ),
                 review_report={
                     "total": 2,
                     "parseable": 1,
@@ -96,6 +104,10 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("sprockets-cogs.service", output)
             self.assertIn("- main pid: 1234", output)
             self.assertIn("SPROCKETS_COGS_MEMORY_RETRIEVAL: 1", output)
+            self.assertIn("Runtime queues", output)
+            self.assertIn("- pending .input files: 1", output)
+            self.assertIn("- oldest pending input: capture.input", output)
+            self.assertIn("- memory trace file exists: yes", output)
             self.assertIn("- embedding model: test-embed", output)
             self.assertIn("- total: 2", output)
             self.assertIn("- memory retrieval: enabled", output)
@@ -110,6 +122,42 @@ class Stage32SystemStatusTests(unittest.TestCase):
         self.assertEqual(runtime.vault_dir, system_status.agentic_loop.VAULT_DIR)
         self.assertEqual(runtime.embed_model, system_status.embeddings.EMBED_MODEL)
         self.assertEqual(runtime.embed_cache_path, system_status.embeddings.EMBED_CACHE_PATH)
+
+    def test_build_directory_status_counts_runtime_files_without_reading_contents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = system_status.RuntimeStatus(
+                model="test-model",
+                sc_root=root / "sc",
+                input_dir=root / "sc" / "input",
+                processing_dir=root / "sc" / "processing",
+                archive_dir=root / "sc" / "archive",
+                output_dir=root / "sc" / "output",
+                vault_dir=root / "vault",
+                embed_model="test-embed",
+                embed_keep_alive="1h",
+                embed_cache_path=root / "embeddings.json",
+            )
+            runtime.input_dir.mkdir(parents=True)
+            runtime.processing_dir.mkdir(parents=True)
+            runtime.archive_dir.mkdir(parents=True)
+            runtime.output_dir.mkdir(parents=True)
+            (runtime.input_dir / "b.input").write_text("newer")
+            (runtime.input_dir / "a.input").write_text("older")
+            (runtime.input_dir / "ignore.txt").write_text("ignore")
+            (runtime.processing_dir / "active.input").write_text("processing")
+            (runtime.archive_dir / "done.input").write_text("archived")
+            (runtime.archive_dir / "note.md").write_text("not counted")
+            (runtime.output_dir / system_status.agentic_loop.MEMORY_TRACE_FILENAME).write_text("{}\n")
+
+            status = system_status.build_directory_status(runtime)
+
+        self.assertEqual(status.pending_inputs, 2)
+        self.assertEqual(status.processing_files, 1)
+        self.assertEqual(status.archived_inputs, 1)
+        self.assertEqual(status.output_files, 1)
+        self.assertTrue(status.memory_trace_exists)
+        self.assertIn(status.oldest_pending_input, {"a.input", "b.input"})
 
     @patch("system_status.read_process_env")
     @patch("system_status.subprocess.run")
