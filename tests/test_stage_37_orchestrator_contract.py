@@ -1,4 +1,5 @@
 import io
+import json
 import unittest
 from contextlib import redirect_stdout
 
@@ -128,6 +129,42 @@ class Stage37OrchestratorContractTests(unittest.TestCase):
         output = buf.getvalue()
         self.assertIn("Orchestrator route preview", output)
         self.assertIn("- specialist: operations", output)
+
+    def test_route_fixtures_match_expected_decisions(self):
+        fixture_names = {fixture.name for fixture in orch.ROUTE_FIXTURES}
+
+        self.assertIn("capture-input", fixture_names)
+        self.assertIn("unknown-review", fixture_names)
+
+        for fixture in orch.ROUTE_FIXTURES:
+            with self.subTest(fixture=fixture.name):
+                decision = orch.route_work_request(fixture.request)
+                self.assertEqual(decision.specialist, fixture.expected_specialist)
+                self.assertEqual(decision.mode, fixture.expected_mode)
+                self.assertEqual(decision.write_posture, fixture.expected_write_posture)
+                self.assertEqual(decision.review, fixture.expected_review)
+
+    def test_route_decision_json_payload_is_stable_and_machine_readable(self):
+        request = orch.WorkRequest(source="cli", content="check status")
+        decision = orch.route_work_request(request)
+
+        output = orch.format_route_decision_json(request, decision)
+        payload = json.loads(output)
+
+        self.assertEqual(payload["request"]["source"], "cli")
+        self.assertEqual(payload["decision"]["specialist"], "operations")
+        self.assertEqual(payload["decision"]["mode"], "operations")
+        self.assertEqual(payload["decision"]["write_posture"], "read-only")
+
+    def test_main_can_print_json_preview(self):
+        buf = io.StringIO()
+
+        with redirect_stdout(buf):
+            orch.main(["--json", "--source", "cli", "check", "status"])
+
+        payload = json.loads(buf.getvalue())
+        self.assertEqual(payload["decision"]["specialist"], "operations")
+        self.assertEqual(payload["decision"]["review"], "not-required")
 
 
 if __name__ == "__main__":

@@ -6,8 +6,9 @@ write vault files, or replace the live watcher.
 from __future__ import annotations
 
 import argparse
+import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 
@@ -83,6 +84,96 @@ class RouteDecision:
     write_posture: WritePosture
     review: ReviewRequirement
     reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RouteFixture:
+    """Named example route used by tests and future orchestrator rehearsals."""
+
+    name: str
+    request: WorkRequest
+    expected_specialist: Specialist
+    expected_mode: WorkflowMode
+    expected_write_posture: WritePosture
+    expected_review: ReviewRequirement
+
+
+ROUTE_FIXTURES: tuple[RouteFixture, ...] = (
+    RouteFixture(
+        name="capture-input",
+        request=WorkRequest(
+            source="/home/cosmo/sc/input/capture.input",
+            content="Need to draft release notes.",
+        ),
+        expected_specialist="extractor-classifier",
+        expected_mode="capture",
+        expected_write_posture="proven-writes-only",
+        expected_review="not-required",
+    ),
+    RouteFixture(
+        name="review-packet",
+        request=WorkRequest(
+            source="cli",
+            content="Show the review packet for pending approvals.",
+        ),
+        expected_specialist="review",
+        expected_mode="review",
+        expected_write_posture="human-approved-only",
+        expected_review="required",
+    ),
+    RouteFixture(
+        name="operations-status",
+        request=WorkRequest(
+            source="cli",
+            content="Check service health and nightly timer status.",
+        ),
+        expected_specialist="operations",
+        expected_mode="operations",
+        expected_write_posture="read-only",
+        expected_review="not-required",
+    ),
+    RouteFixture(
+        name="memory-retrieval-preview",
+        request=WorkRequest(
+            source="cli",
+            content="Run a retrieval benchmark preview for memory traces.",
+        ),
+        expected_specialist="memory",
+        expected_mode="retrieval",
+        expected_write_posture="read-only",
+        expected_review="not-required",
+    ),
+    RouteFixture(
+        name="cogs-maintenance",
+        request=WorkRequest(
+            source="cli",
+            content="Run nightly carry report for weekly planning.",
+        ),
+        expected_specialist="cogs",
+        expected_mode="maintenance",
+        expected_write_posture="guarded-maintenance-writes",
+        expected_review="recommended",
+    ),
+    RouteFixture(
+        name="sprockets-planning",
+        request=WorkRequest(
+            source="cli",
+            content="Propose a project parent for this hierarchy item.",
+        ),
+        expected_specialist="sprockets",
+        expected_mode="planning",
+        expected_write_posture="proposal-or-review-only",
+        expected_review="required",
+    ),
+    RouteFixture(
+        name="unknown-review",
+        request=WorkRequest(source="cli", content="Something unusual."),
+        expected_specialist="review",
+        expected_mode="review",
+        expected_write_posture="proposal-or-review-only",
+        expected_review="required",
+    ),
+)
 
 
 def normalize_mode(value: str | None) -> WorkflowMode:
@@ -273,6 +364,21 @@ def format_route_decision(request: WorkRequest, decision: RouteDecision) -> str:
     return "\n".join(lines)
 
 
+def route_decision_payload(request: WorkRequest, decision: RouteDecision) -> dict[str, object]:
+    """Return a stable machine-readable route preview payload."""
+
+    return {
+        "request": asdict(request),
+        "decision": asdict(decision),
+    }
+
+
+def format_route_decision_json(request: WorkRequest, decision: RouteDecision) -> str:
+    """Format a route preview as deterministic JSON."""
+
+    return json.dumps(route_decision_payload(request, decision), indent=2, sort_keys=True)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Preview Phase 4 orchestrator routing.")
     parser.add_argument("content", nargs="*", help="Request text to route.")
@@ -280,6 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mode", default="orchestration-preview", help="Workflow mode.")
     parser.add_argument("--request-id", default="preview", help="Traceable request id.")
     parser.add_argument("--content-ref", default=None, help="Optional source payload reference.")
+    parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     return parser
 
 
@@ -293,7 +400,11 @@ def main(argv: list[str] | None = None) -> None:
         content=" ".join(args.content),
         content_ref=args.content_ref,
     )
-    print(format_route_decision(request, route_work_request(request)))
+    decision = route_work_request(request)
+    if args.json:
+        print(format_route_decision_json(request, decision))
+    else:
+        print(format_route_decision(request, decision))
 
 
 if __name__ == "__main__":
