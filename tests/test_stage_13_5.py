@@ -554,6 +554,56 @@ class Stage135HardeningTests(unittest.TestCase):
                 with self.subTest(reason=reason):
                     self.assertEqual(sources_by_reason[reason], source)
 
+    def test_review_report_summarizes_queue_without_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            valid_task = {
+                "node_type": "sprockets/task",
+                "title": "Review report task",
+                "item_text": "Review report task",
+                "date": "2026-05-02",
+                "confidence": "low",
+            }
+            valid_note = {
+                "node_type": "sprockets/note",
+                "title": "Review report note",
+                "body": "Review report note",
+                "confidence": "high",
+            }
+            (review_dir / "task.md").write_text(
+                "---\nnode_type: review\nreviewed: false\n---\n\n"
+                "**Reason:** confidence: low\n\n"
+                f"```json\n{json.dumps(valid_task, indent=2)}\n```\n"
+            )
+            (review_dir / "note.md").write_text(
+                "---\nnode_type: review\nreviewed: false\n---\n\n"
+                "**Reason:** openai_fallback_candidate: confidence: low\n\n"
+                f"```json\n{json.dumps(valid_note, indent=2)}\n```\n"
+            )
+            (review_dir / "broken.md").write_text(
+                "---\nnode_type: review\nreviewed: false\n---\n\n"
+                "**Reason:** retry failed\n\n"
+                "```json\nnot json\n```\n"
+            )
+
+            report = review.review_report(review_dir)
+
+            self.assertEqual(report["total"], 3)
+            self.assertEqual(report["parseable"], 2)
+            self.assertEqual(report["unparseable"], 1)
+            self.assertEqual(report["by_source"]["local low confidence"], 1)
+            self.assertEqual(report["by_source"]["openai fallback candidate"], 1)
+            self.assertEqual(report["by_source"]["local retry failure"], 1)
+            self.assertEqual(report["by_node_type"]["sprockets/task"], 1)
+            self.assertEqual(report["by_node_type"]["sprockets/note"], 1)
+            self.assertEqual(report["by_node_type"]["?"], 1)
+            self.assertEqual(report["by_confidence"]["low"], 1)
+            self.assertEqual(report["by_confidence"]["high"], 1)
+            self.assertEqual(report["by_confidence"]["?"], 1)
+            self.assertEqual(report["by_reason"]["confidence: low"], 1)
+            self.assertEqual(report["by_reason"]["openai_fallback_candidate: confidence: low"], 1)
+            self.assertEqual(report["by_reason"]["retry failed"], 1)
+
     def test_list_pending_marks_unparseable_review_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             review_dir = Path(tmp)

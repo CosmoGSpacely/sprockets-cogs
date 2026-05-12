@@ -11,7 +11,7 @@ Markdown files to a configured vault directory.
 - `entity_state.py` — JSON working memory for recently seen contacts/entities
 - `vault_graph.py`  — NetworkX graph builder for testable Sprockets parent resolution
 - `review.py`       — interactive CLI for approving/discarding review items
-- `scripts/review`  — venv-aware wrapper for review count/list/interactive modes
+- `scripts/review`  — venv-aware wrapper for review count/list/report/interactive modes
 - `scripts/smoke`   — venv-aware wrapper for deterministic temp-vault smoke test
 - `scripts/check`   — operational sanity check: tests + smoke + review count
 - `smoke_test.py`   — deterministic temp-vault smoke test with model calls stubbed
@@ -38,6 +38,7 @@ startup scan / watchdog input/ → extract_nodes() → classify_nodes() → vali
 ## Review commands
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
+- `scripts/review --report` — summarize pending review items by source/type/confidence/reason
 - `scripts/review` or `scripts/review --interactive` — approve/discard/skip
 
 ## Operational checks

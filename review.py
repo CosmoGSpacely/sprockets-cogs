@@ -14,6 +14,7 @@ import json
 import re
 import shutil
 import sys
+from collections import Counter
 from pathlib import Path
 
 import frontmatter
@@ -64,9 +65,43 @@ def list_pending(review_dir: Path = REVIEW_DIR) -> list[dict]:
     return [summarize_review_file(path) for path in _review_files(review_dir)]
 
 
+def review_report(review_dir: Path = REVIEW_DIR) -> dict:
+    items = list_pending(review_dir)
+    return {
+        "total": len(items),
+        "parseable": sum(1 for item in items if item["parseable"]),
+        "unparseable": sum(1 for item in items if not item["parseable"]),
+        "by_source": dict(sorted(Counter(item["source"] for item in items).items())),
+        "by_node_type": dict(sorted(Counter(item["node_type"] for item in items).items())),
+        "by_confidence": dict(sorted(Counter(item["confidence"] for item in items).items())),
+        "by_reason": dict(sorted(Counter(item["reason"] for item in items).items())),
+    }
+
+
 def print_pending_count(review_dir: Path = REVIEW_DIR) -> None:
     count = len(_review_files(review_dir))
     print(f"{count} item(s) waiting in {review_dir}")
+
+
+def _print_counter(label: str, values: dict) -> None:
+    print(label)
+    if not values:
+        print("  (none)")
+        return
+    for key, count in values.items():
+        print(f"  {key}: {count}")
+
+
+def print_pending_report(review_dir: Path = REVIEW_DIR) -> None:
+    report = review_report(review_dir)
+    print(f"Review queue report for {review_dir}")
+    print(f"total:       {report['total']}")
+    print(f"parseable:   {report['parseable']}")
+    print(f"unparseable: {report['unparseable']}")
+    _print_counter("by source:", report["by_source"])
+    _print_counter("by node_type:", report["by_node_type"])
+    _print_counter("by confidence:", report["by_confidence"])
+    _print_counter("by reason:", report["by_reason"])
 
 
 def print_pending_list(review_dir: Path = REVIEW_DIR) -> None:
@@ -182,8 +217,10 @@ if __name__ == "__main__":
         print_pending_count()
     elif args == ["--list"]:
         print_pending_list()
+    elif args == ["--report"]:
+        print_pending_report()
     elif args in ([], ["--interactive"]):
         review_all()
     else:
-        print("Usage: python review.py [--count | --list | --interactive]")
+        print("Usage: python review.py [--count | --list | --report | --interactive]")
         raise SystemExit(2)
