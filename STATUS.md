@@ -90,5 +90,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 32C gate passed 312 tests, smoke test, fallback contract, and
+The latest Stage 32D gate passed 316 tests, smoke test, fallback contract, and
 review count 0.

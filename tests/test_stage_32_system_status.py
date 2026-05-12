@@ -62,6 +62,12 @@ class Stage32SystemStatusTests(unittest.TestCase):
                     memory_trace_exists=True,
                     oldest_pending_input="capture.input",
                 ),
+                models=system_status.ModelAvailabilityStatus(
+                    ollama_available=True,
+                    configured_model="test-model",
+                    embedding_model="test-embed",
+                    installed_models=("test-model", "test-embed"),
+                ),
                 review_report={
                     "total": 2,
                     "parseable": 1,
@@ -109,6 +115,10 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("- oldest pending input: capture.input", output)
             self.assertIn("- memory trace file exists: yes", output)
             self.assertIn("- embedding model: test-embed", output)
+            self.assertIn("Models", output)
+            self.assertIn("- ollama available: yes", output)
+            self.assertIn("- configured model installed: yes", output)
+            self.assertIn("- embedding model installed: yes", output)
             self.assertIn("- total: 2", output)
             self.assertIn("- memory retrieval: enabled", output)
             self.assertIn("- memory context: disabled", output)
@@ -122,6 +132,84 @@ class Stage32SystemStatusTests(unittest.TestCase):
         self.assertEqual(runtime.vault_dir, system_status.agentic_loop.VAULT_DIR)
         self.assertEqual(runtime.embed_model, system_status.embeddings.EMBED_MODEL)
         self.assertEqual(runtime.embed_cache_path, system_status.embeddings.EMBED_CACHE_PATH)
+
+    def test_parse_ollama_list_reads_model_names(self):
+        output = (
+            "NAME                           ID              SIZE      MODIFIED\n"
+            "qwen3.5:9b-32k-cosmo          abc123          7.0 GB    2 days ago\n"
+            "nomic-embed-text:latest        def456          274 MB    3 days ago\n"
+        )
+
+        models = system_status.parse_ollama_list(output)
+
+        self.assertEqual(models, ("qwen3.5:9b-32k-cosmo", "nomic-embed-text:latest"))
+
+    def test_model_availability_accepts_implicit_latest_tag(self):
+        status = system_status.ModelAvailabilityStatus(
+            ollama_available=True,
+            configured_model="test-model",
+            embedding_model="nomic-embed-text",
+            installed_models=("test-model:latest", "nomic-embed-text:latest"),
+        )
+
+        self.assertTrue(status.configured_model_installed)
+        self.assertTrue(status.embedding_model_installed)
+
+    @patch("system_status.subprocess.run")
+    def test_build_model_availability_status_reports_installed_models(self, mock_run):
+        runtime = system_status.RuntimeStatus(
+            model="qwen3.5:9b-32k-cosmo",
+            sc_root=Path("/tmp/sc"),
+            input_dir=Path("/tmp/sc/input"),
+            processing_dir=Path("/tmp/sc/processing"),
+            archive_dir=Path("/tmp/sc/archive"),
+            output_dir=Path("/tmp/sc/output"),
+            vault_dir=Path("/tmp/vault"),
+            embed_model="nomic-embed-text:latest",
+            embed_keep_alive="24h",
+            embed_cache_path=Path("/tmp/embeddings.json"),
+        )
+        mock_run.return_value = Mock(
+            stdout=(
+                "NAME                           ID              SIZE      MODIFIED\n"
+                "qwen3.5:9b-32k-cosmo          abc123          7.0 GB    2 days ago\n"
+                "nomic-embed-text:latest        def456          274 MB    3 days ago\n"
+            ),
+            stderr="",
+            returncode=0,
+        )
+
+        status = system_status.build_model_availability_status(runtime)
+
+        self.assertTrue(status.ollama_available)
+        self.assertTrue(status.configured_model_installed)
+        self.assertTrue(status.embedding_model_installed)
+        mock_run.assert_called_once()
+
+    @patch("system_status.subprocess.run")
+    def test_build_model_availability_status_reports_unavailable_ollama(self, mock_run):
+        runtime = system_status.RuntimeStatus(
+            model="test-model",
+            sc_root=Path("/tmp/sc"),
+            input_dir=Path("/tmp/sc/input"),
+            processing_dir=Path("/tmp/sc/processing"),
+            archive_dir=Path("/tmp/sc/archive"),
+            output_dir=Path("/tmp/sc/output"),
+            vault_dir=Path("/tmp/vault"),
+            embed_model="test-embed",
+            embed_keep_alive="24h",
+            embed_cache_path=Path("/tmp/embeddings.json"),
+        )
+        mock_run.return_value = Mock(
+            stdout="",
+            stderr="could not connect to ollama",
+            returncode=1,
+        )
+
+        status = system_status.build_model_availability_status(runtime)
+
+        self.assertFalse(status.ollama_available)
+        self.assertIn("could not connect", status.error)
 
     def test_build_directory_status_counts_runtime_files_without_reading_contents(self):
         with tempfile.TemporaryDirectory() as tmp:

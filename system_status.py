@@ -46,6 +46,7 @@ class SystemStatus:
     runtime: RuntimeStatus
     service: "ServiceStatus"
     directories: "DirectoryStatus"
+    models: "ModelAvailabilityStatus"
     review_report: dict
     retrieval_status: production_retrieval.ProductionRetrievalStatus
     jobs: tuple[job_status.MaintenanceJobStatus, ...]
@@ -69,6 +70,30 @@ class DirectoryStatus:
     oldest_pending_input: str | None = None
 
 
+@dataclass(frozen=True)
+class ModelAvailabilityStatus:
+    ollama_available: bool
+    configured_model: str
+    embedding_model: str
+    installed_models: tuple[str, ...]
+    error: str | None = None
+
+    @property
+    def configured_model_installed(self) -> bool:
+        return _model_name_matches(self.configured_model, self.installed_models)
+
+    @property
+    def embedding_model_installed(self) -> bool:
+        return _model_name_matches(self.embedding_model, self.installed_models)
+
+
+def _model_name_matches(model: str, installed_models: tuple[str, ...]) -> bool:
+    candidates = {model}
+    if ":" not in model:
+        candidates.add(f"{model}:latest")
+    return any(candidate in installed_models for candidate in candidates)
+
+
 def build_runtime_status() -> RuntimeStatus:
     return RuntimeStatus(
         model=agentic_loop.MODEL,
@@ -81,6 +106,55 @@ def build_runtime_status() -> RuntimeStatus:
         embed_model=embeddings.EMBED_MODEL,
         embed_keep_alive=embeddings.EMBED_KEEP_ALIVE,
         embed_cache_path=embeddings.EMBED_CACHE_PATH,
+    )
+
+
+def parse_ollama_list(output: str) -> tuple[str, ...]:
+    models: list[str] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("NAME"):
+            continue
+        name = stripped.split(maxsplit=1)[0]
+        if name:
+            models.append(name)
+    return tuple(models)
+
+
+def build_model_availability_status(runtime: RuntimeStatus) -> ModelAvailabilityStatus:
+    command = ["ollama", "list"]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return ModelAvailabilityStatus(
+            ollama_available=False,
+            configured_model=runtime.model,
+            embedding_model=runtime.embed_model,
+            installed_models=(),
+            error=str(exc),
+        )
+
+    if completed.returncode != 0:
+        error = completed.stderr.strip() or f"ollama list exited {completed.returncode}"
+        return ModelAvailabilityStatus(
+            ollama_available=False,
+            configured_model=runtime.model,
+            embedding_model=runtime.embed_model,
+            installed_models=(),
+            error=error,
+        )
+
+    return ModelAvailabilityStatus(
+        ollama_available=True,
+        configured_model=runtime.model,
+        embedding_model=runtime.embed_model,
+        installed_models=parse_ollama_list(completed.stdout),
     )
 
 
@@ -203,6 +277,7 @@ def build_system_status() -> SystemStatus:
         runtime=runtime,
         service=build_service_status(),
         directories=build_directory_status(runtime),
+        models=build_model_availability_status(runtime),
         review_report=review.review_report(agentic_loop.REVIEW_DIR),
         retrieval_status=production_retrieval.production_retrieval_status(agentic_loop.VAULT_DIR),
         jobs=tuple(job_status.build_job_status(job) for job in job_status.KNOWN_JOBS.values()),
@@ -254,6 +329,21 @@ def _format_directory_status(status: DirectoryStatus) -> list[str]:
     return lines
 
 
+def _format_model_status(status: ModelAvailabilityStatus) -> list[str]:
+    lines = [
+        "Models",
+        f"- ollama available: {_yes_no(status.ollama_available)}",
+        f"- configured model: {status.configured_model}",
+        f"- configured model installed: {_yes_no(status.configured_model_installed)}",
+        f"- embedding model: {status.embedding_model}",
+        f"- embedding model installed: {_yes_no(status.embedding_model_installed)}",
+        f"- installed model count: {len(status.installed_models)}",
+    ]
+    if status.error:
+        lines.append(f"- ollama error: {status.error}")
+    return lines
+
+
 def _format_service_status(status: ServiceStatus) -> list[str]:
     lines = ["Service"]
     lines.extend(job_status._format_unit(status.unit))
@@ -275,6 +365,7 @@ def format_system_status(status: SystemStatus) -> str:
         "\n".join(_format_runtime_status(status.runtime)),
         "\n".join(_format_service_status(status.service)),
         "\n".join(_format_directory_status(status.directories)),
+        "\n".join(_format_model_status(status.models)),
         "\n".join(_format_review_report(status.review_report)),
         format_retrieval_status(status.retrieval_status),
         job_status.format_all_statuses(list(status.jobs)),
