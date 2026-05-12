@@ -81,6 +81,8 @@ and Stage 25 public-readiness MVP:
 - Native local tool calling is not production-ready for the current model tag.
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.
 - The sensitive-data audit passed before the public repository flip.
+- Phase 3.5 closeout added public-facing `EVAL.md`, `DECISIONS.md`, and
+  `DEMO.md` as a bounded portfolio checkpoint before Phase 4.
 
 ## Verification
 

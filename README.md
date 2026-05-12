@@ -115,3 +115,9 @@ See `STATUS.md` for the current maturity level and known limitations.
 
 See `DESIGN.md` for the architecture and design decisions behind the current
 agentic loop.
+
+See `EVAL.md` for current verification and retrieval benchmark notes.
+
+See `DEMO.md` for a short text walkthrough of the live workflow.
+
+See `DECISIONS.md` for the main public-facing design decisions.
