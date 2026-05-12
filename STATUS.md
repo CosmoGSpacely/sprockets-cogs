@@ -58,6 +58,10 @@ and Stage 25 public-readiness MVP:
   and classification through the live service, restarted the service to confirm
   model/env reload, and left exactly one open Cogs item for the first scheduled
   nightly timer run to carry.
+- Stage 27 scheduled-job supervision is complete: the first scheduled run on
+  `2026-05-12 04:30 EDT` succeeded, carried six open Cogs items to `2026-05-13`,
+  left `scripts/nightly --report` with 0 open candidates, and kept review count
+  at 0.
 
 ## Known Limitations
 
@@ -86,5 +90,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest full Stage 27G gate passed 302 tests, smoke test, fallback contract,
-and review count 0. Stage 27H live rehearsal review count remained 0.
+The latest Stage 27 closeout gate passed 302 tests, smoke test, fallback
+contract, and review count 0.
