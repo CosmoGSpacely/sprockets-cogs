@@ -86,6 +86,18 @@ class Stage32SystemStatusTests(unittest.TestCase):
                     current_annual_exists=True,
                     current_5wow_anchor="2026-05",
                 ),
+                backup_sync=system_status.BackupSyncStatus(
+                    vault_dir=root / "vault",
+                    sc_root=root / "sc",
+                    code_repo=root / "repo",
+                    vault_exists=True,
+                    sc_root_exists=True,
+                    code_repo_exists=True,
+                    timeshift_home_note="system snapshots only",
+                    syncthing_note="replication/sync only",
+                    github_note="protects committed repository history",
+                    backup_gap="vault and SC runtime need point-in-time backup",
+                ),
                 review_report={
                     "total": 2,
                     "parseable": 1,
@@ -143,6 +155,10 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("- current annual 2026.md: exists", output)
             self.assertIn("- current planning ready: yes", output)
             self.assertIn("- 5WOW monthly anchor: 2026-05", output)
+            self.assertIn("Backup and sync posture", output)
+            self.assertIn("- vault exists: yes", output)
+            self.assertIn("- Syncthing: replication/sync only", output)
+            self.assertIn("- gap: vault and SC runtime need point-in-time backup", output)
             self.assertIn("- total: 2", output)
             self.assertIn("- memory retrieval: enabled", output)
             self.assertIn("- memory context: disabled", output)
@@ -304,6 +320,32 @@ class Stage32SystemStatusTests(unittest.TestCase):
         self.assertTrue(status.current_annual_exists)
         self.assertTrue(status.current_planning_ready)
         self.assertEqual(status.current_5wow_anchor, "2026-05")
+
+    def test_build_backup_sync_status_reports_known_gap_without_external_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "vault").mkdir()
+            (root / "sc").mkdir()
+            runtime = system_status.RuntimeStatus(
+                model="test-model",
+                sc_root=root / "sc",
+                input_dir=root / "sc" / "input",
+                processing_dir=root / "sc" / "processing",
+                archive_dir=root / "sc" / "archive",
+                output_dir=root / "sc" / "output",
+                vault_dir=root / "vault",
+                embed_model="test-embed",
+                embed_keep_alive="1h",
+                embed_cache_path=root / "embeddings.json",
+            )
+
+            status = system_status.build_backup_sync_status(runtime)
+
+        self.assertTrue(status.vault_exists)
+        self.assertTrue(status.sc_root_exists)
+        self.assertIn("not treated as covered", status.timeshift_home_note)
+        self.assertIn("not a point-in-time backup", status.syncthing_note)
+        self.assertIn("vault and SC runtime", status.backup_gap)
 
     @patch("system_status.read_process_env")
     @patch("system_status.subprocess.run")

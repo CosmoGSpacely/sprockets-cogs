@@ -49,6 +49,7 @@ class SystemStatus:
     directories: "DirectoryStatus"
     models: "ModelAvailabilityStatus"
     planning: "PlanningStatus"
+    backup_sync: "BackupSyncStatus"
     review_report: dict
     retrieval_status: production_retrieval.ProductionRetrievalStatus
     jobs: tuple[job_status.MaintenanceJobStatus, ...]
@@ -115,6 +116,20 @@ class PlanningStatus:
             and self.current_monthly_exists
             and self.current_annual_exists
         )
+
+
+@dataclass(frozen=True)
+class BackupSyncStatus:
+    vault_dir: Path
+    sc_root: Path
+    code_repo: Path
+    vault_exists: bool
+    sc_root_exists: bool
+    code_repo_exists: bool
+    timeshift_home_note: str
+    syncthing_note: str
+    github_note: str
+    backup_gap: str
 
 
 def _model_name_matches(model: str, installed_models: tuple[str, ...]) -> bool:
@@ -207,6 +222,22 @@ def build_planning_status(runtime: RuntimeStatus, reference_date: str | None = N
         current_annual_name=inventory.current_annual_name,
         current_annual_exists=inventory.current_annual_exists,
         current_5wow_anchor=inventory.current_5wow_anchor,
+    )
+
+
+def build_backup_sync_status(runtime: RuntimeStatus) -> BackupSyncStatus:
+    code_repo = Path(__file__).resolve().parent
+    return BackupSyncStatus(
+        vault_dir=runtime.vault_dir,
+        sc_root=runtime.sc_root,
+        code_repo=code_repo,
+        vault_exists=runtime.vault_dir.exists(),
+        sc_root_exists=runtime.sc_root.exists(),
+        code_repo_exists=(code_repo / ".git").exists(),
+        timeshift_home_note="system snapshots only per project record; /home/cosmo/** is not treated as covered",
+        syncthing_note="replication/sync only; not a point-in-time backup",
+        github_note="protects committed repository history, not vault or runtime queue data",
+        backup_gap="vault and SC runtime need point-in-time backup beyond Syncthing",
     )
 
 
@@ -331,6 +362,7 @@ def build_system_status() -> SystemStatus:
         directories=build_directory_status(runtime),
         models=build_model_availability_status(runtime),
         planning=build_planning_status(runtime),
+        backup_sync=build_backup_sync_status(runtime),
         review_report=review.review_report(agentic_loop.REVIEW_DIR),
         retrieval_status=production_retrieval.production_retrieval_status(agentic_loop.VAULT_DIR),
         jobs=tuple(job_status.build_job_status(job) for job in job_status.KNOWN_JOBS.values()),
@@ -414,6 +446,19 @@ def _format_planning_status(status: PlanningStatus) -> list[str]:
     ]
 
 
+def _format_backup_sync_status(status: BackupSyncStatus) -> list[str]:
+    return [
+        "Backup and sync posture",
+        f"- vault exists: {_yes_no(status.vault_exists)} ({status.vault_dir})",
+        f"- sc root exists: {_yes_no(status.sc_root_exists)} ({status.sc_root})",
+        f"- code repo exists: {_yes_no(status.code_repo_exists)} ({status.code_repo})",
+        f"- Timeshift: {status.timeshift_home_note}",
+        f"- Syncthing: {status.syncthing_note}",
+        f"- GitHub: {status.github_note}",
+        f"- gap: {status.backup_gap}",
+    ]
+
+
 def _format_service_status(status: ServiceStatus) -> list[str]:
     lines = ["Service"]
     lines.extend(job_status._format_unit(status.unit))
@@ -437,6 +482,7 @@ def format_system_status(status: SystemStatus) -> str:
         "\n".join(_format_directory_status(status.directories)),
         "\n".join(_format_model_status(status.models)),
         "\n".join(_format_planning_status(status.planning)),
+        "\n".join(_format_backup_sync_status(status.backup_sync)),
         "\n".join(_format_review_report(status.review_report)),
         format_retrieval_status(status.retrieval_status),
         job_status.format_all_statuses(list(status.jobs)),
