@@ -41,6 +41,7 @@ startup scan / watchdog input/ → extract_nodes() → classify_nodes() → vali
 - `scripts/review --report` — summarize pending review items by source/type/confidence/reason
 - `scripts/review --packet-preview` — render an Obsidian-readable Markdown preview
 - `scripts/review` or `scripts/review --interactive` — approve/discard/skip
+- `scripts/status` — read-only status summary for runtime paths, review queue, memory retrieval, and maintenance jobs
 
 ## Operational checks
 - `scripts/check` — run unit tests, temp-vault smoke test, and review count
