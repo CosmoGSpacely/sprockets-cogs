@@ -604,6 +604,39 @@ class Stage135HardeningTests(unittest.TestCase):
             self.assertEqual(report["by_reason"]["openai_fallback_candidate: confidence: low"], 1)
             self.assertEqual(report["by_reason"]["retry failed"], 1)
 
+    def test_review_packet_preview_formats_markdown_without_full_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            raw = {
+                "node_type": "sprockets/task",
+                "title": "Review markdown packet",
+                "item_text": "Review markdown packet",
+                "date": "2026-05-02",
+                "confidence": "low",
+            }
+            (review_dir / "pending.md").write_text(
+                "---\nnode_type: review\nreviewed: false\n---\n\n"
+                "**Reason:** confidence: low\n\n"
+                f"```json\n{json.dumps(raw, indent=2)}\n```\n"
+            )
+
+            packet = review.review_packet_markdown(review_dir)
+
+            self.assertIn("# Sprockets-Cogs Review Packet", packet)
+            self.assertIn("Preview only", packet)
+            self.assertIn("- Total: 1", packet)
+            self.assertIn("| File | Source | Type | Confidence | Date | Title | Reason |", packet)
+            self.assertIn("| pending.md | local low confidence | sprockets/task | low | 2026-05-02 | Review markdown packet | confidence: low |", packet)
+            self.assertNotIn(str(review_dir), packet)
+            self.assertNotIn("```json", packet)
+
+    def test_review_packet_preview_handles_empty_queue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            packet = review.review_packet_markdown(Path(tmp))
+
+            self.assertIn("- Total: 0", packet)
+            self.assertIn("No pending review items.", packet)
+
     def test_list_pending_marks_unparseable_review_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             review_dir = Path(tmp)

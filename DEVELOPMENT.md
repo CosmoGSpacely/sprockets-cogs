@@ -39,6 +39,7 @@ startup scan / watchdog input/ → extract_nodes() → classify_nodes() → vali
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
 - `scripts/review --report` — summarize pending review items by source/type/confidence/reason
+- `scripts/review --packet-preview` — render an Obsidian-readable Markdown preview
 - `scripts/review` or `scripts/review --interactive` — approve/discard/skip
 
 ## Operational checks

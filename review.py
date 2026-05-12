@@ -104,6 +104,76 @@ def print_pending_report(review_dir: Path = REVIEW_DIR) -> None:
     _print_counter("by reason:", report["by_reason"])
 
 
+def _shorten(value: object, limit: int = 120) -> str:
+    text = str(value or "")
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
+def _markdown_cell(value: object, limit: int = 80) -> str:
+    text = _shorten(value, limit)
+    return text.replace("|", "\\|")
+
+
+def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
+    items = list_pending(review_dir)
+    report = review_report(review_dir)
+    lines = [
+        "# Sprockets-Cogs Review Packet",
+        "",
+        "> Preview only. Generated from the canonical review queue. Do not edit",
+        "> this packet as a source of truth; approve/discard/skip through",
+        "> `scripts/review` until a guarded decision import exists.",
+        "",
+        "## Summary",
+        "",
+        f"- Total: {report['total']}",
+        f"- Parseable: {report['parseable']}",
+        f"- Unparseable: {report['unparseable']}",
+        "",
+    ]
+    if not items:
+        lines.extend(["No pending review items.", ""])
+        return "\n".join(lines)
+
+    lines.extend([
+        "## Items",
+        "",
+        "| File | Source | Type | Confidence | Date | Title | Reason |",
+        "|---|---|---|---|---|---|---|",
+    ])
+    for item in items:
+        parse_note = " [UNPARSEABLE]" if not item["parseable"] else ""
+        lines.append(
+            "| "
+            + " | ".join([
+                _markdown_cell(f"{item['file']}{parse_note}", 64),
+                _markdown_cell(item["source"], 48),
+                _markdown_cell(item["node_type"], 32),
+                _markdown_cell(item["confidence"], 24),
+                _markdown_cell(item["date"], 24),
+                _markdown_cell(item["title"], 80),
+                _markdown_cell(item["reason"], 120),
+            ])
+            + " |"
+        )
+    lines.append("")
+    lines.extend([
+        "## Review Commands",
+        "",
+        "- `scripts/review --list` for per-item terminal details.",
+        "- `scripts/review` for approve/discard/skip.",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def print_review_packet_preview(review_dir: Path = REVIEW_DIR) -> None:
+    print(review_packet_markdown(review_dir))
+
+
 def print_pending_list(review_dir: Path = REVIEW_DIR) -> None:
     items = list_pending(review_dir)
     if not items:
@@ -219,8 +289,10 @@ if __name__ == "__main__":
         print_pending_list()
     elif args == ["--report"]:
         print_pending_report()
+    elif args == ["--packet-preview"]:
+        print_review_packet_preview()
     elif args in ([], ["--interactive"]):
         review_all()
     else:
-        print("Usage: python review.py [--count | --list | --report | --interactive]")
+        print("Usage: python review.py [--count | --list | --report | --packet-preview | --interactive]")
         raise SystemExit(2)
