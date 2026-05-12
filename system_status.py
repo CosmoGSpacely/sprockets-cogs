@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +17,14 @@ import job_status
 import production_retrieval
 import review
 from retrieval_preview import format_status as format_retrieval_status
+
+SERVICE_UNIT = "sprockets-cogs.service"
+SERVICE_ENV_KEYS = (
+    "SPROCKETS_COGS_MODEL",
+    "SPROCKETS_COGS_MEMORY_RETRIEVAL",
+    "SPROCKETS_COGS_MEMORY_CONTEXT",
+    "SPROCKETS_COGS_MEMORY_RETRIEVER",
+)
 
 
 @dataclass(frozen=True)
@@ -35,9 +44,18 @@ class RuntimeStatus:
 @dataclass(frozen=True)
 class SystemStatus:
     runtime: RuntimeStatus
+    service: "ServiceStatus"
     review_report: dict
     retrieval_status: production_retrieval.ProductionRetrievalStatus
     jobs: tuple[job_status.MaintenanceJobStatus, ...]
+
+
+@dataclass(frozen=True)
+class ServiceStatus:
+    unit: job_status.UnitStatus
+    main_pid: int | None
+    env: dict[str, str]
+    env_error: str | None = None
 
 
 def build_runtime_status() -> RuntimeStatus:
@@ -55,9 +73,96 @@ def build_runtime_status() -> RuntimeStatus:
     )
 
 
+def _service_unit_status_from_show(name: str, values: dict[str, str]) -> ServiceStatus:
+    unit = job_status.unit_status_from_show(name, values)
+    raw_pid = values.get("MainPID", "")
+    try:
+        main_pid = int(raw_pid)
+    except ValueError:
+        main_pid = None
+    if main_pid == 0:
+        main_pid = None
+    return ServiceStatus(
+        unit=unit,
+        main_pid=main_pid,
+        env={},
+    )
+
+
+def read_process_env(
+    pid: int,
+    keys: tuple[str, ...] = SERVICE_ENV_KEYS,
+    proc_root: Path = Path("/proc"),
+) -> tuple[dict[str, str], str | None]:
+    path = proc_root / str(pid) / "environ"
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        return {}, str(exc)
+
+    wanted = set(keys)
+    values: dict[str, str] = {}
+    for chunk in raw.split(b"\0"):
+        if not chunk or b"=" not in chunk:
+            continue
+        key_bytes, value_bytes = chunk.split(b"=", 1)
+        key = key_bytes.decode(errors="replace")
+        if key in wanted:
+            values[key] = value_bytes.decode(errors="replace")
+    return values, None
+
+
+def build_service_status(name: str = SERVICE_UNIT) -> ServiceStatus:
+    command = [
+        "systemctl",
+        "--user",
+        "show",
+        name,
+        "--property=LoadState",
+        "--property=ActiveState",
+        "--property=SubState",
+        "--property=UnitFileState",
+        "--property=Result",
+        "--property=ExecMainStatus",
+        "--property=MainPID",
+        "--no-pager",
+    ]
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    except OSError as exc:
+        return ServiceStatus(
+            unit=job_status.unavailable_unit_status(name, str(exc)),
+            main_pid=None,
+            env={},
+            env_error=str(exc),
+        )
+
+    output = completed.stdout.strip()
+    if not output:
+        error = completed.stderr.strip() or f"systemctl exited {completed.returncode}"
+        return ServiceStatus(
+            unit=job_status.unavailable_unit_status(name, error),
+            main_pid=None,
+            env={},
+            env_error=error,
+        )
+
+    status = _service_unit_status_from_show(name, job_status.parse_systemctl_show(output))
+    if status.main_pid is None:
+        return status
+    env, env_error = read_process_env(status.main_pid)
+    return ServiceStatus(
+        unit=status.unit,
+        main_pid=status.main_pid,
+        env=env,
+        env_error=env_error,
+    )
+
+
 def build_system_status() -> SystemStatus:
     return SystemStatus(
         runtime=build_runtime_status(),
+        service=build_service_status(),
         review_report=review.review_report(agentic_loop.REVIEW_DIR),
         retrieval_status=production_retrieval.production_retrieval_status(agentic_loop.VAULT_DIR),
         jobs=tuple(job_status.build_job_status(job) for job in job_status.KNOWN_JOBS.values()),
@@ -95,10 +200,26 @@ def _format_runtime_status(status: RuntimeStatus) -> list[str]:
     ]
 
 
+def _format_service_status(status: ServiceStatus) -> list[str]:
+    lines = ["Service"]
+    lines.extend(job_status._format_unit(status.unit))
+    lines.append(f"- main pid: {status.main_pid if status.main_pid is not None else 'unknown'}")
+    if status.env_error:
+        lines.append(f"- service env: unavailable ({status.env_error})")
+    elif status.env:
+        lines.append("- service env:")
+        for key in SERVICE_ENV_KEYS:
+            lines.append(f"  {key}: {status.env.get(key, '(unset)')}")
+    else:
+        lines.append("- service env: unavailable")
+    return lines
+
+
 def format_system_status(status: SystemStatus) -> str:
     sections = [
         "\n".join(["Sprockets-Cogs status", ""]),
         "\n".join(_format_runtime_status(status.runtime)),
+        "\n".join(_format_service_status(status.service)),
         "\n".join(_format_review_report(status.review_report)),
         format_retrieval_status(status.retrieval_status),
         job_status.format_all_statuses(list(status.jobs)),
