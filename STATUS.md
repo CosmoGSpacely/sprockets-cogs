@@ -90,5 +90,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 27 closeout gate passed 302 tests, smoke test, fallback
-contract, and review count 0.
+The latest Stage 28A gate passed 303 tests, smoke test, fallback contract, and
+review count 0.

@@ -522,6 +522,38 @@ class Stage135HardeningTests(unittest.TestCase):
             self.assertEqual(len(items), 1)
             self.assertEqual(items[0]["source"], "openai fallback candidate")
 
+    def test_list_pending_maps_known_review_reason_sources(self):
+        cases = [
+            ("openai_fallback_invalid: retry failed", "openai fallback invalid"),
+            ("ambiguous hierarchy parent_hint: 'Phase 2' matched A, B", "hierarchy ambiguity"),
+            ("retry failed: cogs/daily: date must be YYYY-MM-DD", "local retry failure"),
+            ("confidence: low", "local low confidence"),
+            ("manual inspection requested", "local review"),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            raw = {
+                "node_type": "sprockets/task",
+                "title": "Review source taxonomy",
+                "item_text": "Review source taxonomy",
+                "date": "",
+                "confidence": "low",
+            }
+            for index, (reason, _) in enumerate(cases):
+                (review_dir / f"pending-{index}.md").write_text(
+                    "---\nnode_type: review\nreviewed: false\n---\n\n"
+                    f"**Reason:** {reason}\n\n"
+                    f"```json\n{json.dumps(raw, indent=2)}\n```\n"
+                )
+
+            items = review.list_pending(review_dir)
+
+            self.assertEqual(len(items), len(cases))
+            sources_by_reason = {item["reason"]: item["source"] for item in items}
+            for reason, source in cases:
+                with self.subTest(reason=reason):
+                    self.assertEqual(sources_by_reason[reason], source)
+
     def test_list_pending_marks_unparseable_review_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             review_dir = Path(tmp)
