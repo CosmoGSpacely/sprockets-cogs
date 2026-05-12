@@ -68,6 +68,24 @@ class Stage32SystemStatusTests(unittest.TestCase):
                     embedding_model="test-embed",
                     installed_models=("test-model", "test-embed"),
                 ),
+                planning=system_status.PlanningStatus(
+                    cogs_dir=root / "vault" / "Cogs",
+                    reference_date="2026-05-12",
+                    daily_count=3,
+                    weekly_count=1,
+                    monthly_count=1,
+                    annual_count=1,
+                    daily_legacy_count=2,
+                    daily_iso_count=1,
+                    daily_invalid_count=0,
+                    current_weekly_name="2026-W20.md",
+                    current_weekly_exists=True,
+                    current_monthly_name="2026-05.md",
+                    current_monthly_exists=True,
+                    current_annual_name="2026.md",
+                    current_annual_exists=True,
+                    current_5wow_anchor="2026-05",
+                ),
                 review_report={
                     "total": 2,
                     "parseable": 1,
@@ -119,6 +137,12 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("- ollama available: yes", output)
             self.assertIn("- configured model installed: yes", output)
             self.assertIn("- embedding model installed: yes", output)
+            self.assertIn("Planning notes", output)
+            self.assertIn("- current weekly 2026-W20.md: exists", output)
+            self.assertIn("- current monthly 2026-05.md: exists", output)
+            self.assertIn("- current annual 2026.md: exists", output)
+            self.assertIn("- current planning ready: yes", output)
+            self.assertIn("- 5WOW monthly anchor: 2026-05", output)
             self.assertIn("- total: 2", output)
             self.assertIn("- memory retrieval: enabled", output)
             self.assertIn("- memory context: disabled", output)
@@ -246,6 +270,40 @@ class Stage32SystemStatusTests(unittest.TestCase):
         self.assertEqual(status.output_files, 1)
         self.assertTrue(status.memory_trace_exists)
         self.assertIn(status.oldest_pending_input, {"a.input", "b.input"})
+
+    def test_build_planning_status_reports_current_note_presence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cogs_dir = root / "vault" / "Cogs"
+            (cogs_dir / "daily").mkdir(parents=True)
+            (cogs_dir / "weekly").mkdir(parents=True)
+            (cogs_dir / "monthly").mkdir(parents=True)
+            (cogs_dir / "annual").mkdir(parents=True)
+            (cogs_dir / "daily" / "Tue 12 May 2026.md").write_text("# legacy\n")
+            (cogs_dir / "weekly" / "2026-W20.md").write_text("# week\n")
+            (cogs_dir / "monthly" / "2026-05.md").write_text("# month\n")
+            (cogs_dir / "annual" / "2026.md").write_text("# year\n")
+            runtime = system_status.RuntimeStatus(
+                model="test-model",
+                sc_root=root / "sc",
+                input_dir=root / "sc" / "input",
+                processing_dir=root / "sc" / "processing",
+                archive_dir=root / "sc" / "archive",
+                output_dir=root / "sc" / "output",
+                vault_dir=root / "vault",
+                embed_model="test-embed",
+                embed_keep_alive="1h",
+                embed_cache_path=root / "embeddings.json",
+            )
+
+            status = system_status.build_planning_status(runtime, "2026-05-12")
+
+        self.assertEqual(status.current_weekly_name, "2026-W20.md")
+        self.assertTrue(status.current_weekly_exists)
+        self.assertTrue(status.current_monthly_exists)
+        self.assertTrue(status.current_annual_exists)
+        self.assertTrue(status.current_planning_ready)
+        self.assertEqual(status.current_5wow_anchor, "2026-05")
 
     @patch("system_status.read_process_env")
     @patch("system_status.subprocess.run")

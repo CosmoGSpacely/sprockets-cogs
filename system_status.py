@@ -1,7 +1,7 @@
 """Read-only system status surface for Sprockets-Cogs.
 
 Stage 32 starts by composing existing status/report helpers. This module avoids
-service changes, model calls, and vault writes.
+service changes, model inference calls, and vault writes.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import agentic_loop
+import cogs_planning
 import embeddings
 import job_status
 import production_retrieval
@@ -47,6 +48,7 @@ class SystemStatus:
     service: "ServiceStatus"
     directories: "DirectoryStatus"
     models: "ModelAvailabilityStatus"
+    planning: "PlanningStatus"
     review_report: dict
     retrieval_status: production_retrieval.ProductionRetrievalStatus
     jobs: tuple[job_status.MaintenanceJobStatus, ...]
@@ -85,6 +87,34 @@ class ModelAvailabilityStatus:
     @property
     def embedding_model_installed(self) -> bool:
         return _model_name_matches(self.embedding_model, self.installed_models)
+
+
+@dataclass(frozen=True)
+class PlanningStatus:
+    cogs_dir: Path
+    reference_date: str
+    daily_count: int
+    weekly_count: int
+    monthly_count: int
+    annual_count: int
+    daily_legacy_count: int
+    daily_iso_count: int
+    daily_invalid_count: int
+    current_weekly_name: str
+    current_weekly_exists: bool
+    current_monthly_name: str
+    current_monthly_exists: bool
+    current_annual_name: str
+    current_annual_exists: bool
+    current_5wow_anchor: str
+
+    @property
+    def current_planning_ready(self) -> bool:
+        return (
+            self.current_weekly_exists
+            and self.current_monthly_exists
+            and self.current_annual_exists
+        )
 
 
 def _model_name_matches(model: str, installed_models: tuple[str, ...]) -> bool:
@@ -155,6 +185,28 @@ def build_model_availability_status(runtime: RuntimeStatus) -> ModelAvailability
         configured_model=runtime.model,
         embedding_model=runtime.embed_model,
         installed_models=parse_ollama_list(completed.stdout),
+    )
+
+
+def build_planning_status(runtime: RuntimeStatus, reference_date: str | None = None) -> PlanningStatus:
+    inventory = cogs_planning.build_inventory(runtime.vault_dir / "Cogs", reference_date)
+    return PlanningStatus(
+        cogs_dir=inventory.cogs_dir,
+        reference_date=inventory.reference_date,
+        daily_count=inventory.daily_count,
+        weekly_count=inventory.weekly_count,
+        monthly_count=inventory.monthly_count,
+        annual_count=inventory.annual_count,
+        daily_legacy_count=inventory.daily_legacy_count,
+        daily_iso_count=inventory.daily_iso_count,
+        daily_invalid_count=inventory.daily_invalid_count,
+        current_weekly_name=inventory.current_weekly_name,
+        current_weekly_exists=inventory.current_weekly_exists,
+        current_monthly_name=inventory.current_monthly_name,
+        current_monthly_exists=inventory.current_monthly_exists,
+        current_annual_name=inventory.current_annual_name,
+        current_annual_exists=inventory.current_annual_exists,
+        current_5wow_anchor=inventory.current_5wow_anchor,
     )
 
 
@@ -278,6 +330,7 @@ def build_system_status() -> SystemStatus:
         service=build_service_status(),
         directories=build_directory_status(runtime),
         models=build_model_availability_status(runtime),
+        planning=build_planning_status(runtime),
         review_report=review.review_report(agentic_loop.REVIEW_DIR),
         retrieval_status=production_retrieval.production_retrieval_status(agentic_loop.VAULT_DIR),
         jobs=tuple(job_status.build_job_status(job) for job in job_status.KNOWN_JOBS.values()),
@@ -344,6 +397,23 @@ def _format_model_status(status: ModelAvailabilityStatus) -> list[str]:
     return lines
 
 
+def _format_planning_status(status: PlanningStatus) -> list[str]:
+    return [
+        "Planning notes",
+        f"- cogs dir: {status.cogs_dir}",
+        f"- reference date: {status.reference_date}",
+        f"- daily notes: {status.daily_count} total ({status.daily_legacy_count} legacy, {status.daily_iso_count} ISO-first, {status.daily_invalid_count} invalid)",
+        f"- weekly notes: {status.weekly_count}",
+        f"- monthly notes: {status.monthly_count}",
+        f"- annual notes: {status.annual_count}",
+        f"- current weekly {status.current_weekly_name}: {'exists' if status.current_weekly_exists else 'missing'}",
+        f"- current monthly {status.current_monthly_name}: {'exists' if status.current_monthly_exists else 'missing'}",
+        f"- current annual {status.current_annual_name}: {'exists' if status.current_annual_exists else 'missing'}",
+        f"- current planning ready: {_yes_no(status.current_planning_ready)}",
+        f"- 5WOW monthly anchor: {status.current_5wow_anchor}",
+    ]
+
+
 def _format_service_status(status: ServiceStatus) -> list[str]:
     lines = ["Service"]
     lines.extend(job_status._format_unit(status.unit))
@@ -366,6 +436,7 @@ def format_system_status(status: SystemStatus) -> str:
         "\n".join(_format_service_status(status.service)),
         "\n".join(_format_directory_status(status.directories)),
         "\n".join(_format_model_status(status.models)),
+        "\n".join(_format_planning_status(status.planning)),
         "\n".join(_format_review_report(status.review_report)),
         format_retrieval_status(status.retrieval_status),
         job_status.format_all_statuses(list(status.jobs)),
