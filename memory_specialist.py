@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -15,6 +16,11 @@ from typing import Any, Sequence
 import embeddings
 import production_retrieval
 import retrieval_preview as retrieval_preview_module
+import retrieval_trace_report
+
+
+MEMORY_TRACE_PATH_ENV = "SPROCKETS_COGS_MEMORY_TRACE_PATH"
+DEFAULT_MEMORY_TRACE_PATH = Path.home() / "sc" / "output" / "memory-parent-traces.jsonl"
 
 
 @dataclass(frozen=True)
@@ -25,6 +31,7 @@ class MemorySpecialistConfig:
     embedding_cache_path: Path = embeddings.EMBED_CACHE_PATH
     embedding_model: str = embeddings.EMBED_MODEL
     embedding_keep_alive: str = embeddings.EMBED_KEEP_ALIVE
+    memory_trace_path: Path = DEFAULT_MEMORY_TRACE_PATH
 
 
 @dataclass(frozen=True)
@@ -153,6 +160,38 @@ class MemorySpecialist:
 
         return retrieval_preview_module.preview_production_return(query, vault_dir=self.config.vault_dir)
 
+    def trace_report(
+        self,
+        limit: int | None = 20,
+        decision: str = "",
+        since: str = retrieval_trace_report.DEFAULT_SINCE,
+        service_name: str = retrieval_trace_report.SERVICE_NAME,
+        file_path: Path | None = None,
+        jsonl_path: Path | None = None,
+        use_journal: bool = False,
+    ) -> str:
+        """Return a read-only memory parent trace report."""
+
+        if jsonl_path is not None or (not use_journal and file_path is None):
+            path = jsonl_path or self.config.memory_trace_path
+            lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else ()
+            return retrieval_trace_report.format_memory_guard_jsonl_report(
+                lines,
+                limit=limit,
+                decision=decision,
+            )
+
+        if file_path is not None:
+            lines = file_path.read_text(encoding="utf-8").splitlines() if file_path.exists() else ()
+        else:
+            lines = retrieval_trace_report.fetch_service_log_lines(since=since, service_name=service_name)
+
+        return retrieval_trace_report.format_memory_guard_report(
+            retrieval_trace_report.parse_memory_guard_log(lines),
+            limit=limit,
+            decision=decision,
+        )
+
 
 def _int_or_none(value: Any) -> int | None:
     return value if isinstance(value, int) else None
@@ -280,6 +319,25 @@ def format_production_return_preview(preview: retrieval_preview_module.Productio
     )
 
 
+def format_trace_report(report: str) -> str:
+    """Format a Memory specialist trace report."""
+
+    return "\n".join(
+        [
+            "Memory specialist trace report",
+            "- writes: no",
+            "",
+            report,
+        ]
+    )
+
+
+def default_memory_trace_path() -> Path:
+    """Return the current durable memory trace path."""
+
+    return Path(os.environ.get(MEMORY_TRACE_PATH_ENV, str(DEFAULT_MEMORY_TRACE_PATH)))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Read-only Memory specialist preview.")
     parser.add_argument(
@@ -308,6 +366,44 @@ def build_parser() -> argparse.ArgumentParser:
         "--show-trace",
         action="store_true",
         help="Print retrieval trace details for --retrieval.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Number of most recent trace events to show for --traces. Defaults to 20.",
+    )
+    parser.add_argument(
+        "--decision",
+        choices=("selected", "skipped"),
+        default="",
+        help="Only show selected or skipped memory parent decisions for --traces.",
+    )
+    parser.add_argument(
+        "--since",
+        default=retrieval_trace_report.DEFAULT_SINCE,
+        help="journalctl --since value for --traces --journal. Defaults to '24 hours ago'.",
+    )
+    parser.add_argument(
+        "--service",
+        default=retrieval_trace_report.SERVICE_NAME,
+        help="systemd user service name for --traces --journal.",
+    )
+    parser.add_argument(
+        "--file",
+        type=Path,
+        help="Parse a service log file for --traces instead of JSONL or journalctl.",
+    )
+    parser.add_argument(
+        "--jsonl",
+        type=Path,
+        default=default_memory_trace_path(),
+        help="Parse a durable memory trace JSONL file for --traces.",
+    )
+    parser.add_argument(
+        "--journal",
+        action="store_true",
+        help="Read --traces from journalctl instead of the durable JSONL trace sink.",
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
@@ -345,6 +441,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="QUERY",
         help="Preview exact compact production retrieval return nodes.",
     )
+    mode.add_argument(
+        "--traces",
+        action="store_true",
+        help="Report memory parent guard traces without writing.",
+    )
     return parser
 
 
@@ -353,6 +454,7 @@ def specialist_from_args(args: argparse.Namespace) -> MemorySpecialist:
         MemorySpecialistConfig(
             vault_dir=args.vault_dir,
             embedding_cache_path=args.cache_path,
+            memory_trace_path=args.jsonl,
         )
     )
 
@@ -381,6 +483,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(format_memory_guard_preview(specialist.memory_guard_preview(args.memory_guard, retriever_name=args.retriever)))
     elif args.production_return:
         print(format_production_return_preview(specialist.production_return_preview(args.production_return)))
+    elif args.traces:
+        print(format_trace_report(
+            specialist.trace_report(
+                limit=args.limit,
+                decision=args.decision,
+                since=args.since,
+                service_name=args.service,
+                file_path=args.file,
+                jsonl_path=None if args.journal or args.file else args.jsonl,
+                use_journal=args.journal,
+            )
+        ))
 
 
 if __name__ == "__main__":

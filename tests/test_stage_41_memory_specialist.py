@@ -340,6 +340,97 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
         self.assertIn("Sprockets-Cogs production retrieval return preview", output)
         self.assertIn("- writes: no", output)
 
+    def test_trace_report_reads_jsonl_sink_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trace_path = Path(tmp) / "memory-parent-traces.jsonl"
+            trace_path.write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "created_at": "2026-05-04T12:04:00+00:00",
+                    "decision": "selected",
+                    "retrieved_count": 5,
+                    "parent_title": "Production",
+                    "parent_node_id": "projects/production",
+                    "parent_node_type": "sprockets/project",
+                })
+            )
+            specialist = memory_specialist.MemorySpecialist(
+                memory_specialist.MemorySpecialistConfig(memory_trace_path=trace_path)
+            )
+
+            output = specialist.trace_report()
+
+        self.assertIn("Sprockets-Cogs memory guard log report", output)
+        self.assertIn("- events: 1", output)
+        self.assertIn("parent: Production", output)
+
+    def test_trace_report_can_read_service_log_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "service.log"
+            log_path.write_text(
+                "2026-05-04T10:01:02-0400 host python[123]: "
+                "Memory parent guard selected: parent='Phase 3' "
+                "node_id=projects/phase-3 node_type=sprockets/project retrieved=3\n"
+            )
+            specialist = memory_specialist.MemorySpecialist()
+
+            output = specialist.trace_report(file_path=log_path)
+
+        self.assertIn("- events: 1", output)
+        self.assertIn("parent: Phase 3", output)
+        self.assertIn("parent node: projects/phase-3 [sprockets/project]", output)
+
+    def test_format_trace_report_marks_memory_boundary_and_read_only(self):
+        output = memory_specialist.format_trace_report("Sprockets-Cogs memory guard log report\n- events: 0")
+
+        self.assertIn("Memory specialist trace report", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn("Sprockets-Cogs memory guard log report", output)
+
+    def test_main_prints_trace_report_from_jsonl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trace_path = Path(tmp) / "memory-parent-traces.jsonl"
+            trace_path.write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "created_at": "2026-05-04T12:04:00+00:00",
+                    "decision": "selected",
+                    "retrieved_count": 5,
+                    "parent_title": "Production",
+                    "parent_node_id": "projects/production",
+                    "parent_node_type": "sprockets/project",
+                })
+            )
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                memory_specialist.main(["--jsonl", str(trace_path), "--traces"])
+
+        output = buf.getvalue()
+        self.assertIn("Memory specialist trace report", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn("parent: Production", output)
+
+    def test_main_prints_trace_report_from_log_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "service.log"
+            log_path.write_text(
+                "2026-05-04T10:03:04-0400 host python[123]: "
+                "Memory parent guard skipped: "
+                "reason=no hierarchy parent in retrieved nodes "
+                "top_node_id=contacts/taylor-reed "
+                "top_node_type=sprockets/contact retrieved=5\n"
+            )
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                memory_specialist.main(["--file", str(log_path), "--decision", "skipped", "--traces"])
+
+        output = buf.getvalue()
+        self.assertIn("Memory specialist trace report", output)
+        self.assertIn("- decision filter: skipped", output)
+        self.assertIn("top node: contacts/taylor-reed [sprockets/contact]", output)
+
 
 if __name__ == "__main__":
     unittest.main()
