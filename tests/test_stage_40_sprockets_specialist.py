@@ -142,6 +142,72 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 context,
             )
 
+    def test_hierarchy_titles_returns_longest_first_parent_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "areas",
+                "learn-agentic-ai",
+                "node_type: sprockets/area\n"
+                "uuid: area-1\n"
+                "title: Learn Agentic AI\n",
+            )
+            write_node(
+                vault,
+                "projects",
+                "phase-4-multi-agent",
+                "node_type: sprockets/project\n"
+                "uuid: project-1\n"
+                "title: Phase 4 - Multi-Agent Architecture\n",
+            )
+            specialist = sprockets_specialist.SprocketsSpecialist(
+                sprockets_specialist.SprocketsSpecialistConfig(vault_dir=vault)
+            )
+
+            self.assertEqual(
+                specialist.hierarchy_titles(),
+                ["Phase 4 - Multi-Agent Architecture", "Learn Agentic AI"],
+            )
+
+    def test_ambiguous_parent_matches_reports_hierarchy_matches_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "projects",
+                "phase-2-hardening",
+                "node_type: sprockets/project\n"
+                "uuid: project-1\n"
+                "title: Phase 2 - Hardening\n",
+            )
+            write_node(
+                vault,
+                "projects",
+                "phase-2-handoff",
+                "node_type: sprockets/project\n"
+                "uuid: project-2\n"
+                "title: Phase 2 - Handoff\n",
+            )
+            write_node(
+                vault,
+                "contacts",
+                "phase-2-contact",
+                "node_type: sprockets/contact\n"
+                "uuid: contact-1\n"
+                "title: Phase 2 Contact\n",
+            )
+            specialist = sprockets_specialist.SprocketsSpecialist(
+                sprockets_specialist.SprocketsSpecialistConfig(vault_dir=vault)
+            )
+
+            matches = specialist.ambiguous_parent_matches("Phase 2")
+
+            self.assertCountEqual(
+                [title for _, title, _ in matches],
+                ["Phase 2 - Hardening", "Phase 2 - Handoff"],
+            )
+
     def test_main_prints_read_only_inventory_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)

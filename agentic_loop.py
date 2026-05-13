@@ -24,11 +24,10 @@ from openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
 )
+from sprockets_specialist import SprocketsSpecialist, SprocketsSpecialistConfig
 from vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,
-    ambiguous_title_matches,
     build_graph,
-    find_node_by_title,
 )
 from vault import append_cogs_item_text, ensure_daily_note
 
@@ -163,43 +162,18 @@ def _build_hierarchy_context(max_nodes: int = 30) -> list[str]:
     Return compact area/goal/project labels for parent_hint selection.
     Reads frontmatter only through vault_graph; note bodies stay out of model context.
     """
-    graph = build_graph()
-    if not graph.nodes:
-        return []
+    return _sprockets_specialist().hierarchy_context_lines(max_nodes)
 
-    type_labels = {
-        "sprockets/area": "Area",
-        "sprockets/goal": "Goal",
-        "sprockets/project": "Project",
-    }
-    sort_order = {
-        "sprockets/area": 0,
-        "sprockets/goal": 1,
-        "sprockets/project": 2,
-    }
-    hierarchy_nodes = [
-        (slug, attrs)
-        for slug, attrs in graph.nodes(data=True)
-        if attrs.get("node_type", "") in HIERARCHY_PARENT_NODE_TYPES
-    ]
-    hierarchy_nodes.sort(
-        key=lambda item: (
-            sort_order.get(item[1].get("node_type", ""), 99),
-            item[1].get("title", item[0]).lower(),
+
+def _sprockets_specialist() -> SprocketsSpecialist:
+    """Return the Sprockets facade while preserving the local build_graph test seam."""
+
+    return SprocketsSpecialist(
+        SprocketsSpecialistConfig(
+            vault_dir=VAULT_DIR,
+            graph_builder=build_graph,
         )
     )
-
-    lines: list[str] = []
-    for slug, attrs in hierarchy_nodes[:max_nodes]:
-        node_type = attrs.get("node_type", "")
-        title = attrs.get("title", slug)
-        parents = list(graph.successors(slug))
-        if parents:
-            parent_title = graph.nodes[parents[0]].get("title", parents[0])
-            lines.append(f"{type_labels[node_type]}: {title} (under {parent_title})")
-        else:
-            lines.append(f"{type_labels[node_type]}: {title}")
-    return lines
 
 
 def build_context() -> str:
@@ -385,22 +359,16 @@ def resolve_parents(nodes: list[NodeBase]) -> list[NodeBase]:
     without a parent rather than with a phantom link.
     Phase 3: also walks vector DB for semantic parent candidates.
     """
-    graph = build_graph()
-    if not graph.nodes:
-        return nodes
+    specialist = _sprockets_specialist()
     for node in nodes:
         if getattr(node, "parent", ""):
             continue
         hint = getattr(node, "parent_hint", "")
         if not hint:
             continue
-        match = find_node_by_title(
-            graph,
-            hint,
-            allowed_node_types=HIERARCHY_PARENT_NODE_TYPES,
-        )
-        if match:
-            slug, _ = match
+        match = specialist.parent_match_preview(hint)
+        if match.matched:
+            slug = match.slug
             node.parent = f"[[{slug}]]"
             log.info("Parent resolved: %s → [[%s]]", node.title, slug)
         else:
@@ -508,17 +476,7 @@ def ensure_hierarchy_tasks(raw_nodes: list[dict], classified: list[dict]) -> lis
     task names an existing area/goal/project title, preserve the structural task and
     let resolve_parents link it through the normal hierarchy-only path.
     """
-    graph = build_graph()
-    hierarchy_targets = [
-        attrs.get("title", slug)
-        for slug, attrs in graph.nodes(data=True)
-        if attrs.get("node_type", "") in HIERARCHY_PARENT_NODE_TYPES
-    ]
-    hierarchy_targets = sorted(
-        [title for title in hierarchy_targets if title],
-        key=len,
-        reverse=True,
-    )
+    hierarchy_targets = _sprockets_specialist().hierarchy_titles()
     if not hierarchy_targets:
         return classified
 
@@ -570,17 +528,7 @@ def apply_explicit_hierarchy_hints(raw_nodes: list[dict], classified: list[dict]
     hierarchy target exactly. This is intentionally exact-match only; fuzzy
     ambiguity is handled later by resolve_parents().
     """
-    graph = build_graph()
-    hierarchy_targets = [
-        attrs.get("title", slug)
-        for slug, attrs in graph.nodes(data=True)
-        if attrs.get("node_type", "") in HIERARCHY_PARENT_NODE_TYPES
-    ]
-    hierarchy_targets = sorted(
-        [title for title in hierarchy_targets if title],
-        key=len,
-        reverse=True,
-    )
+    hierarchy_targets = _sprockets_specialist().hierarchy_titles()
     if not hierarchy_targets:
         return classified
 
@@ -713,9 +661,7 @@ def route_ambiguous_hierarchy_parent_hints_to_review(nodes: list[NodeBase]) -> l
     Ambiguous is better than wrong: these nodes should wait for human choice
     instead of being written unlinked or attached to a guess.
     """
-    graph = build_graph()
-    if not graph.nodes:
-        return nodes
+    specialist = _sprockets_specialist()
 
     keep: list[NodeBase] = []
     for node in nodes:
@@ -723,11 +669,7 @@ def route_ambiguous_hierarchy_parent_hints_to_review(nodes: list[NodeBase]) -> l
         if not hint or getattr(node, "parent", ""):
             keep.append(node)
             continue
-        matches = ambiguous_title_matches(
-            graph,
-            hint,
-            allowed_node_types=HIERARCHY_PARENT_NODE_TYPES,
-        )
+        matches = specialist.ambiguous_parent_matches(hint)
         if not matches:
             keep.append(node)
             continue

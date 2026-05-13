@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Callable, Sequence
 
 import inspect_hierarchy
 import vault_graph
@@ -20,6 +20,7 @@ class SprocketsSpecialistConfig:
     """Filesystem roots owned by the Sprockets specialist."""
 
     vault_dir: Path = vault_graph.VAULT_DIR
+    graph_builder: Callable[[Path], Any] = vault_graph.build_graph
 
 
 @dataclass(frozen=True)
@@ -62,10 +63,13 @@ class SprocketsSpecialist:
     def __init__(self, config: SprocketsSpecialistConfig | None = None) -> None:
         self.config = config or SprocketsSpecialistConfig()
 
+    def _graph(self) -> Any:
+        return self.config.graph_builder(self.config.vault_dir)
+
     def hierarchy_nodes(self) -> tuple[SprocketsHierarchyNode, ...]:
         """Return hierarchy nodes without reading note bodies or writing files."""
 
-        graph = vault_graph.build_graph(self.config.vault_dir)
+        graph = self._graph()
         nodes: list[SprocketsHierarchyNode] = []
         for slug, attrs in graph.nodes(data=True):
             node_type = attrs.get("node_type", "")
@@ -89,6 +93,15 @@ class SprocketsSpecialist:
         nodes.sort(key=lambda node: (_node_type_order(node.node_type), node.title.lower(), node.slug))
         return tuple(nodes)
 
+    def hierarchy_titles(self) -> list[str]:
+        """Return hierarchy titles ordered longest-first for exact text matching."""
+
+        return sorted(
+            [node.title for node in self.hierarchy_nodes() if node.title],
+            key=len,
+            reverse=True,
+        )
+
     def inventory(self) -> SprocketsInventoryPreview:
         """Inspect hierarchy state without writing."""
 
@@ -105,7 +118,7 @@ class SprocketsSpecialist:
     def parent_match_preview(self, hint: str) -> SprocketsParentMatchPreview:
         """Preview how an input parent_hint would resolve without mutating nodes."""
 
-        graph = vault_graph.build_graph(self.config.vault_dir)
+        graph = self._graph()
         ambiguous = tuple(
             vault_graph.ambiguous_title_matches(
                 graph,
@@ -137,9 +150,20 @@ class SprocketsSpecialist:
             uuid=uuid,
         )
 
-    def hierarchy_context_preview(self, max_nodes: int = 30) -> str:
-        """Return compact hierarchy labels suitable for classifier context previews."""
+    def ambiguous_parent_matches(self, hint: str) -> tuple[tuple[str, str, int], ...]:
+        """Return ambiguous area/goal/project title matches for a parent hint."""
 
+        graph = self._graph()
+        return tuple(
+            vault_graph.ambiguous_title_matches(
+                graph,
+                hint,
+                allowed_node_types=vault_graph.HIERARCHY_PARENT_NODE_TYPES,
+            )
+        )
+
+    def hierarchy_context_lines(self, max_nodes: int = 30) -> list[str]:
+        """Return compact hierarchy labels suitable for classifier context."""
         lines: list[str] = []
         labels = {
             "sprockets/area": "Area",
@@ -152,6 +176,12 @@ class SprocketsSpecialist:
                 lines.append(f"{label}: {node.title} (under {node.parent_title})")
             else:
                 lines.append(f"{label}: {node.title}")
+        return lines
+
+    def hierarchy_context_preview(self, max_nodes: int = 30) -> str:
+        """Return compact hierarchy labels for operator previews."""
+
+        lines = self.hierarchy_context_lines(max_nodes)
         return "\n".join(lines) if lines else "(none)"
 
 
