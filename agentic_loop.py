@@ -5,11 +5,10 @@ import re
 import shutil
 import time
 import uuid as uuid_lib
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import frontmatter
-import ollama
 from rapidfuzz import fuzz
 from jinja2 import Template
 from pydantic import ValidationError
@@ -17,6 +16,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from entity_state import get_entities_by_tier, upsert_entity
+from extractor_classifier import ExtractClassifier, ExtractClassifierConfig
 import memory_guards
 from memory_trace_log import append_memory_parent_trace
 from models import Confidence, NodeBase, validate_node
@@ -29,10 +29,6 @@ from vault_graph import (
     ambiguous_title_matches,
     build_graph,
     find_node_by_title,
-)
-from prompts import (
-    CLASSIFY_EXAMPLES, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM,
-    EXTRACT_EXAMPLES, EXTRACT_SCHEMA, EXTRACT_SYSTEM,
 )
 from vault import append_cogs_item_text, ensure_daily_note
 
@@ -83,12 +79,6 @@ def _slugify(text: str) -> str:
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_]+", "-", text)
     return text[:60].strip("-")
-
-
-def _truncate_context(context: str, max_chars: int = 2000) -> str:
-    if len(context) <= max_chars:
-        return context
-    return context[:max_chars] + "\n[... truncated]"
 
 
 def _find_duplicate(title: str, folder: Path, threshold: int = 85) -> Path | None:
@@ -166,13 +156,6 @@ def _write_sprockets_node(node: NodeBase, folder: Path) -> None:
 
 
 # ── Abstracted seams (Phase 3 fills these in) ─────────────────────────────────
-
-
-def _week_workdays(ref: datetime) -> str:
-    monday = ref - timedelta(days=ref.weekday())
-    return "  ".join(
-        (monday + timedelta(days=i)).strftime("%a %Y-%m-%d") for i in range(5)
-    )
 
 
 def _build_hierarchy_context(max_nodes: int = 30) -> list[str]:
@@ -334,33 +317,8 @@ def send_response(session_id: str, text: str) -> None:
 
 def extract_nodes(content: str) -> list[dict]:
     """Qwen3 call 1: extract raw items from input text."""
-    workdays = _week_workdays(datetime.now())
-    extract_msg = (
-        f"This week's workdays: {workdays}\n\n"
-        f"Extract all items from this text:\n\n{content}"
-    )
-    messages = [
-        {"role": "system", "content": EXTRACT_SYSTEM},
-        *EXTRACT_EXAMPLES,
-        {"role": "user", "content": extract_msg},
-    ]
-    response = ollama.chat(
-        model=MODEL,
-        messages=messages,
-        format=EXTRACT_SCHEMA,
-        options={"temperature": 0.1},
-        think=False,
-    )
-    raw = response.message.content
-    log.debug("extract_nodes raw: %s", raw)
-    try:
-        result = json.loads(raw)
-        items  = result.get("items", []) if isinstance(result, dict) else result
-        log.info("Extracted %d item(s)", len(items))
-        return items
-    except json.JSONDecodeError as e:
-        log.error("extract_nodes JSON parse failed: %s | raw: %s", e, raw)
-        return []
+    classifier = ExtractClassifier(ExtractClassifierConfig(model=MODEL))
+    return classifier.extract_nodes(content)
 
 
 def classify_nodes(
@@ -370,44 +328,13 @@ def classify_nodes(
     use_examples: bool = True,
 ) -> list[dict]:
     """Qwen3 call 2: assign node_type, fields, and date to each extracted item."""
-    if not raw_nodes:
-        return []
-    today_dt = datetime.now()
-    today    = today_dt.strftime("%Y-%m-%d (%A)")
-    workdays = _week_workdays(today_dt)
-    user_msg = (
-        f"Today: {today}\n"
-        f"This week's workdays: {workdays}\n\n"
-        f"{_truncate_context(context)}\n\n"
-        f"Extracted:\n{json.dumps(raw_nodes, indent=2)}\n\n"
+    classifier = ExtractClassifier(ExtractClassifierConfig(model=MODEL))
+    return classifier.classify_nodes(
+        raw_nodes,
+        context,
+        error_context=error_context,
+        use_examples=use_examples,
     )
-    if error_context:
-        user_msg += f"Fix these issues from the previous attempt:\n{error_context}\n\n"
-    user_msg += "Classify each item."
-
-    examples = CLASSIFY_EXAMPLES if use_examples else []
-    messages = [
-        {"role": "system", "content": CLASSIFY_SYSTEM},
-        *examples,
-        {"role": "user", "content": user_msg},
-    ]
-    response = ollama.chat(
-        model=MODEL,
-        messages=messages,
-        format=CLASSIFY_SCHEMA,
-        options={"temperature": 0.1},
-        think=False,
-    )
-    raw = response.message.content
-    log.debug("classify_nodes raw: %s", raw)
-    try:
-        result = json.loads(raw)
-        nodes  = result.get("nodes", []) if isinstance(result, dict) else result
-        log.info("Classified %d node(s)", len(nodes))
-        return nodes
-    except json.JSONDecodeError as e:
-        log.error("classify_nodes JSON parse failed: %s | raw: %s", e, raw)
-        return []
 
 
 def _format_validation_error(node_type: str, exc: Exception) -> str:

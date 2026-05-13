@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import extractor_classifier as ec
+import agentic_loop
 
 
 def _response(payload):
@@ -158,6 +159,54 @@ class Stage38ExtractorClassifierTests(unittest.TestCase):
         truncated = ec.truncate_context(context, max_chars=10)
 
         self.assertEqual(truncated, "x" * 10 + "\n[... truncated]")
+
+    def test_agentic_loop_extract_nodes_delegates_to_facade_with_existing_model(self):
+        calls = []
+
+        class FakeExtractorClassifier:
+            def __init__(self, config):
+                calls.append(("init", config.model))
+
+            def extract_nodes(self, content):
+                calls.append(("extract", content))
+                return [{"raw": "Call Alex"}]
+
+        with patch.object(agentic_loop, "MODEL", "loop-model"):
+            with patch.object(agentic_loop, "ExtractClassifier", FakeExtractorClassifier):
+                items = agentic_loop.extract_nodes("Call Alex")
+
+        self.assertEqual(items, [{"raw": "Call Alex"}])
+        self.assertEqual(calls, [("init", "loop-model"), ("extract", "Call Alex")])
+
+    def test_agentic_loop_classify_nodes_delegates_to_facade_with_retry_shape(self):
+        calls = []
+
+        class FakeExtractorClassifier:
+            def __init__(self, config):
+                calls.append(("init", config.model))
+
+            def classify_nodes(self, raw_nodes, context, error_context="", use_examples=True):
+                calls.append((raw_nodes, context, error_context, use_examples))
+                return [{"node_type": "cogs/daily"}]
+
+        raw_nodes = [{"raw": "Call Alex"}]
+        with patch.object(agentic_loop, "MODEL", "loop-model"):
+            with patch.object(agentic_loop, "ExtractClassifier", FakeExtractorClassifier):
+                nodes = agentic_loop.classify_nodes(
+                    raw_nodes,
+                    "context",
+                    error_context="fix it",
+                    use_examples=False,
+                )
+
+        self.assertEqual(nodes, [{"node_type": "cogs/daily"}])
+        self.assertEqual(
+            calls,
+            [
+                ("init", "loop-model"),
+                (raw_nodes, "context", "fix it", False),
+            ],
+        )
 
 
 if __name__ == "__main__":
