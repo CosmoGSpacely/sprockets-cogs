@@ -1,5 +1,7 @@
 # Sprockets-Cogs
 
+![tests](https://github.com/CosmoGSpacely/sprockets-cogs/actions/workflows/test.yml/badge.svg)
+
 Sprockets-Cogs is a local-first agentic capture loop for turning plain-language
 inputs into an Obsidian-compatible knowledge/work system.
 
