@@ -10,6 +10,7 @@ import argparse
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Sequence
 
 from carry import apply_plan_document, build_plan_document, preview_apply_plan_document, scan_daily_notes
 from vault import DEFAULT_DAILY_DIR
@@ -113,7 +114,7 @@ def format_nightly_report(
     return "\n".join(lines)
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--through",
@@ -140,23 +141,25 @@ def main() -> None:
         action="store_true",
         help="Summarize the nightly plan without writing.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+
+    if args.report:
+        from cogs_specialist import CogsSpecialist, CogsSpecialistConfig
+
+        specialist = CogsSpecialist(
+            CogsSpecialistConfig(
+                cogs_dir=Path(args.daily_dir).parent,
+                daily_dir=Path(args.daily_dir),
+            )
+        )
+        print(specialist.nightly_preview(args.through, args.to).report)
+        return
 
     plan = build_nightly_plan(
         daily_dir=Path(args.daily_dir),
         through_date=args.through,
         destination_date=args.to,
     )
-    if args.report:
-        print(
-            format_nightly_report(
-                plan,
-                daily_dir=Path(args.daily_dir),
-                through_date=args.through,
-                destination_date=args.to,
-            )
-        )
-        return
     if args.dry_run:
         print(preview_apply_plan_document(plan))
         return
