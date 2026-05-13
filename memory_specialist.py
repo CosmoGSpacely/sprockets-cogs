@@ -15,6 +15,8 @@ from typing import Any, Sequence
 
 import embeddings
 import production_retrieval
+import retrieval_eval
+from retrieval_nodes import load_retrieval_nodes, retrieval_node_counts
 import retrieval_preview as retrieval_preview_module
 import retrieval_trace_report
 
@@ -55,6 +57,38 @@ class MemoryInventoryPreview:
     config: MemorySpecialistConfig
     cache: EmbeddingCacheInventory
     production_status: production_retrieval.ProductionRetrievalStatus
+
+
+@dataclass(frozen=True)
+class EmbeddingCacheCoverage:
+    """Read-only cache coverage report for current vault retrieval nodes."""
+
+    vault_dir: Path
+    cache_path: Path
+    model: str
+    node_count: int
+    covered_count: int
+    missing_count: int
+    stale_count: int
+    extra_count: int
+    node_counts: dict[str, int]
+    missing_node_ids: tuple[str, ...] = ()
+    stale_node_ids: tuple[str, ...] = ()
+    extra_node_ids: tuple[str, ...] = ()
+    error: str = ""
+
+
+@dataclass(frozen=True)
+class MemoryBenchmarkPreview:
+    """Read-only benchmark posture result for a selected retriever."""
+
+    retriever_name: str
+    case_set: str
+    vault_dir: Path
+    node_count: int
+    passed_count: int
+    total_count: int
+    misses: tuple[str, ...] = ()
 
 
 class MemorySpecialist:
@@ -190,6 +224,118 @@ class MemorySpecialist:
             retrieval_trace_report.parse_memory_guard_log(lines),
             limit=limit,
             decision=decision,
+        )
+
+    def cache_coverage(self, sample_limit: int = 10) -> EmbeddingCacheCoverage:
+        """Compare current vault retrieval nodes to the embedding cache without writing."""
+
+        nodes = tuple(load_retrieval_nodes(self.config.vault_dir))
+        cache_path = self.config.embedding_cache_path
+        if not cache_path.exists():
+            return EmbeddingCacheCoverage(
+                vault_dir=self.config.vault_dir,
+                cache_path=cache_path,
+                model=self.config.embedding_model,
+                node_count=len(nodes),
+                covered_count=0,
+                missing_count=len(nodes),
+                stale_count=0,
+                extra_count=0,
+                node_counts=retrieval_node_counts(nodes),
+                missing_node_ids=tuple(node.node_id for node in nodes[:sample_limit]),
+                error="cache file missing",
+            )
+
+        try:
+            raw = json.loads(cache_path.read_text())
+        except Exception as exc:
+            return EmbeddingCacheCoverage(
+                vault_dir=self.config.vault_dir,
+                cache_path=cache_path,
+                model=self.config.embedding_model,
+                node_count=len(nodes),
+                covered_count=0,
+                missing_count=len(nodes),
+                stale_count=0,
+                extra_count=0,
+                node_counts=retrieval_node_counts(nodes),
+                error=str(exc),
+            )
+
+        entries = raw.get("entries", {})
+        if not isinstance(entries, dict):
+            return EmbeddingCacheCoverage(
+                vault_dir=self.config.vault_dir,
+                cache_path=cache_path,
+                model=self.config.embedding_model,
+                node_count=len(nodes),
+                covered_count=0,
+                missing_count=len(nodes),
+                stale_count=0,
+                extra_count=0,
+                node_counts=retrieval_node_counts(nodes),
+                error="entries must be an object",
+            )
+
+        covered: list[str] = []
+        missing: list[str] = []
+        stale: list[str] = []
+        node_ids = {node.node_id for node in nodes}
+        for node in nodes:
+            entry = entries.get(node.node_id)
+            if not isinstance(entry, dict):
+                missing.append(node.node_id)
+                continue
+            expected_hash = embeddings.embedding_text_hash(embeddings.node_embedding_text(node))
+            vector = entry.get("vector")
+            if entry.get("model") != self.config.embedding_model:
+                missing.append(node.node_id)
+            elif entry.get("text_hash") != expected_hash:
+                stale.append(node.node_id)
+            elif not isinstance(vector, list) or not vector:
+                stale.append(node.node_id)
+            else:
+                covered.append(node.node_id)
+
+        extra = sorted(
+            node_id
+            for node_id, entry in entries.items()
+            if node_id not in node_ids and isinstance(entry, dict) and entry.get("model") == self.config.embedding_model
+        )
+        return EmbeddingCacheCoverage(
+            vault_dir=self.config.vault_dir,
+            cache_path=cache_path,
+            model=self.config.embedding_model,
+            node_count=len(nodes),
+            covered_count=len(covered),
+            missing_count=len(missing),
+            stale_count=len(stale),
+            extra_count=len(extra),
+            node_counts=retrieval_node_counts(nodes),
+            missing_node_ids=tuple(missing[:sample_limit]),
+            stale_node_ids=tuple(stale[:sample_limit]),
+            extra_node_ids=tuple(extra[:sample_limit]),
+        )
+
+    def benchmark_preview(
+        self,
+        retriever_name: str = retrieval_preview_module.DEFAULT_RETRIEVER,
+        case_set: str = "real-vault",
+    ) -> MemoryBenchmarkPreview:
+        """Run a read-only retrieval benchmark through the Memory boundary."""
+
+        experimental = retrieval_eval.build_experimental_retriever(retriever_name, self.config.vault_dir)
+        cases = retrieval_eval.select_cases(case_set, retriever_name)
+        result = retrieval_eval.evaluate_retriever(cases, experimental.retrieve)
+        misses = tuple(case_result.case.name for case_result in result.results if not case_result.passed)
+        return MemoryBenchmarkPreview(
+            retriever_name=retriever_name,
+            case_set=case_set,
+            vault_dir=self.config.vault_dir,
+            node_count=len(experimental.nodes),
+            passed_count=result.passed_count,
+            total_count=result.total_count,
+            misses=misses,
         )
 
 
@@ -332,6 +478,55 @@ def format_trace_report(report: str) -> str:
     )
 
 
+def format_cache_coverage(coverage: EmbeddingCacheCoverage) -> str:
+    """Format embedding cache coverage for operator inspection."""
+
+    lines = [
+        "Memory specialist cache coverage preview",
+        f"- vault: {coverage.vault_dir}",
+        f"- cache path: {coverage.cache_path}",
+        f"- model: {coverage.model}",
+        f"- nodes: {coverage.node_count}",
+        f"- covered: {coverage.covered_count}",
+        f"- missing: {coverage.missing_count}",
+        f"- stale: {coverage.stale_count}",
+        f"- extra cache entries: {coverage.extra_count}",
+    ]
+    if coverage.node_counts:
+        lines.append("- node types: " + ", ".join(
+            f"{node_type or '(unknown)'}={count}"
+            for node_type, count in coverage.node_counts.items()
+        ))
+    if coverage.missing_node_ids:
+        lines.append("- missing sample: " + ", ".join(coverage.missing_node_ids))
+    if coverage.stale_node_ids:
+        lines.append("- stale sample: " + ", ".join(coverage.stale_node_ids))
+    if coverage.extra_node_ids:
+        lines.append("- extra sample: " + ", ".join(coverage.extra_node_ids))
+    if coverage.error:
+        lines.append(f"- error: {coverage.error}")
+    lines.append("- writes: no")
+    return "\n".join(lines)
+
+
+def format_benchmark_preview(preview: MemoryBenchmarkPreview) -> str:
+    """Format a Memory specialist benchmark preview."""
+
+    lines = [
+        "Memory specialist benchmark preview",
+        f"- retriever: {preview.retriever_name}",
+        f"- case-set: {preview.case_set}",
+        f"- vault: {preview.vault_dir}",
+        f"- nodes: {preview.node_count}",
+        f"- passed: {preview.passed_count}/{preview.total_count}",
+        f"- status: {'pass' if preview.passed_count == preview.total_count else 'baseline'}",
+    ]
+    if preview.misses:
+        lines.append("- misses: " + ", ".join(preview.misses))
+    lines.append("- writes: no")
+    return "\n".join(lines)
+
+
 def default_memory_trace_path() -> Path:
     """Return the current durable memory trace path."""
 
@@ -405,6 +600,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Read --traces from journalctl instead of the durable JSONL trace sink.",
     )
+    parser.add_argument(
+        "--case-set",
+        choices=("auto", "fixture", "real-vault", "packet-vault"),
+        default="real-vault",
+        help="Benchmark case set for --benchmark. Defaults to real-vault.",
+    )
+    parser.add_argument(
+        "--sample-limit",
+        type=int,
+        default=10,
+        help="Number of node IDs to sample in --cache-coverage. Defaults to 10.",
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
         "--inventory",
@@ -445,6 +652,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--traces",
         action="store_true",
         help="Report memory parent guard traces without writing.",
+    )
+    mode.add_argument(
+        "--cache-coverage",
+        action="store_true",
+        help="Compare current vault retrieval nodes to cached embeddings without writing.",
+    )
+    mode.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Run a read-only retrieval benchmark summary through the Memory boundary.",
     )
     return parser
 
@@ -493,6 +710,15 @@ def main(argv: Sequence[str] | None = None) -> None:
                 file_path=args.file,
                 jsonl_path=None if args.journal or args.file else args.jsonl,
                 use_journal=args.journal,
+            )
+        ))
+    elif args.cache_coverage:
+        print(format_cache_coverage(specialist.cache_coverage(sample_limit=args.sample_limit)))
+    elif args.benchmark:
+        print(format_benchmark_preview(
+            specialist.benchmark_preview(
+                retriever_name=args.retriever,
+                case_set=args.case_set,
             )
         ))
 

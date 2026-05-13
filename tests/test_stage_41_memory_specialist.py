@@ -431,6 +431,206 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
         self.assertIn("- decision filter: skipped", output)
         self.assertIn("top node: contacts/taylor-reed [sprockets/contact]", output)
 
+    def test_cache_coverage_reports_covered_missing_stale_and_extra_nodes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "embeddings.json"
+            covered = RetrievalNode(
+                node_id="projects/covered",
+                title="Covered",
+                node_type="sprockets/project",
+                path=Path("/vault/Sprockets/projects/covered.md"),
+                text="covered text",
+            )
+            stale = RetrievalNode(
+                node_id="notes/stale",
+                title="Stale",
+                node_type="sprockets/note",
+                path=Path("/vault/Sprockets/notes/stale.md"),
+                text="current text",
+            )
+            missing = RetrievalNode(
+                node_id="daily/2026-05-13",
+                title="Wed 13 May 2026",
+                node_type="cogs/daily",
+                path=Path("/vault/Cogs/daily/Wed 13 May 2026.md"),
+            )
+            cache_path.write_text(json.dumps({
+                "schema_version": 1,
+                "entries": {
+                    covered.node_id: {
+                        "model": "test-embed",
+                        "text_hash": memory_specialist.embeddings.embedding_text_hash(
+                            memory_specialist.embeddings.node_embedding_text(covered)
+                        ),
+                        "vector": [0.1, 0.2],
+                    },
+                    stale.node_id: {
+                        "model": "test-embed",
+                        "text_hash": "old-hash",
+                        "vector": [0.3, 0.4],
+                    },
+                    "notes/extra": {
+                        "model": "test-embed",
+                        "text_hash": "extra",
+                        "vector": [0.5, 0.6],
+                    },
+                },
+            }))
+            specialist = memory_specialist.MemorySpecialist(
+                memory_specialist.MemorySpecialistConfig(
+                    vault_dir=Path("/vault"),
+                    embedding_cache_path=cache_path,
+                    embedding_model="test-embed",
+                )
+            )
+
+            with patch("memory_specialist.load_retrieval_nodes", return_value=[covered, stale, missing]):
+                coverage = specialist.cache_coverage()
+
+        self.assertEqual(coverage.node_count, 3)
+        self.assertEqual(coverage.covered_count, 1)
+        self.assertEqual(coverage.missing_count, 1)
+        self.assertEqual(coverage.stale_count, 1)
+        self.assertEqual(coverage.extra_count, 1)
+        self.assertEqual(coverage.missing_node_ids, ("daily/2026-05-13",))
+        self.assertEqual(coverage.stale_node_ids, ("notes/stale",))
+        self.assertEqual(coverage.extra_node_ids, ("notes/extra",))
+        self.assertEqual(coverage.node_counts, {"cogs/daily": 1, "sprockets/note": 1, "sprockets/project": 1})
+
+    def test_cache_coverage_missing_cache_is_read_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "missing.json"
+            node = RetrievalNode(
+                node_id="projects/phase-3",
+                title="Phase 3",
+                node_type="sprockets/project",
+                path=Path("/vault/Sprockets/projects/phase-3.md"),
+            )
+            specialist = memory_specialist.MemorySpecialist(
+                memory_specialist.MemorySpecialistConfig(embedding_cache_path=cache_path)
+            )
+
+            with patch("memory_specialist.load_retrieval_nodes", return_value=[node]):
+                coverage = specialist.cache_coverage()
+
+        self.assertEqual(coverage.missing_count, 1)
+        self.assertEqual(coverage.error, "cache file missing")
+        self.assertFalse(cache_path.exists())
+
+    def test_format_cache_coverage_marks_read_only(self):
+        coverage = memory_specialist.EmbeddingCacheCoverage(
+            vault_dir=Path("/vault"),
+            cache_path=Path("/cache/embeddings.json"),
+            model="test-embed",
+            node_count=3,
+            covered_count=1,
+            missing_count=1,
+            stale_count=1,
+            extra_count=1,
+            node_counts={"sprockets/project": 2, "cogs/daily": 1},
+            missing_node_ids=("daily/2026-05-13",),
+            stale_node_ids=("notes/stale",),
+            extra_node_ids=("notes/extra",),
+        )
+
+        output = memory_specialist.format_cache_coverage(coverage)
+
+        self.assertIn("Memory specialist cache coverage preview", output)
+        self.assertIn("- covered: 1", output)
+        self.assertIn("- missing: 1", output)
+        self.assertIn("- stale: 1", output)
+        self.assertIn("- extra cache entries: 1", output)
+        self.assertIn("- writes: no", output)
+
+    def test_benchmark_preview_runs_existing_retrieval_eval_without_writes(self):
+        specialist = memory_specialist.MemorySpecialist(
+            memory_specialist.MemorySpecialistConfig(vault_dir=Path("/vault"))
+        )
+
+        with patch("memory_specialist.retrieval_eval.build_experimental_retriever") as mock_build:
+            with patch("memory_specialist.retrieval_eval.select_cases", return_value=("case",)) as mock_cases:
+                with patch("memory_specialist.retrieval_eval.evaluate_retriever") as mock_eval:
+                    mock_build.return_value = memory_specialist.retrieval_eval.ExperimentalRetriever(
+                        name="memory-vault",
+                        nodes=(
+                            RetrievalNode(
+                                node_id="projects/phase-3",
+                                title="Phase 3",
+                                node_type="sprockets/project",
+                                path=Path("/vault/Sprockets/projects/phase-3.md"),
+                            ),
+                        ),
+                        retriever=lambda query: (),
+                    )
+                    mock_eval.return_value = memory_specialist.retrieval_eval.RetrievalSuiteResult(())
+
+                    preview = specialist.benchmark_preview(
+                        retriever_name="memory-vault",
+                        case_set="real-vault",
+                    )
+
+        self.assertEqual(preview.retriever_name, "memory-vault")
+        self.assertEqual(preview.case_set, "real-vault")
+        self.assertEqual(preview.node_count, 1)
+        self.assertEqual(preview.passed_count, 0)
+        self.assertEqual(preview.total_count, 0)
+        mock_cases.assert_called_once_with("real-vault", "memory-vault")
+        mock_eval.assert_called_once()
+
+    def test_format_benchmark_preview_marks_read_only(self):
+        output = memory_specialist.format_benchmark_preview(
+            memory_specialist.MemoryBenchmarkPreview(
+                retriever_name="memory-vault",
+                case_set="real-vault",
+                vault_dir=Path("/vault"),
+                node_count=40,
+                passed_count=6,
+                total_count=7,
+                misses=("named-contact-followup",),
+            )
+        )
+
+        self.assertIn("Memory specialist benchmark preview", output)
+        self.assertIn("- passed: 6/7", output)
+        self.assertIn("- status: baseline", output)
+        self.assertIn("- misses: named-contact-followup", output)
+        self.assertIn("- writes: no", output)
+
+    def test_main_prints_cache_coverage_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "embeddings.json"
+            cache_path.write_text(json.dumps({"schema_version": 1, "entries": {}}))
+            buf = io.StringIO()
+
+            with patch("memory_specialist.load_retrieval_nodes", return_value=[]):
+                with redirect_stdout(buf):
+                    memory_specialist.main(["--cache-path", str(cache_path), "--cache-coverage"])
+
+        output = buf.getvalue()
+        self.assertIn("Memory specialist cache coverage preview", output)
+        self.assertIn("- nodes: 0", output)
+        self.assertIn("- writes: no", output)
+
+    def test_main_prints_benchmark_preview(self):
+        buf = io.StringIO()
+
+        with patch("memory_specialist.MemorySpecialist.benchmark_preview") as mock_benchmark:
+            mock_benchmark.return_value = memory_specialist.MemoryBenchmarkPreview(
+                retriever_name="memory-vault",
+                case_set="real-vault",
+                vault_dir=Path("/vault"),
+                node_count=40,
+                passed_count=7,
+                total_count=7,
+            )
+            with redirect_stdout(buf):
+                memory_specialist.main(["--retriever", "memory-vault", "--benchmark"])
+
+        output = buf.getvalue()
+        self.assertIn("Memory specialist benchmark preview", output)
+        self.assertIn("- passed: 7/7", output)
+        self.assertIn("- writes: no", output)
+
 
 if __name__ == "__main__":
     unittest.main()
