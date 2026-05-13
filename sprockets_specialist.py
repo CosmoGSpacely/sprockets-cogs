@@ -7,6 +7,7 @@ review-first behavior.
 from __future__ import annotations
 
 import argparse
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
@@ -55,6 +56,38 @@ class SprocketsParentMatchPreview:
     title: str = ""
     uuid: str = ""
     matches: tuple[tuple[str, str, int], ...] = ()
+
+
+@dataclass(frozen=True)
+class SprocketsHierarchyProposalPreview:
+    """Review-only hierarchy node proposal."""
+
+    node_type: str
+    title: str
+    slug: str
+    parent_hint: str = ""
+    parent_slug: str = ""
+    parent_title: str = ""
+    duplicate_slug: str = ""
+    duplicate_title: str = ""
+    issues: tuple[str, ...] = ()
+    review_required: bool = True
+
+
+VALID_HIERARCHY_PROPOSAL_TYPES = {
+    "area": "sprockets/area",
+    "goal": "sprockets/goal",
+    "project": "sprockets/project",
+    "sprockets/area": "sprockets/area",
+    "sprockets/goal": "sprockets/goal",
+    "sprockets/project": "sprockets/project",
+}
+
+VALID_PROPOSAL_PARENT_TYPES = {
+    "sprockets/area": set(),
+    "sprockets/goal": {"sprockets/area"},
+    "sprockets/project": {"sprockets/area", "sprockets/goal"},
+}
 
 
 class SprocketsSpecialist:
@@ -150,6 +183,61 @@ class SprocketsSpecialist:
             uuid=uuid,
         )
 
+    def hierarchy_proposal_preview(
+        self,
+        node_type: str,
+        title: str,
+        parent_hint: str = "",
+    ) -> SprocketsHierarchyProposalPreview:
+        """Preview a review-only area/goal/project proposal without writing."""
+
+        normalized_type = VALID_HIERARCHY_PROPOSAL_TYPES.get(node_type.strip().lower(), "")
+        clean_title = title.strip()
+        issues: list[str] = []
+        if not normalized_type:
+            issues.append(f"unsupported hierarchy node type: {node_type}")
+            normalized_type = node_type.strip()
+        if not clean_title:
+            issues.append("title is required")
+
+        slug = _slugify(clean_title)
+        duplicate = self._exact_title_duplicate(clean_title, normalized_type)
+        duplicate_slug = duplicate.slug if duplicate else ""
+        duplicate_title = duplicate.title if duplicate else ""
+        if duplicate:
+            issues.append(f"duplicate {normalized_type} title exists: {duplicate.title} ({duplicate.slug})")
+
+        parent_slug = ""
+        parent_title = ""
+        parent_hint = parent_hint.strip()
+        allowed_parents = VALID_PROPOSAL_PARENT_TYPES.get(normalized_type, set())
+        if not allowed_parents and parent_hint:
+            issues.append(f"{normalized_type} does not accept a parent")
+        elif allowed_parents and not parent_hint:
+            issues.append(f"{normalized_type} requires a parent")
+        elif allowed_parents and parent_hint:
+            parent_match = self._parent_match_for_types(parent_hint, allowed_parents)
+            if parent_match.ambiguous:
+                choices = ", ".join(title for _, title, _ in parent_match.matches)
+                issues.append(f"ambiguous parent hint {parent_hint!r}: {choices}")
+            elif not parent_match.matched:
+                issues.append(f"parent hint did not match an allowed parent: {parent_hint}")
+            else:
+                parent_slug = parent_match.slug
+                parent_title = parent_match.title
+
+        return SprocketsHierarchyProposalPreview(
+            node_type=normalized_type,
+            title=clean_title,
+            slug=slug,
+            parent_hint=parent_hint,
+            parent_slug=parent_slug,
+            parent_title=parent_title,
+            duplicate_slug=duplicate_slug,
+            duplicate_title=duplicate_title,
+            issues=tuple(issues),
+        )
+
     def ambiguous_parent_matches(self, hint: str) -> tuple[tuple[str, str, int], ...]:
         """Return ambiguous area/goal/project title matches for a parent hint."""
 
@@ -161,6 +249,54 @@ class SprocketsSpecialist:
                 allowed_node_types=vault_graph.HIERARCHY_PARENT_NODE_TYPES,
             )
         )
+
+    def _parent_match_for_types(
+        self,
+        hint: str,
+        allowed_node_types: set[str],
+    ) -> SprocketsParentMatchPreview:
+        graph = self._graph()
+        ambiguous = tuple(
+            vault_graph.ambiguous_title_matches(
+                graph,
+                hint,
+                allowed_node_types=allowed_node_types,
+            )
+        )
+        if ambiguous:
+            return SprocketsParentMatchPreview(
+                hint=hint,
+                matched=False,
+                ambiguous=True,
+                matches=ambiguous,
+            )
+        match = vault_graph.find_node_by_title(
+            graph,
+            hint,
+            allowed_node_types=allowed_node_types,
+        )
+        if not match:
+            return SprocketsParentMatchPreview(hint=hint, matched=False, ambiguous=False)
+        slug, uuid = match
+        return SprocketsParentMatchPreview(
+            hint=hint,
+            matched=True,
+            ambiguous=False,
+            slug=slug,
+            title=graph.nodes[slug].get("title", slug),
+            uuid=uuid,
+        )
+
+    def _exact_title_duplicate(
+        self,
+        title: str,
+        node_type: str,
+    ) -> SprocketsHierarchyNode | None:
+        title_lower = title.lower()
+        for node in self.hierarchy_nodes():
+            if node.node_type == node_type and node.title.lower() == title_lower:
+                return node
+        return None
 
     def hierarchy_context_lines(self, max_nodes: int = 30) -> list[str]:
         """Return compact hierarchy labels suitable for classifier context."""
@@ -193,8 +329,17 @@ def _node_type_order(node_type: str) -> int:
     }.get(node_type, 99)
 
 
+def _slugify(text: str) -> str:
+    """Return a filesystem-safe slug preview without writing a file."""
+
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_]+", "-", text)
+    return text[:60].strip("-")
+
+
 def format_sprockets_specialist_preview(
-    preview: SprocketsInventoryPreview | SprocketsParentMatchPreview | str,
+    preview: SprocketsInventoryPreview | SprocketsParentMatchPreview | SprocketsHierarchyProposalPreview | str,
 ) -> str:
     """Format a Sprockets specialist preview for operator inspection."""
 
@@ -230,6 +375,27 @@ def format_sprockets_specialist_preview(
         else:
             lines.append("- result: no match")
         return "\n".join(lines)
+    if isinstance(preview, SprocketsHierarchyProposalPreview):
+        lines = [
+            "Sprockets specialist hierarchy proposal preview",
+            f"- node type: {preview.node_type}",
+            f"- title: {preview.title}",
+            f"- slug: {preview.slug}",
+            f"- review required: {'yes' if preview.review_required else 'no'}",
+            "- writes: no",
+        ]
+        if preview.parent_hint:
+            lines.append(f"- parent hint: {preview.parent_hint}")
+        if preview.parent_slug:
+            lines.append(f"- parent: [[{preview.parent_slug}]] ({preview.parent_title})")
+        if preview.duplicate_slug:
+            lines.append(f"- duplicate: [[{preview.duplicate_slug}]] ({preview.duplicate_title})")
+        if preview.issues:
+            lines.append("- issues:")
+            lines.extend(f"  - {issue}" for issue in preview.issues)
+        else:
+            lines.append("- issues: none")
+        return "\n".join(lines)
     return "\n".join(["Sprockets specialist hierarchy context preview", "- writes: no", "", preview])
 
 
@@ -247,6 +413,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=30,
         help="Maximum hierarchy nodes for context preview.",
     )
+    parser.add_argument(
+        "--title",
+        default="",
+        help="Title for --propose hierarchy preview.",
+    )
+    parser.add_argument(
+        "--parent",
+        default="",
+        help="Parent title hint for --propose hierarchy preview.",
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
         "--inventory",
@@ -263,6 +439,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Preview compact hierarchy context without writing.",
     )
+    mode.add_argument(
+        "--propose",
+        choices=("area", "goal", "project", "sprockets/area", "sprockets/goal", "sprockets/project"),
+        help="Preview a review-only hierarchy node proposal without writing.",
+    )
     return parser
 
 
@@ -277,6 +458,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(format_sprockets_specialist_preview(specialist.parent_match_preview(args.parent_match)))
     elif args.context_preview:
         print(format_sprockets_specialist_preview(specialist.hierarchy_context_preview(args.max_nodes)))
+    elif args.propose:
+        print(
+            format_sprockets_specialist_preview(
+                specialist.hierarchy_proposal_preview(
+                    args.propose,
+                    args.title,
+                    args.parent,
+                )
+            )
+        )
 
 
 if __name__ == "__main__":

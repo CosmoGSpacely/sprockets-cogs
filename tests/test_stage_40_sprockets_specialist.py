@@ -208,6 +208,143 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 ["Phase 2 - Hardening", "Phase 2 - Handoff"],
             )
 
+    def test_hierarchy_proposal_preview_accepts_project_under_goal_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "goals",
+                "build-sprockets-cogs",
+                "node_type: sprockets/goal\n"
+                "uuid: goal-1\n"
+                "title: Build Sprockets-Cogs\n",
+            )
+            specialist = sprockets_specialist.SprocketsSpecialist(
+                sprockets_specialist.SprocketsSpecialistConfig(vault_dir=vault)
+            )
+
+            preview = specialist.hierarchy_proposal_preview(
+                "project",
+                "Phase 5 - Voice Interface",
+                "Build Sprockets-Cogs",
+            )
+
+            self.assertEqual(preview.node_type, "sprockets/project")
+            self.assertEqual(preview.slug, "phase-5---voice-interface")
+            self.assertEqual(preview.parent_slug, "build-sprockets-cogs")
+            self.assertEqual(preview.parent_title, "Build Sprockets-Cogs")
+            self.assertEqual(preview.issues, ())
+            self.assertFalse((vault / "Sprockets" / "projects" / "phase-5-voice-interface.md").exists())
+
+    def test_hierarchy_proposal_preview_requires_goal_parent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            specialist = sprockets_specialist.SprocketsSpecialist(
+                sprockets_specialist.SprocketsSpecialistConfig(vault_dir=vault)
+            )
+
+            preview = specialist.hierarchy_proposal_preview("goal", "Build Trademark Digger")
+
+            self.assertEqual(preview.node_type, "sprockets/goal")
+            self.assertIn("sprockets/goal requires a parent", preview.issues)
+
+    def test_hierarchy_proposal_preview_rejects_parent_for_area(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "areas",
+                "learn-agentic-ai",
+                "node_type: sprockets/area\n"
+                "uuid: area-1\n"
+                "title: Learn Agentic AI\n",
+            )
+            specialist = sprockets_specialist.SprocketsSpecialist(
+                sprockets_specialist.SprocketsSpecialistConfig(vault_dir=vault)
+            )
+
+            preview = specialist.hierarchy_proposal_preview(
+                "area",
+                "Public Portfolio",
+                "Learn Agentic AI",
+            )
+
+            self.assertEqual(preview.node_type, "sprockets/area")
+            self.assertIn("sprockets/area does not accept a parent", preview.issues)
+
+    def test_hierarchy_proposal_preview_detects_duplicate_titles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "projects",
+                "phase-4-multi-agent",
+                "node_type: sprockets/project\n"
+                "uuid: project-1\n"
+                "title: Phase 4 - Multi-Agent Architecture\n",
+            )
+            specialist = sprockets_specialist.SprocketsSpecialist(
+                sprockets_specialist.SprocketsSpecialistConfig(vault_dir=vault)
+            )
+
+            preview = specialist.hierarchy_proposal_preview(
+                "project",
+                "Phase 4 - Multi-Agent Architecture",
+                "Missing Goal",
+            )
+
+            self.assertEqual(preview.duplicate_slug, "phase-4-multi-agent")
+            self.assertIn(
+                "duplicate sprockets/project title exists: Phase 4 - Multi-Agent Architecture "
+                "(phase-4-multi-agent)",
+                preview.issues,
+            )
+
+    def test_hierarchy_proposal_preview_reports_ambiguous_parent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "areas",
+                "learn-agentic-ai",
+                "node_type: sprockets/area\n"
+                "uuid: area-1\n"
+                "title: Learn Agentic AI\n",
+            )
+            write_node(
+                vault,
+                "areas",
+                "learn-advanced-ai",
+                "node_type: sprockets/area\n"
+                "uuid: area-2\n"
+                "title: Learn Advanced AI\n",
+            )
+            specialist = sprockets_specialist.SprocketsSpecialist(
+                sprockets_specialist.SprocketsSpecialistConfig(vault_dir=vault)
+            )
+
+            preview = specialist.hierarchy_proposal_preview("goal", "Study model routing", "Learn AI")
+
+            self.assertTrue(any(issue.startswith("ambiguous parent hint") for issue in preview.issues))
+
+    def test_format_hierarchy_proposal_preview_marks_review_required(self):
+        preview = sprockets_specialist.SprocketsHierarchyProposalPreview(
+            node_type="sprockets/project",
+            title="Phase 5 - Voice Interface",
+            slug="phase-5-voice-interface",
+            parent_hint="Build Sprockets-Cogs",
+            parent_slug="build-sprockets-cogs",
+            parent_title="Build Sprockets-Cogs",
+        )
+
+        output = sprockets_specialist.format_sprockets_specialist_preview(preview)
+
+        self.assertIn("Sprockets specialist hierarchy proposal preview", output)
+        self.assertIn("- review required: yes", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn("- parent: [[build-sprockets-cogs]] (Build Sprockets-Cogs)", output)
+        self.assertIn("- issues: none", output)
+
     def test_main_prints_read_only_inventory_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -251,6 +388,39 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
             self.assertIn("Sprockets specialist parent match preview", output)
             self.assertIn("- result: matched", output)
             self.assertIn("- parent: [[phase-3-memory-enhancement]]", output)
+
+    def test_main_prints_hierarchy_proposal_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            write_node(
+                vault,
+                "areas",
+                "learn-agentic-ai",
+                "node_type: sprockets/area\n"
+                "uuid: area-1\n"
+                "title: Learn Agentic AI\n",
+            )
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                sprockets_specialist.main(
+                    [
+                        "--vault",
+                        str(vault),
+                        "--propose",
+                        "goal",
+                        "--title",
+                        "Build a public portfolio",
+                        "--parent",
+                        "Learn Agentic AI",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Sprockets specialist hierarchy proposal preview", output)
+            self.assertIn("- node type: sprockets/goal", output)
+            self.assertIn("- parent: [[learn-agentic-ai]] (Learn Agentic AI)", output)
+            self.assertIn("- writes: no", output)
 
 
 if __name__ == "__main__":
