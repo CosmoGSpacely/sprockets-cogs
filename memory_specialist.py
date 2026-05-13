@@ -14,6 +14,7 @@ from typing import Any, Sequence
 
 import embeddings
 import production_retrieval
+import retrieval_preview as retrieval_preview_module
 
 
 @dataclass(frozen=True)
@@ -112,6 +113,46 @@ class MemorySpecialist:
             production_status=production_retrieval.production_retrieval_status(self.config.vault_dir),
         )
 
+    def retrieval_preview(
+        self,
+        query: str,
+        retriever_name: str = retrieval_preview_module.DEFAULT_RETRIEVER,
+    ) -> retrieval_preview_module.RetrievalPreview:
+        """Run a read-only retrieval preview through the Memory boundary."""
+
+        return retrieval_preview_module.preview_retrieval(
+            query,
+            vault_dir=self.config.vault_dir,
+            retriever_name=retriever_name,
+        )
+
+    def context_preview(
+        self,
+        query: str,
+        retriever_name: str = retrieval_preview_module.DEFAULT_RETRIEVER,
+    ) -> str:
+        """Preview compact prompt-context formatting without enabling memory context."""
+
+        return retrieval_preview_module.format_context_preview(
+            self.retrieval_preview(query, retriever_name=retriever_name)
+        )
+
+    def memory_guard_preview(
+        self,
+        query: str,
+        retriever_name: str = retrieval_preview_module.DEFAULT_RETRIEVER,
+    ) -> retrieval_preview_module.MemoryGuardPreview:
+        """Preview post-classification memory guard behavior without writing."""
+
+        return retrieval_preview_module.preview_memory_guard(
+            self.retrieval_preview(query, retriever_name=retriever_name)
+        )
+
+    def production_return_preview(self, query: str) -> retrieval_preview_module.ProductionReturnPreview:
+        """Preview exact compact production retrieval return nodes without writing."""
+
+        return retrieval_preview_module.preview_production_return(query, vault_dir=self.config.vault_dir)
+
 
 def _int_or_none(value: Any) -> int | None:
     return value if isinstance(value, int) else None
@@ -186,6 +227,59 @@ def format_production_status(status: production_retrieval.ProductionRetrievalSta
     )
 
 
+def format_retrieval_preview(preview: retrieval_preview_module.RetrievalPreview, show_trace: bool = False) -> str:
+    """Format a Memory specialist retrieval preview."""
+
+    return "\n".join(
+        [
+            "Memory specialist retrieval preview",
+            "- writes: no",
+            "",
+            retrieval_preview_module.format_preview(preview, show_trace=show_trace),
+        ]
+    )
+
+
+def format_context_preview(context: str) -> str:
+    """Format a Memory specialist context preview."""
+
+    return "\n".join(
+        [
+            "Memory specialist context preview",
+            "- prompt memory context remains disabled unless explicitly enabled elsewhere",
+            "- writes: no",
+            "",
+            context,
+        ]
+    )
+
+
+def format_memory_guard_preview(guard: retrieval_preview_module.MemoryGuardPreview) -> str:
+    """Format a Memory specialist memory-guard preview."""
+
+    return "\n".join(
+        [
+            "Memory specialist guard preview",
+            "- writes: no",
+            "",
+            retrieval_preview_module.format_memory_guard_preview(guard),
+        ]
+    )
+
+
+def format_production_return_preview(preview: retrieval_preview_module.ProductionReturnPreview) -> str:
+    """Format a Memory specialist production-return preview."""
+
+    return "\n".join(
+        [
+            "Memory specialist production return preview",
+            "- writes: no",
+            "",
+            retrieval_preview_module.format_production_return_preview(preview),
+        ]
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Read-only Memory specialist preview.")
     parser.add_argument(
@@ -199,6 +293,21 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=embeddings.EMBED_CACHE_PATH,
         help="Embedding cache path. Defaults to SPROCKETS_COGS_EMBED_CACHE_PATH or project default.",
+    )
+    parser.add_argument(
+        "--retriever",
+        choices=(
+            "memory-vault",
+            "memory-embedding-gated-vault",
+            "memory-embedding-graph-gated-vault",
+        ),
+        default=retrieval_preview_module.DEFAULT_RETRIEVER,
+        help="Read-only preview retriever. Defaults to gated embedded memory.",
+    )
+    parser.add_argument(
+        "--show-trace",
+        action="store_true",
+        help="Print retrieval trace details for --retrieval.",
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
@@ -215,6 +324,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--status",
         action="store_true",
         help="Preview guarded production retrieval status without running retrieval.",
+    )
+    mode.add_argument(
+        "--retrieval",
+        metavar="QUERY",
+        help="Preview retrieval results without production writes.",
+    )
+    mode.add_argument(
+        "--context",
+        metavar="QUERY",
+        help="Preview compact context formatting without enabling memory context.",
+    )
+    mode.add_argument(
+        "--memory-guard",
+        metavar="QUERY",
+        help="Preview memory parent guard behavior without writing.",
+    )
+    mode.add_argument(
+        "--production-return",
+        metavar="QUERY",
+        help="Preview exact compact production retrieval return nodes.",
     )
     return parser
 
@@ -239,6 +368,19 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(format_cache_inventory(specialist.cache_inventory()))
     elif args.status:
         print(format_production_status(production_retrieval.production_retrieval_status(args.vault_dir)))
+    elif args.retrieval:
+        print(
+            format_retrieval_preview(
+                specialist.retrieval_preview(args.retrieval, retriever_name=args.retriever),
+                show_trace=args.show_trace,
+            )
+        )
+    elif args.context:
+        print(format_context_preview(specialist.context_preview(args.context, retriever_name=args.retriever)))
+    elif args.memory_guard:
+        print(format_memory_guard_preview(specialist.memory_guard_preview(args.memory_guard, retriever_name=args.retriever)))
+    elif args.production_return:
+        print(format_production_return_preview(specialist.production_return_preview(args.production_return)))
 
 
 if __name__ == "__main__":

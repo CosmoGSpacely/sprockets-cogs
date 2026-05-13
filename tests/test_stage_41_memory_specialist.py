@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 import memory_specialist
 import production_retrieval
+from retrieval_eval import RetrievalNode
+from retrieval_preview import RetrievalPreview, ProductionReturnPreview
 
 
 class Stage41MemorySpecialistTests(unittest.TestCase):
@@ -156,6 +158,187 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
             self.assertIn("Memory specialist embedding cache inventory", output)
             self.assertIn("- entries: 0", output)
             self.assertIn("- writes: no", output)
+
+    def test_retrieval_preview_delegates_to_existing_preview_without_writes(self):
+        node = RetrievalNode(
+            node_id="projects/production",
+            title="Production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+        expected = RetrievalPreview(
+            query="run beyond laptop",
+            retriever_name="memory-vault",
+            vault_dir=Path("/vault"),
+            results=(node,),
+        )
+        specialist = memory_specialist.MemorySpecialist(
+            memory_specialist.MemorySpecialistConfig(vault_dir=Path("/vault"))
+        )
+
+        with patch("memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
+            mock_preview.return_value = expected
+            preview = specialist.retrieval_preview("run beyond laptop", retriever_name="memory-vault")
+
+        self.assertEqual(preview, expected)
+        mock_preview.assert_called_once_with(
+            "run beyond laptop",
+            vault_dir=Path("/vault"),
+            retriever_name="memory-vault",
+        )
+
+    def test_context_preview_formats_existing_preview_without_enabling_context(self):
+        specialist = memory_specialist.MemorySpecialist()
+
+        with patch.object(specialist, "retrieval_preview") as mock_preview:
+            mock_preview.return_value = RetrievalPreview(
+                query="find memory",
+                retriever_name="memory-embedding-gated-vault",
+                vault_dir=Path("/vault"),
+                results=(),
+            )
+            output = specialist.context_preview("find memory")
+
+        self.assertEqual(output, "Relevant memory: (none)")
+
+    def test_memory_guard_preview_delegates_to_existing_guard_preview(self):
+        project = RetrievalNode(
+            node_id="projects/production",
+            title="Production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+        specialist = memory_specialist.MemorySpecialist()
+
+        with patch.object(specialist, "retrieval_preview") as mock_preview:
+            mock_preview.return_value = RetrievalPreview(
+                query="Need to make this portable",
+                retriever_name="memory-embedding-gated-vault",
+                vault_dir=Path("/vault"),
+                results=(project,),
+            )
+            guard = specialist.memory_guard_preview("Need to make this portable")
+
+        self.assertEqual(guard.parent_title, "Production")
+        self.assertTrue(guard.would_apply_parent_hint)
+        self.assertTrue(guard.would_add_hierarchy_task)
+
+    def test_production_return_preview_delegates_to_existing_adapter_preview(self):
+        expected = ProductionReturnPreview(
+            query="find memory",
+            vault_dir=Path("/vault"),
+            enabled=False,
+            results=(),
+        )
+        specialist = memory_specialist.MemorySpecialist(
+            memory_specialist.MemorySpecialistConfig(vault_dir=Path("/vault"))
+        )
+
+        with patch("memory_specialist.retrieval_preview_module.preview_production_return") as mock_preview:
+            mock_preview.return_value = expected
+            preview = specialist.production_return_preview("find memory")
+
+        self.assertEqual(preview, expected)
+        mock_preview.assert_called_once_with("find memory", vault_dir=Path("/vault"))
+
+    def test_format_retrieval_preview_marks_memory_boundary_and_read_only(self):
+        node = RetrievalNode(
+            node_id="notes/memory",
+            title="Memory",
+            node_type="sprockets/note",
+            path=Path("/vault/Sprockets/notes/memory.md"),
+        )
+
+        output = memory_specialist.format_retrieval_preview(
+            RetrievalPreview(
+                query="find memory",
+                retriever_name="memory-embedding-gated-vault",
+                vault_dir=Path("/vault"),
+                results=(node,),
+            )
+        )
+
+        self.assertIn("Memory specialist retrieval preview", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn("Sprockets-Cogs retrieval preview", output)
+        self.assertIn("1. notes/memory [sprockets/note] Memory", output)
+
+    def test_main_prints_retrieval_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault_dir = Path(tmp) / "vault"
+            node = RetrievalNode(
+                node_id="projects/production",
+                title="Production",
+                node_type="sprockets/project",
+                path=vault_dir / "Sprockets" / "projects" / "production.md",
+            )
+            buf = io.StringIO()
+
+            with patch("memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
+                mock_preview.return_value = RetrievalPreview(
+                    query="find production",
+                    retriever_name="memory-vault",
+                    vault_dir=vault_dir,
+                    results=(node,),
+                )
+                with redirect_stdout(buf):
+                    memory_specialist.main(
+                        [
+                            "--vault-dir",
+                            str(vault_dir),
+                            "--retriever",
+                            "memory-vault",
+                            "--retrieval",
+                            "find production",
+                        ]
+                    )
+
+            output = buf.getvalue()
+            self.assertIn("Memory specialist retrieval preview", output)
+            self.assertIn("- writes: no", output)
+            self.assertIn("1. projects/production [sprockets/project] Production", output)
+
+    def test_main_prints_memory_guard_preview(self):
+        node = RetrievalNode(
+            node_id="projects/production",
+            title="Production",
+            node_type="sprockets/project",
+            path=Path("/vault/Sprockets/projects/production.md"),
+        )
+        buf = io.StringIO()
+
+        with patch("memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
+            mock_preview.return_value = RetrievalPreview(
+                query="Need to make this portable",
+                retriever_name="memory-embedding-gated-vault",
+                vault_dir=Path("/vault"),
+                results=(node,),
+            )
+            with redirect_stdout(buf):
+                memory_specialist.main(["--memory-guard", "Need to make this portable"])
+
+        output = buf.getvalue()
+        self.assertIn("Memory specialist guard preview", output)
+        self.assertIn("- top hierarchy parent: Production", output)
+        self.assertIn("- writes: no", output)
+
+    def test_main_prints_production_return_preview(self):
+        buf = io.StringIO()
+
+        with patch("memory_specialist.retrieval_preview_module.preview_production_return") as mock_preview:
+            mock_preview.return_value = ProductionReturnPreview(
+                query="find memory",
+                vault_dir=Path("/vault"),
+                enabled=False,
+                results=(),
+            )
+            with redirect_stdout(buf):
+                memory_specialist.main(["--production-return", "find memory"])
+
+        output = buf.getvalue()
+        self.assertIn("Memory specialist production return preview", output)
+        self.assertIn("Sprockets-Cogs production retrieval return preview", output)
+        self.assertIn("- writes: no", output)
 
 
 if __name__ == "__main__":
