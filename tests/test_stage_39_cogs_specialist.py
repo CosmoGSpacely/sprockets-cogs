@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+import io
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import cogs_specialist
@@ -104,6 +106,99 @@ class Stage39CogsSpecialistTests(unittest.TestCase):
             self.assertIn("Cogs specialist planning preview", output)
             self.assertIn("- writes: no", output)
             self.assertIn("- planned items: 3", output)
+
+    def test_main_prints_inventory_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                cogs_specialist.main(
+                    [
+                        "--cogs-dir",
+                        str(cogs_dir),
+                        "--inventory",
+                        "--through",
+                        "2026-05-13",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Cogs planning inventory", output)
+            self.assertIn("Reference date: 2026-05-13", output)
+
+    def test_main_prints_carry_preview_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            daily_dir = cogs_dir / "daily"
+            note = vault.ensure_daily_note("2026-05-11", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Carry from CLI\n")
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                cogs_specialist.main(
+                    [
+                        "--cogs-dir",
+                        str(cogs_dir),
+                        "--carry-preview",
+                        "--through",
+                        "2026-05-12",
+                        "--to",
+                        "2026-05-13",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Cogs specialist carry preview", output)
+            self.assertIn("- candidates: 1", output)
+            self.assertIn("- writes: no", output)
+            self.assertFalse(vault.daily_note_path("2026-05-13", daily_dir).exists())
+
+    def test_main_prints_nightly_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            daily_dir = cogs_dir / "daily"
+            note = vault.ensure_daily_note("2026-05-11", daily_dir)
+            note.write_text(note.read_text() + "- [ ] Carry tonight from CLI\n")
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                cogs_specialist.main(
+                    [
+                        "--cogs-dir",
+                        str(cogs_dir),
+                        "--nightly-preview",
+                        "--through",
+                        "2026-05-12",
+                        "--to",
+                        "2026-05-13",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Cogs specialist nightly preview", output)
+            self.assertIn("Nightly carry report", output)
+            self.assertIn("- writes: no", output)
+
+    def test_main_prints_planning_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp)
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                cogs_specialist.main(
+                    [
+                        "--cogs-dir",
+                        str(cogs_dir),
+                        "--planning-preview",
+                        "2026-05-13",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Cogs specialist planning preview", output)
+            self.assertIn("- planned items: 3", output)
+            self.assertIn("No files written.", output)
 
 
 if __name__ == "__main__":

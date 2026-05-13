@@ -5,9 +5,10 @@ modules so scripts and timers continue to own their current write paths.
 """
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import carry
 import cogs_planning
@@ -156,3 +157,83 @@ def format_cogs_specialist_preview(preview: CogsCarryPreview | CogsNightlyPrevie
             preview.report,
         ]
     )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Read-only Cogs specialist preview.")
+    parser.add_argument(
+        "--cogs-dir",
+        default=str(DEFAULT_DAILY_DIR.parent),
+        help="Cogs root directory. Defaults to the real vault Cogs directory.",
+    )
+    parser.add_argument(
+        "--daily-dir",
+        default=None,
+        help="Cogs daily-note directory. Defaults to COGS_DIR/daily.",
+    )
+    parser.add_argument(
+        "--through",
+        default=None,
+        help="YYYY-MM-DD cutoff for carry/nightly previews.",
+    )
+    parser.add_argument(
+        "--to",
+        default=None,
+        help="YYYY-MM-DD destination date for carry/nightly previews.",
+    )
+
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--inventory",
+        action="store_true",
+        help="Preview Cogs planning inventory without writing.",
+    )
+    mode.add_argument(
+        "--carry-preview",
+        action="store_true",
+        help="Preview editable carry-plan actions without writing.",
+    )
+    mode.add_argument(
+        "--nightly-preview",
+        action="store_true",
+        help="Preview nightly carry report without writing.",
+    )
+    mode.add_argument(
+        "--planning-preview",
+        metavar="YYYY-MM-DD|YYYY-MM",
+        help="Preview planning-note creates without writing.",
+    )
+    return parser
+
+
+def specialist_from_args(args: argparse.Namespace) -> CogsSpecialist:
+    cogs_dir = Path(args.cogs_dir)
+    daily_dir = Path(args.daily_dir) if args.daily_dir else cogs_dir / "daily"
+    return CogsSpecialist(CogsSpecialistConfig(cogs_dir=cogs_dir, daily_dir=daily_dir))
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    specialist = specialist_from_args(args)
+
+    if args.inventory:
+        print(specialist.format_inventory(args.through))
+        return
+    if args.carry_preview:
+        through = args.through or nightly.default_through_date()
+        destination = args.to or nightly.default_destination_date()
+        print(format_cogs_specialist_preview(specialist.carry_preview(through, destination)))
+        return
+    if args.nightly_preview:
+        print(format_cogs_specialist_preview(specialist.nightly_preview(args.through, args.to)))
+        return
+    if args.planning_preview:
+        print(format_cogs_specialist_preview(specialist.planning_preview(args.planning_preview)))
+        return
+
+    parser.error("select a Cogs specialist preview mode")
+
+
+if __name__ == "__main__":
+    main()
