@@ -1,13 +1,16 @@
 import importlib
+import io
 import json
 import os
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import extractor_classifier as ec
 import agentic_loop
+import capture_preview
 
 
 def _response(payload):
@@ -22,6 +25,25 @@ class FakeChat:
     def __call__(self, **kwargs):
         self.calls.append(kwargs)
         return _response(self.payload)
+
+
+class FakePreviewClassifier:
+    def __init__(self):
+        self.calls = []
+
+    def extract_nodes(self, content):
+        self.calls.append(("extract", content))
+        return [{"raw": "Call Alex", "type_hint": "task"}]
+
+    def classify_nodes(self, raw_nodes, context):
+        self.calls.append(("classify", raw_nodes, context))
+        return [
+            {
+                "node_type": "cogs/daily",
+                "item_text": "Call Alex",
+                "confidence": "high",
+            }
+        ]
 
 
 class Stage38ExtractorClassifierTests(unittest.TestCase):
@@ -207,6 +229,99 @@ class Stage38ExtractorClassifierTests(unittest.TestCase):
                 (raw_nodes, "context", "fix it", False),
             ],
         )
+
+    def test_capture_preview_runs_read_only_extract_and_classify(self):
+        classifier = FakePreviewClassifier()
+
+        preview = capture_preview.run_capture_preview(
+            "Call Alex",
+            model="preview-model",
+            context="Existing context",
+            classifier=classifier,
+        )
+
+        self.assertEqual(preview.model, "preview-model")
+        self.assertEqual(preview.context_chars, len("Existing context"))
+        self.assertEqual(preview.raw_nodes[0]["raw"], "Call Alex")
+        self.assertEqual(preview.classified_nodes[0]["node_type"], "cogs/daily")
+        self.assertEqual(
+            classifier.calls,
+            [
+                ("extract", "Call Alex"),
+                ("classify", [{"raw": "Call Alex", "type_hint": "task"}], "Existing context"),
+            ],
+        )
+
+    def test_capture_preview_can_skip_classification(self):
+        classifier = FakePreviewClassifier()
+
+        preview = capture_preview.run_capture_preview(
+            "Call Alex",
+            classify=False,
+            context="Existing context",
+            classifier=classifier,
+        )
+
+        self.assertFalse(preview.classified)
+        self.assertEqual(preview.classified_nodes, [])
+        self.assertEqual(classifier.calls, [("extract", "Call Alex")])
+
+    def test_format_capture_preview_reports_no_writes(self):
+        preview = capture_preview.CapturePreview(
+            content="Call Alex",
+            model="preview-model",
+            raw_nodes=[{"raw": "Call Alex"}],
+            classified_nodes=[
+                {
+                    "node_type": "cogs/daily",
+                    "item_text": "Call Alex",
+                    "confidence": "high",
+                }
+            ],
+            classified=True,
+            context_chars=7,
+        )
+
+        output = capture_preview.format_capture_preview(preview)
+
+        self.assertIn("Capture preview", output)
+        self.assertIn("- writes: none", output)
+        self.assertIn("1. Call Alex", output)
+        self.assertIn("1. [cogs/daily] Call Alex (high)", output)
+
+    def test_capture_preview_json_payload_is_machine_readable(self):
+        preview = capture_preview.CapturePreview(
+            content="Call Alex",
+            model="preview-model",
+            raw_nodes=[{"raw": "Call Alex"}],
+            classified_nodes=[],
+            classified=False,
+            context_chars=0,
+        )
+
+        payload = json.loads(capture_preview.capture_preview_to_json(preview))
+
+        self.assertEqual(payload["writes"], "none")
+        self.assertEqual(payload["model"], "preview-model")
+        self.assertFalse(payload["classified"])
+
+    def test_capture_preview_main_prints_read_only_preview(self):
+        classifier = FakePreviewClassifier()
+
+        def fake_classifier(config):
+            self.assertEqual(config.model, "preview-model")
+            return classifier
+
+        buf = io.StringIO()
+        with patch.object(capture_preview, "ExtractClassifier", fake_classifier):
+            with patch.object(capture_preview, "build_context", return_value="context"):
+                with redirect_stdout(buf):
+                    capture_preview.main(["--model", "preview-model", "Call", "Alex"])
+
+        output = buf.getvalue()
+        self.assertIn("Capture preview", output)
+        self.assertIn("- writes: none", output)
+        self.assertIn("classified nodes: 1", output)
 
 
 if __name__ == "__main__":
