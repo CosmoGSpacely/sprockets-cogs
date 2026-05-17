@@ -379,6 +379,40 @@ small, testable, already queued from review, and gives a good Python lesson:
 extract one shared utility, align callers, add regression tests, and preserve
 all live behavior.
 
+## How to use this developer map
+
+Stage 46G closes the map by turning it into a reading path for future work.
+
+When changing the codebase, start here:
+
+1. Identify the entry point in `Entry points`.
+2. Follow the live or preview path in `Runtime data flow`.
+3. Locate the owning specialist/domain in `Module responsibility map`.
+4. Check import direction in `Dependency tour`.
+5. Find the relevant safety net in `Test coverage and fixtures`.
+6. If the work is a cleanup, compare it with `Refactor candidate register`.
+
+Use this rule of thumb:
+
+| Question | First section to read |
+|---|---|
+| Which command or service runs this behavior? | `Entry points` |
+| Can this path write to the vault or runtime queues? | `Entry points`, then `Runtime data flow` |
+| Which specialist owns this behavior? | `Module responsibility map` |
+| Is this import direction healthy? | `Dependency tour` |
+| Which tests protect the change? | `Test coverage and fixtures` |
+| Is this a good Phase 5 refactor? | `Refactor candidate register` |
+
+Before a behavior-changing refactor:
+
+- Write down the behavior being preserved.
+- Run or add the focused test that protects that behavior.
+- Keep the first patch small enough to revert easily.
+- Run `scripts/check` before committing.
+
+For documentation-only map updates, `git diff --check` is usually enough. For
+code changes, use `scripts/check` as the local gate.
+
 ## Review commands
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
