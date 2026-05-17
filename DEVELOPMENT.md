@@ -283,6 +283,64 @@ Specialist facades generally sit one layer above these foundations:
 - Avoid moving files into `specialists/*` until imports are boring enough that a
   package move is mostly mechanical.
 
+## Test coverage and fixtures
+
+Stage 46E maps the current safety net before improving it.
+
+Run the full local gate with:
+
+```bash
+scripts/check
+```
+
+That command runs `python -m unittest discover -v`, the deterministic smoke
+test, fallback contract checks, and the pending review count.
+
+### Test suite shape
+
+The suite currently uses `unittest`, not `pytest`. Most tests are named by the
+stage that introduced the behavior. That history is useful, but Phase 5 may add
+more behavior-oriented names when it clarifies long-lived contracts.
+
+| Test cluster | Main files | Protects |
+|---|---|---|
+| Live loop and hardening | `test_stage_10a_parent_resolution.py`, `test_stage_13_5.py`, `test_model_config.py`, `smoke_test.py` | Parent resolution, review routing, fallback posture, runtime env/model config, and whole-loop temp-vault behavior. |
+| Cogs planning/carry/jobs | `test_stage_14_5_carry.py`, `test_stage_14_5_nightly.py`, `test_stage_26_cogs_naming.py`, `test_stage_27_job_status.py`, `test_stage_27_job_supervisor.py`, `test_stage_39_cogs_specialist.py` | Cogs note parsing, carry apply safety, nightly/report behavior, naming, planning notes, timer/job status, and Cogs specialist facade. |
+| Retrieval and memory | `test_stage_15_retrieval_eval.py`, `test_stage_16_embeddings.py`, `test_stage_17_*`, `test_stage_19_*`, `test_stage_20_graph_retrieval.py`, `test_stage_22_memory_packets.py`, `test_stage_24_memory_tool_probe.py`, `test_stage_41_memory_specialist.py` | Retrieval benchmark behavior, embeddings/cache, memory index, production retrieval guard, traces, graph/packet retrieval, tool-call probes, and memory specialist facade. |
+| Orchestration and specialists | `test_stage_37_orchestrator_contract.py`, `test_stage_38_extractor_classifier.py`, `test_stage_40_sprockets_specialist.py`, `test_stage_42_review_specialist.py`, `test_stage_43_agent_message_bus.py`, `test_stage_44_orchestrated_rehearsal.py`, `test_stage_45_specialist_catalog.py` | Route contracts, model-call boundary, hierarchy facade, review facade, message-bus contract, end-to-end rehearsal, and specialist catalog. |
+| Shared utilities | `test_slug_utils.py`, `test_stage_17_5_vector_math.py`, `test_stage_17_5_memory_guards.py` | Filename slug behavior, vector scoring, and pure memory guard helpers. |
+
+### Common fixture patterns
+
+- `tempfile.TemporaryDirectory()` is the dominant filesystem fixture.
+- Tests build temporary vaults and SC roots directly with `Path`.
+- `unittest.mock.patch` stubs model calls, embedding calls, subprocess calls,
+  environment variables, and CLI arguments.
+- Smoke testing imports `agentic_loop` after setting temporary environment
+  variables so the module-level paths point at test directories.
+- Retrieval tests frequently patch `embeddings.build_embedding_index()` and
+  `embeddings.embed_text()` so they do not need a live Ollama embedding call.
+- Review/Cogs/Sprockets tests create small Markdown/frontmatter fixtures rather
+  than using the real vault.
+
+### Testing gaps to keep in mind
+
+- There is no shared temp-vault fixture module yet; many tests repeat similar
+  `TemporaryDirectory()` setup.
+- Many tests are stage-named. That is good history, but some long-lived behavior
+  would be easier to find with behavior-oriented test names.
+- `agentic_loop.py` is protected by several tests and the smoke test, but its
+  internal seams are still broad. Extracting behavior should add focused tests
+  beside the extracted module.
+- Some CLI behavior is tested through patched `sys.argv` and `print`; broader
+  subprocess-style CLI tests should be added only where they catch real risk.
+- Retrieval benchmark tests are intentionally large because they preserve
+  measured behavior. Refactor them carefully and keep benchmark outputs stable.
+
+Phase 5 testing rule: before moving behavior, identify the existing test that
+protects it. If the protection is indirect or only smoke-level, add a focused
+test first.
+
 ## Review commands
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
