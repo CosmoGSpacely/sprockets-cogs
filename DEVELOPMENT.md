@@ -98,6 +98,82 @@ Runtime directories are outside the repo under the configured SC root, usually
 `output/`. The vault is also outside the repo. Tests and dry-runs should use
 environment overrides rather than writing to live paths.
 
+## Runtime data flow
+
+Stage 46B maps the live Rosie pipeline before refactoring it.
+
+```text
+sprockets-cogs.service
+  -> agentic_loop.main()
+  -> ensure_runtime_dirs()
+  -> watchdog Observer on SC input/
+  -> process_existing_inputs() for startup backlog
+  -> InputHandler.on_created() for new *.input files
+  -> process_input(path)
+```
+
+`process_input()` is the central live write path:
+
+```text
+SC input/<name>.input
+  -> move to SC processing/<name>.input
+  -> parse frontmatter/content/session_id
+  -> build_context_for_input(content)
+       -> build_context()
+          -> today's Cogs items
+          -> hot contact/entity hints
+          -> hierarchy parent target titles
+       -> optional prompt-appended memory context only if
+          SPROCKETS_COGS_MEMORY_CONTEXT=1
+  -> extract_nodes(content)
+  -> classify_nodes(raw_nodes, context)
+  -> apply_explicit_hierarchy_hints()
+  -> ensure_hierarchy_tasks()
+  -> memory_parent_trace(content)
+       -> retrieve_relevant_nodes(content) if memory retrieval is enabled
+       -> select first retrieved hierarchy parent, if any
+       -> log compact trace
+       -> append JSONL trace under SC output/
+  -> ensure_memory_hierarchy_tasks()
+  -> apply_memory_parent_title()
+  -> ensure_cogs_companions()
+  -> validate_output()
+```
+
+After validation, the flow branches:
+
+| Branch | Condition | Destination |
+|---|---|---|
+| Low confidence | Valid shape but `confidence: low` | OpenAI fallback if enabled; otherwise vault `review/`. |
+| Invalid shape | Pydantic/model validation failed | One local retry with error context, then OpenAI fallback if enabled, otherwise vault `review/`. |
+| OpenAI fallback candidate | Fallback returns candidate nodes | Always routed to vault `review/`; never direct-write. |
+| Ambiguous hierarchy parent | Valid node has unresolved ambiguous `parent_hint` | Vault `review/`. |
+| Valid resolved node | Valid and not routed to review | Cogs daily append or Sprockets node write. |
+| Duplicate resolved node | Same node key already seen in current input | Skipped with a warning. |
+| Successful input | Write loop completes | Reflection appended to today's Cogs note; input moved to SC `archive/`. |
+| Unexpected exception | Any unhandled processing error | Input remains in SC `processing/` for inspection. |
+
+Live write destinations:
+
+- Cogs daily items: `VAULT_DIR/Cogs/daily/` via `vault.ensure_daily_note()` and
+  `vault.append_cogs_item_text()`.
+- Sprockets task/contact/entity/note files: `VAULT_DIR/Sprockets/...`.
+- Review packets: `VAULT_DIR/review/`.
+- Memory-parent trace JSONL: `SC output/memory-parent-traces.jsonl` or
+  `SPROCKETS_COGS_MEMORY_TRACE_PATH`.
+- Entity working memory: configured by `SPROCKETS_COGS_ENTITY_STATE_PATH`.
+- Processed input archive: `SC archive/`.
+
+Important safety boundaries:
+
+- Prompt-appended memory context is off by default and should remain off unless
+  a future contamination-resistant design is proven.
+- Production retrieval is used only as a post-classification structural guard.
+- OpenAI fallback is review-first only.
+- The message bus is not part of the live `process_input()` path.
+- If processing fails unexpectedly, the source input is not archived; it stays
+  in `processing/` so the failure is inspectable.
+
 ## Review commands
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
