@@ -7,6 +7,13 @@ inspectable, reversible, and safe enough to write into a personal vault?
 The answer so far is a deliberately narrow loop: capture text, extract typed
 nodes, validate them, write Markdown, and use memory only through guarded seams.
 
+Sprockets-Cogs sits at an unusual intersection: external drop-folder watch,
+two-pass local Ollama extract/classify, typed node routing, Bullet Journal
+carry-forward, fuzzy deduplication, Obsidian vault writes, and review-first
+OpenAI fallback. Most adjacent tools cover one or two of those jobs; this
+project is intentionally exploring how they work together in a local,
+inspectable personal system.
+
 ## Core Loop
 
 The production loop is file based. Source adapters or a person place `.input`
