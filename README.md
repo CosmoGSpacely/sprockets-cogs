@@ -92,7 +92,7 @@ Current boundaries:
 
 ## Repository Map
 
-- `specialists/` - visible Phase 4 specialist homes and responsibility map.
+- `specialists/` - visible Phase 4 specialist homes and importable responsibility catalog.
 - `agentic_loop.py` - Rosie watcher and processing pipeline.
 - `orchestrator_contract.py` and `orchestrated_rehearsal.py` - RUDI routing and read-only orchestration rehearsal.
 - `cogs_specialist.py` and `cogs_planning.py` - Cogs planning and carry-facing specialist surfaces.

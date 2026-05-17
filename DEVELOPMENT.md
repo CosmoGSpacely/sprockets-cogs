@@ -4,7 +4,8 @@ Agentic loop that processes natural-language inputs and writes Obsidian-compatib
 Markdown files to a configured vault directory.
 
 ## Files
-- `specialists/` — visible Phase 4 specialist map; README/index surfaces only
+- `specialists/` — visible Phase 4 specialist map and importable catalog
+- `specialists/catalog.py` — stable specialist metadata for docs/tests/status surfaces
 - `agentic_loop.py` — Rosie file watcher + processing pipeline
 - `orchestrator_contract.py` — RUDI route decisions and handoff contracts
 - `orchestrated_rehearsal.py` — read-only end-to-end RUDI rehearsal
@@ -53,8 +54,8 @@ startup scan / watchdog input/ → Rosie extract_nodes() → Rosie classify_node
   specialists.
 - The message bus is a handoff contract and rehearsal surface, not live
   dispatch.
-- The `specialists/` directories are public entry points, not a package move;
-  root modules remain the implementation source of truth for now.
+- The `specialists/` directories are public entry points and a small catalog,
+  not a package move; root modules remain the implementation source of truth for now.
 
 ## Review commands
 - `scripts/review --count` — count pending review items
