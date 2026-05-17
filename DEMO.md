@@ -81,7 +81,7 @@ Run:
 scripts/check
 ```
 
-The current Phase 4 gate passes 431 tests, a temp-vault smoke test, fallback
+The current Phase 4 gate passes 437 tests, a temp-vault smoke test, fallback
 contract checks, and review count 0.
 
 ## What This Demonstrates

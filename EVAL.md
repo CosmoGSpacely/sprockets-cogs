@@ -14,7 +14,7 @@ scripts/check
 
 Current Phase 4 result on 2026-05-17:
 
-- unit tests: 431 passing
+- unit tests: 437 passing
 - smoke test: passed
 - fallback contract: passed
 - review queue: 0 items
