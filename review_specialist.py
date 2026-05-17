@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import review
+from models import validate_node
 
 SC_ROOT_ENV = "SPROCKETS_COGS_SC_ROOT"
 DEFAULT_REVIEW_PACKET_PATH = Path(os.environ.get(SC_ROOT_ENV, str(Path.home() / "sc"))) / "output" / "review-packet.md"
@@ -61,6 +62,32 @@ class ReviewDecisionImportPreview:
     actionable_count: int
     pending_count: int
     invalid_count: int
+
+
+@dataclass(frozen=True)
+class ReviewDecisionApplyAction:
+    """One read-only apply-preview action for an edited decision packet."""
+
+    file: str
+    decision: str
+    effect: str
+    notes: str = ""
+    valid: bool = True
+    issue: str = ""
+
+
+@dataclass(frozen=True)
+class ReviewDecisionApplyPreview:
+    """Read-only preview of how review decisions would affect the queue."""
+
+    review_dir: Path
+    packet_path: Path
+    actions: tuple[ReviewDecisionApplyAction, ...]
+    approve_count: int
+    discard_count: int
+    skip_count: int
+    pending_count: int
+    rejected_count: int
 
 
 @dataclass(frozen=True)
@@ -132,6 +159,51 @@ class ReviewSpecialist:
             invalid_count=sum(1 for row in checked if not row.valid),
         )
 
+    def decision_apply_preview(self, packet_path: Path) -> ReviewDecisionApplyPreview:
+        """Preview guarded decision effects without applying them."""
+
+        import_preview = self.decision_import_preview(packet_path)
+        seen_files: set[str] = set()
+        actions: list[ReviewDecisionApplyAction] = []
+        for row in import_preview.rows:
+            if not row.valid:
+                actions.append(_action_from_row(row, effect="reject", valid=False, issue=row.issue))
+                continue
+            if row.file in seen_files:
+                actions.append(
+                    _action_from_row(
+                        row,
+                        effect="reject",
+                        valid=False,
+                        issue="duplicate decision row for review file",
+                    )
+                )
+                continue
+            seen_files.add(row.file)
+            if row.decision == "pending":
+                actions.append(_action_from_row(row, effect="pending"))
+            elif row.decision == "approve":
+                issue = _approval_preview_issue(self.config.review_dir / row.file)
+                if issue:
+                    actions.append(_action_from_row(row, effect="reject", valid=False, issue=issue))
+                else:
+                    actions.append(_action_from_row(row, effect="approve"))
+            elif row.decision == "discard":
+                actions.append(_action_from_row(row, effect="discard"))
+            elif row.decision == "skip":
+                actions.append(_action_from_row(row, effect="skip"))
+
+        return ReviewDecisionApplyPreview(
+            review_dir=self.config.review_dir,
+            packet_path=packet_path,
+            actions=tuple(actions),
+            approve_count=sum(1 for action in actions if action.effect == "approve"),
+            discard_count=sum(1 for action in actions if action.effect == "discard"),
+            skip_count=sum(1 for action in actions if action.effect == "skip"),
+            pending_count=sum(1 for action in actions if action.effect == "pending"),
+            rejected_count=sum(1 for action in actions if action.effect == "reject"),
+        )
+
     def operational_packet_markdown(self) -> str:
         """Return the complete operational packet intended for file output."""
 
@@ -178,6 +250,39 @@ def _replace_row(
         valid=row.valid if valid is None else valid,
         issue=row.issue if issue is None else issue,
     )
+
+
+def _action_from_row(
+    row: ReviewDecisionRow,
+    *,
+    effect: str,
+    valid: bool = True,
+    issue: str = "",
+) -> ReviewDecisionApplyAction:
+    return ReviewDecisionApplyAction(
+        file=row.file,
+        decision=row.decision,
+        notes=row.notes,
+        effect=effect,
+        valid=valid,
+        issue=issue,
+    )
+
+
+def _approval_preview_issue(path: Path) -> str:
+    try:
+        raw = review._extract_json(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        return f"cannot read review file: {exc}"
+    if not raw:
+        return "review item is unparseable"
+    raw = dict(raw)
+    raw["confidence"] = "high"
+    try:
+        validate_node(raw)
+    except Exception as exc:
+        return f"approval would fail validation: {exc}"
+    return ""
 
 
 def _format_counter(label: str, values: dict[str, int]) -> list[str]:
@@ -389,6 +494,37 @@ def format_decision_import_preview(preview: ReviewDecisionImportPreview) -> str:
     return "\n".join(lines)
 
 
+def format_decision_apply_preview(preview: ReviewDecisionApplyPreview) -> str:
+    """Format guarded decision effects without applying them."""
+
+    lines = [
+        "Review specialist guarded apply preview",
+        f"- review dir: {preview.review_dir}",
+        f"- packet: {preview.packet_path}",
+        f"- rows: {len(preview.actions)}",
+        f"- would approve: {preview.approve_count}",
+        f"- would discard: {preview.discard_count}",
+        f"- would skip: {preview.skip_count}",
+        f"- pending: {preview.pending_count}",
+        f"- rejected: {preview.rejected_count}",
+        "- vault writes: no",
+        "- review queue writes: no",
+    ]
+    if not preview.actions:
+        lines.append("No decision rows found.")
+        return "\n".join(lines)
+    lines.append("")
+    for action in preview.actions:
+        if action.effect == "reject":
+            detail = f"reject: {action.issue}"
+        elif action.effect == "pending":
+            detail = "pending: no action"
+        else:
+            detail = f"would {action.effect}"
+        lines.append(f"- {action.file}: {action.decision} -> {detail}")
+    return "\n".join(lines)
+
+
 def format_packet_write_result(result: ReviewPacketWriteResult) -> str:
     """Format an operational packet write result."""
 
@@ -425,6 +561,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--packet-preview", action="store_true", help="Preview Obsidian review packet without writing.")
     mode.add_argument("--decision-template", action="store_true", help="Print an editable review decision template without writing.")
     mode.add_argument("--decision-import-preview", type=Path, metavar="PATH", help="Parse a filled decision template without applying it.")
+    mode.add_argument("--apply-preview", type=Path, metavar="PATH", help="Preview guarded decision effects without applying them.")
     mode.add_argument("--write-packet", action="store_true", help="Regenerate the operational review packet outside the vault.")
     return parser
 
@@ -448,6 +585,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(format_decision_template(specialist.decision_template()))
     elif args.decision_import_preview:
         print(format_decision_import_preview(specialist.decision_import_preview(args.decision_import_preview)))
+    elif args.apply_preview:
+        print(format_decision_apply_preview(specialist.decision_apply_preview(args.apply_preview)))
     elif args.write_packet:
         print(format_packet_write_result(specialist.write_operational_packet()))
 

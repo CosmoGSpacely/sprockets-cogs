@@ -275,6 +275,116 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("- vault writes: no", output)
             self.assertTrue(packet_path.exists())
 
+    def test_decision_apply_preview_groups_guarded_effects_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "approve-me.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Approve me",
+                    "confidence": "low",
+                },
+            )
+            _write_review_file(
+                review_dir / "discard-me.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/note",
+                    "title": "Discard me",
+                    "confidence": "low",
+                },
+            )
+            packet = root / "decisions.md"
+            packet.write_text(
+                "| File | Decision | Notes |\n"
+                "|---|---|---|\n"
+                "| approve-me.md | approve | good |\n"
+                "| discard-me.md | discard | no |\n"
+                "| missing.md | approve | stale |\n"
+                "| approve-me.md | skip | duplicate |\n"
+                "| discard-me.md |  | later |\n"
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+
+            preview = specialist.decision_apply_preview(packet)
+
+            self.assertEqual(preview.approve_count, 1)
+            self.assertEqual(preview.discard_count, 1)
+            self.assertEqual(preview.skip_count, 0)
+            self.assertEqual(preview.pending_count, 0)
+            self.assertEqual(preview.rejected_count, 3)
+            self.assertTrue((review_dir / "approve-me.md").exists())
+            self.assertTrue((review_dir / "discard-me.md").exists())
+
+    def test_decision_apply_preview_rejects_unparseable_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            (review_dir / "bad.md").write_text(
+                "---\nnode_type: review\nreviewed: false\n---\n\n"
+                "**Reason:** confidence: low\n\n"
+                "No JSON here.\n"
+            )
+            packet = root / "decisions.md"
+            packet.write_text(
+                "| File | Decision | Notes |\n"
+                "|---|---|---|\n"
+                "| bad.md | approve | impossible |\n"
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+
+            preview = specialist.decision_apply_preview(packet)
+
+            self.assertEqual(preview.approve_count, 0)
+            self.assertEqual(preview.rejected_count, 1)
+            self.assertIn("unparseable", preview.actions[0].issue)
+
+    def test_main_prints_guarded_apply_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Pending",
+                    "confidence": "low",
+                },
+            )
+            packet = root / "decisions.md"
+            packet.write_text(
+                "| File | Decision | Notes |\n"
+                "|---|---|---|\n"
+                "| pending.md | approve | yes |\n"
+            )
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                review_specialist.main(
+                    [
+                        "--review-dir",
+                        str(review_dir),
+                        "--apply-preview",
+                        str(packet),
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Review specialist guarded apply preview", output)
+            self.assertIn("- would approve: 1", output)
+            self.assertIn("- vault writes: no", output)
+
 
 def _write_review_file(path: Path, reason: str, raw: dict) -> None:
     path.write_text(
