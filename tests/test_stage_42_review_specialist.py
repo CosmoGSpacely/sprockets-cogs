@@ -101,6 +101,101 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("# Sprockets-Cogs Review Packet", output)
             self.assertIn("- writes: no", output)
 
+    def test_decision_template_lists_pending_files_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Decision template task",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+
+            template = specialist.decision_template()
+
+            self.assertIn("# Sprockets-Cogs Review Decision Template", template)
+            self.assertIn("| File | Decision | Notes |", template)
+            self.assertIn("| pending.md |  |  |", template)
+            self.assertTrue((review_dir / "pending.md").exists())
+
+    def test_decision_import_preview_validates_against_current_queue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "approve-me.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Approve me",
+                    "confidence": "low",
+                },
+            )
+            packet = root / "decisions.md"
+            packet.write_text(
+                "# Decisions\n\n"
+                "| File | Decision | Notes |\n"
+                "|---|---|---|\n"
+                "| approve-me.md | approve | looks right |\n"
+                "| missing.md | discard | stale row |\n"
+                "| approve-me.md | nope | bad decision |\n"
+                "| approve-me.md |  | not ready |\n"
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+
+            preview = specialist.decision_import_preview(packet)
+
+            self.assertEqual(preview.actionable_count, 1)
+            self.assertEqual(preview.pending_count, 1)
+            self.assertEqual(preview.invalid_count, 2)
+            self.assertTrue((review_dir / "approve-me.md").exists())
+
+    def test_main_prints_decision_import_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Pending",
+                    "confidence": "low",
+                },
+            )
+            packet = root / "decisions.md"
+            packet.write_text(
+                "| File | Decision | Notes |\n"
+                "|---|---|---|\n"
+                "| pending.md | skip | keep it |\n"
+            )
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                review_specialist.main(
+                    [
+                        "--review-dir",
+                        str(review_dir),
+                        "--decision-import-preview",
+                        str(packet),
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Review specialist decision import preview", output)
+            self.assertIn("- actionable: 1", output)
+            self.assertIn("- writes: no", output)
+
 
 def _write_review_file(path: Path, reason: str, raw: dict) -> None:
     path.write_text(
