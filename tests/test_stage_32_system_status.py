@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 import job_status
 import production_retrieval
+from specialists import SPECIALISTS
 import system_status
 
 
@@ -54,6 +55,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
                         "SPROCKETS_COGS_MEMORY_CONTEXT": "0",
                     },
                 ),
+                specialists=SPECIALISTS,
                 directories=system_status.DirectoryStatus(
                     pending_inputs=1,
                     processing_files=0,
@@ -141,6 +143,10 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("- main pid: 1234", output)
             self.assertIn("SPROCKETS_COGS_MEMORY_RETRIEVAL: 1", output)
             self.assertIn("Runtime queues", output)
+            self.assertIn("Specialists", output)
+            self.assertIn("- Rosie: Intake and classification; Always-on file watcher service (always-on)", output)
+            self.assertIn("- RUDI: Reasoning, orchestration, and memory/retrieval", output)
+            self.assertIn("- message bus: contract/rehearsal only, not live dispatch", output)
             self.assertIn("- pending .input files: 1", output)
             self.assertIn("- oldest pending input: capture.input", output)
             self.assertIn("- memory trace file exists: yes", output)

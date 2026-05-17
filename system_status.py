@@ -18,6 +18,7 @@ import job_status
 import production_retrieval
 import review
 from retrieval_preview import format_status as format_retrieval_status
+from specialists import SpecialistDefinition, iter_specialists
 
 SERVICE_UNIT = "sprockets-cogs.service"
 SERVICE_ENV_KEYS = (
@@ -46,6 +47,7 @@ class RuntimeStatus:
 class SystemStatus:
     runtime: RuntimeStatus
     service: "ServiceStatus"
+    specialists: tuple[SpecialistDefinition, ...]
     directories: "DirectoryStatus"
     models: "ModelAvailabilityStatus"
     planning: "PlanningStatus"
@@ -359,6 +361,7 @@ def build_system_status() -> SystemStatus:
     return SystemStatus(
         runtime=runtime,
         service=build_service_status(),
+        specialists=tuple(iter_specialists()),
         directories=build_directory_status(runtime),
         models=build_model_availability_status(runtime),
         planning=build_planning_status(runtime),
@@ -474,11 +477,29 @@ def _format_service_status(status: ServiceStatus) -> list[str]:
     return lines
 
 
+def _format_specialist_status(specialists: tuple[SpecialistDefinition, ...]) -> list[str]:
+    lines = ["Specialists"]
+    for specialist in specialists:
+        flags: list[str] = []
+        if specialist.always_on:
+            flags.append("always-on")
+        if specialist.live_dispatch:
+            flags.append("live-dispatch")
+        flag_text = f" ({', '.join(flags)})" if flags else ""
+        lines.append(
+            f"- {specialist.display_name}: {specialist.role}; {specialist.runtime_form}{flag_text}"
+        )
+    if not any(specialist.live_dispatch for specialist in specialists):
+        lines.append("- message bus: contract/rehearsal only, not live dispatch")
+    return lines
+
+
 def format_system_status(status: SystemStatus) -> str:
     sections = [
         "\n".join(["Sprockets-Cogs status", ""]),
         "\n".join(_format_runtime_status(status.runtime)),
         "\n".join(_format_service_status(status.service)),
+        "\n".join(_format_specialist_status(status.specialists)),
         "\n".join(_format_directory_status(status.directories)),
         "\n".join(_format_model_status(status.models)),
         "\n".join(_format_planning_status(status.planning)),

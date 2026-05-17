@@ -98,5 +98,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Phase 4 gate passed 431 tests, smoke test, fallback contract, and
+The latest Phase 4 gate passed 437 tests, smoke test, fallback contract, and
 review count 0.
