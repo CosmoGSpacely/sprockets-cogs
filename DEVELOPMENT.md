@@ -341,6 +341,44 @@ Phase 5 testing rule: before moving behavior, identify the existing test that
 protects it. If the protection is indirect or only smoke-level, add a focused
 test first.
 
+## Refactor candidate register
+
+Stage 46F turns the codebase map into a ranked shortlist for safe Phase 5
+refactors. This is a planning register, not a promise to move every file.
+Candidates are ranked by:
+
+- risk: how likely the change is to alter live behavior accidentally;
+- learning value: how much the change teaches about Python structure, seams,
+  and tests;
+- user value: how directly the change improves reliability, readability, or
+  future feature work.
+
+### Recommended first candidates
+
+| Rank | Candidate | Why | Risk | Learning value | User value | Safety net | Recommendation |
+|---|---|---|---|---|---|---|---|
+| 1 | Shared slug/title truncation cleanup | Live write paths and specialist helpers should agree on filename slug behavior. This is already a known review finding. | Low | Medium | High | `test_slug_utils.py`, Sprockets specialist tests, focused regression tests for canonical truncation. | Do first in Stage 47. |
+| 2 | Context-building seam extraction | `capture_preview.py` imports `agentic_loop.build_context`; Rosie and preview need the same context without coupling preview to the live watcher. | Medium | High | Medium | Existing smoke test plus new focused tests for context output with memory context disabled/enabled. | Good early Phase 5 seam after slug cleanup. |
+| 3 | Review apply/write seam | `review.py` imports live loop paths and `write_node`; Jane should depend on a smaller write/review interface. | Medium | High | Medium | Review specialist tests, review source-check tests, smoke test. | Do after context extraction, keeping live apply behavior unchanged. |
+| 4 | Shared temp-vault test fixtures | Many tests repeat `TemporaryDirectory()` vault and SC-root setup. | Low | High | Medium | Add fixture helpers while preserving existing tests; migrate only a few tests at first. | Good Stage 48 learning slice. |
+| 5 | Retriever construction seam | `production_retrieval.py` reuses benchmark retriever construction from `retrieval_eval`. | Medium | Medium | Medium | Retrieval benchmark tests, production retrieval tests, preview tests. | Defer until retrieval behavior changes again. |
+
+### Watch list
+
+| Candidate | Why to watch | Current recommendation |
+|---|---|---|
+| `agentic_loop.py` broad extraction | The live loop is still the largest behavior owner, but broad extraction would touch the riskiest path in the app. | Extract one pure seam at a time only after focused tests exist. |
+| `nightly.py` / `cogs_specialist.py` report delegation seam | There is contained circular-import pressure around report behavior. | Leave alone unless Stage 27/Phase 6 planning work expands the interface. |
+| CLI output/help consistency | Many scripts are user-facing and could share formatting conventions. | Useful polish, but lower priority than behavior seams. |
+| Package moves into `specialists/*` | Visual separation helps explain the multi-agent design, but moving implementation too early increases import churn. | Keep `specialists/` as the visible role map until imports are boring enough for mechanical moves. |
+
+### Stage 47 recommendation
+
+The best first refactor is the shared slug/title truncation cleanup. It is
+small, testable, already queued from review, and gives a good Python lesson:
+extract one shared utility, align callers, add regression tests, and preserve
+all live behavior.
+
 ## Review commands
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
