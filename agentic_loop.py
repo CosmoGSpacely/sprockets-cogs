@@ -24,6 +24,7 @@ from openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
 )
+from slug_utils import slugify
 from sprockets_specialist import SprocketsSpecialist, SprocketsSpecialistConfig
 from vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,
@@ -74,10 +75,7 @@ _NODE_BODY = Template("")
 
 def _slugify(text: str) -> str:
     """Return a filesystem-safe slug from a title."""
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_]+", "-", text)
-    return text[:60].strip("-")
+    return slugify(text)
 
 
 def _find_duplicate(title: str, folder: Path, threshold: int = 85) -> Path | None:

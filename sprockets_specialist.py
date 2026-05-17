@@ -7,13 +7,13 @@ review-first behavior.
 from __future__ import annotations
 
 import argparse
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
 import inspect_hierarchy
 import vault_graph
+from slug_utils import slugify
 
 
 @dataclass(frozen=True)
@@ -331,11 +331,7 @@ def _node_type_order(node_type: str) -> int:
 
 def _slugify(text: str) -> str:
     """Return a filesystem-safe slug preview without writing a file."""
-
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_]+", "-", text)
-    return text[:60].strip("-")
+    return slugify(text)
 
 
 def format_sprockets_specialist_preview(

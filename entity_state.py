@@ -12,9 +12,10 @@ Tiers (by days since last_seen):
 """
 import json
 import os
-import re
 from datetime import datetime
 from pathlib import Path
+
+from slug_utils import slugify
 
 SC_ROOT = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", str(Path.home() / "sc")))
 STATE_PATH = Path(
@@ -25,10 +26,7 @@ TRACKABLE_TYPES = {"sprockets/contact", "sprockets/entity"}
 
 
 def _slugify(text: str) -> str:
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_]+", "-", text)
-    return text[:60].strip("-")
+    return slugify(text)
 
 
 def load_state() -> dict:
