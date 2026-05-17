@@ -174,6 +174,53 @@ Important safety boundaries:
 - If processing fails unexpectedly, the source input is not archived; it stays
   in `processing/` so the failure is inspectable.
 
+## Module responsibility map
+
+Stage 46C groups modules by ownership before any package or import refactor. Use
+this map to find the right starting point for a change.
+
+### Specialist-owned modules
+
+| Owner | Modules | Responsibility |
+|---|---|---|
+| Rosie | `agentic_loop.py`, `extractor_classifier.py`, `capture_preview.py` | Live intake, local extraction/classification calls, capture preview, and the central processing pipeline. |
+| RUDI | `orchestrator_contract.py`, `orchestrated_rehearsal.py`, `agent_message_bus.py` | Route decisions, handoff contracts, read-only orchestration rehearsal, and message-bus contract/preview behavior. |
+| RUDI memory | `memory_specialist.py`, `memory_index.py`, `memory_guards.py`, `memory_packets.py`, `memory_packets_cli.py`, `memory_trace_log.py`, `memory_tool_probe.py`, `production_retrieval.py`, `embeddings.py`, `retrieval_*.py`, `vector_math.py` | Retrieval, embeddings, memory cache/index contracts, benchmark strategies, packet previews, traces, and post-classification memory guards. |
+| Cogs | `cogs_specialist.py`, `cogs_planning.py`, `cogs_naming.py`, `carry.py`, `nightly.py`, `vault.py` | Planning notes, daily note naming, carry/reconciliation, nightly behavior, and Cogs daily-note primitives. |
+| Sprockets | `sprockets_specialist.py`, `vault_graph.py`, `inspect_hierarchy.py` | Hierarchy graph reading, parent resolution previews, graph inspection, and proposal/review-first structural behavior. |
+| Jane | `review.py`, `review_specialist.py` | Review queue reporting, packet preview/write, decision import preview, guarded apply preview, and interactive review. |
+| Uniblab | `system_status.py`, `job_status.py`, `job_supervisor.py`, `smoke_test.py` | Operational status, timer/job visibility, maintenance previews, and smoke-test verification. |
+
+### Shared foundation modules
+
+| Module | Shared role | Notes |
+|---|---|---|
+| `models.py` | Pydantic node schemas and validation | Used across live processing, review, specialists, and tests. Treat changes as schema changes. |
+| `prompts.py` | Local-model prompt contracts and structured examples | Changes affect Rosie extraction/classification behavior. Add benchmark or preview coverage. |
+| `openai_fallback.py`, `fallback_eval.py` | Review-first OpenAI fallback path and evaluator | Must remain review-first unless a separate safety decision changes it. |
+| `entity_state.py` | Contact/entity working memory | Supports context hints and dedupe behavior. |
+| `slug_utils.py` | Shared slug behavior | Keep filename/title truncation consistency here rather than duplicating slug rules. |
+| `tools.py` | Date/time tool definitions | Currently a small legacy surface for model/tool-related work. |
+| `specialists/catalog.py` | Importable specialist metadata | Public/status map, not a runtime ownership switch. |
+
+### Test responsibility map
+
+| Test group | Protects |
+|---|---|
+| `test_stage_10a_parent_resolution.py`, `test_stage_40_sprockets_specialist.py` | Sprockets hierarchy and parent matching behavior. |
+| `test_stage_14_5_*`, `test_stage_26_cogs_naming.py`, `test_stage_27_*`, `test_stage_39_cogs_specialist.py` | Cogs carry, planning, naming, nightly, and scheduled-job behavior. |
+| `test_stage_15_*` through `test_stage_24_*`, `test_stage_41_memory_specialist.py` | RUDI memory/retrieval, embeddings, vector math, traces, packets, and tool-call readiness. |
+| `test_stage_37_*`, `test_stage_43_*`, `test_stage_44_*` | RUDI orchestration contracts, message bus, and end-to-end rehearsal. |
+| `test_stage_38_extractor_classifier.py` | Rosie extraction/classification boundary. |
+| `test_stage_42_review_specialist.py` | Jane review facade, packets, decision import, and guarded apply preview. |
+| `test_stage_32_system_status.py`, `test_stage_45_specialist_catalog.py`, `test_model_config.py` | Uniblab/status, specialist catalog, and model configuration surfaces. |
+| `test_slug_utils.py`, `smoke_test.py` | Shared filename behavior and deterministic whole-loop smoke coverage. |
+
+Responsibility rule of thumb: change the owning specialist module first, shared
+foundation modules second, and `agentic_loop.py` only when a live-pipeline seam
+must be adjusted. If a change crosses multiple owners, add or update a test at
+the boundary before moving behavior.
+
 ## Review commands
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
