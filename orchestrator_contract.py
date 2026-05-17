@@ -11,6 +11,8 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
+from agent_message_bus import AgentMessage, message_to_dict, new_message
+
 
 WorkflowMode = Literal[
     "capture",
@@ -373,6 +375,62 @@ def route_decision_payload(request: WorkRequest, decision: RouteDecision) -> dic
     }
 
 
+def route_handoff_message(request: WorkRequest, decision: RouteDecision) -> AgentMessage:
+    """Build the message-bus handoff shape without executing a specialist."""
+
+    trace_id = request.request_id or "preview"
+    return new_message(
+        sender="orchestrator",
+        recipient=decision.specialist,
+        kind=f"{decision.mode}.handoff-preview",
+        trace_id=trace_id,
+        idempotency_key=f"{trace_id}:{decision.specialist}:{decision.mode}",
+        payload={
+            **route_decision_payload(request, decision),
+            "execution": {
+                "executed": False,
+                "reason": "handoff preview only",
+            },
+        },
+    )
+
+
+def route_handoff_payload(request: WorkRequest, decision: RouteDecision) -> dict[str, object]:
+    """Return a stable machine-readable message-bus handoff preview."""
+
+    return {
+        "message": message_to_dict(route_handoff_message(request, decision)),
+        "writes": "no",
+        "executes_recipient": False,
+    }
+
+
+def format_route_handoff(request: WorkRequest, decision: RouteDecision) -> str:
+    """Format the message-bus handoff preview for humans."""
+
+    message = route_handoff_message(request, decision)
+    lines = [
+        "Orchestrator handoff message preview",
+        f"- trace_id: {message.trace_id}",
+        f"- idempotency_key: {message.idempotency_key}",
+        f"- sender: {message.sender}",
+        f"- recipient: {message.recipient}",
+        f"- kind: {message.kind}",
+        f"- status: {message.status}",
+        "- writes: no",
+        "- executes recipient: no",
+        "- decision reasons:",
+    ]
+    lines.extend(f"  - {reason}" for reason in decision.reasons)
+    return "\n".join(lines)
+
+
+def format_route_handoff_json(request: WorkRequest, decision: RouteDecision) -> str:
+    """Format a message-bus handoff preview as deterministic JSON."""
+
+    return json.dumps(route_handoff_payload(request, decision), indent=2, sort_keys=True)
+
+
 def format_route_decision_json(request: WorkRequest, decision: RouteDecision) -> str:
     """Format a route preview as deterministic JSON."""
 
@@ -387,6 +445,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--request-id", default="preview", help="Traceable request id.")
     parser.add_argument("--content-ref", default=None, help="Optional source payload reference.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    parser.add_argument("--handoff-preview", action="store_true", help="Preview message-bus handoff shape without writing.")
     return parser
 
 
@@ -401,7 +460,11 @@ def main(argv: list[str] | None = None) -> None:
         content_ref=args.content_ref,
     )
     decision = route_work_request(request)
-    if args.json:
+    if args.handoff_preview and args.json:
+        print(format_route_handoff_json(request, decision))
+    elif args.handoff_preview:
+        print(format_route_handoff(request, decision))
+    elif args.json:
         print(format_route_decision_json(request, decision))
     else:
         print(format_route_decision(request, decision))

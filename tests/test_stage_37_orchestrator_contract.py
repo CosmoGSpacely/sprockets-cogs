@@ -166,6 +166,59 @@ class Stage37OrchestratorContractTests(unittest.TestCase):
         self.assertEqual(payload["decision"]["specialist"], "operations")
         self.assertEqual(payload["decision"]["review"], "not-required")
 
+    def test_route_handoff_message_wraps_decision_without_execution(self):
+        request = orch.WorkRequest(
+            source="cli",
+            request_id="trace-43",
+            content="show review packet",
+        )
+        decision = orch.route_work_request(request)
+
+        message = orch.route_handoff_message(request, decision)
+
+        self.assertEqual(message.trace_id, "trace-43")
+        self.assertEqual(message.idempotency_key, "trace-43:review:review")
+        self.assertEqual(message.sender, "orchestrator")
+        self.assertEqual(message.recipient, "review")
+        self.assertEqual(message.kind, "review.handoff-preview")
+        self.assertFalse(message.payload["execution"]["executed"])
+        self.assertEqual(message.payload["decision"]["write_posture"], "human-approved-only")
+
+    def test_format_route_handoff_reports_no_writes_or_execution(self):
+        request = orch.WorkRequest(source="cli", request_id="trace-ops", content="check status")
+        decision = orch.route_work_request(request)
+
+        output = orch.format_route_handoff(request, decision)
+
+        self.assertIn("Orchestrator handoff message preview", output)
+        self.assertIn("- recipient: operations", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn("- executes recipient: no", output)
+
+    def test_main_can_print_handoff_json_preview(self):
+        buf = io.StringIO()
+
+        with redirect_stdout(buf):
+            orch.main(
+                [
+                    "--handoff-preview",
+                    "--json",
+                    "--source",
+                    "cli",
+                    "--request-id",
+                    "trace-memory",
+                    "run",
+                    "memory",
+                    "benchmark",
+                ]
+            )
+
+        payload = json.loads(buf.getvalue())
+        self.assertFalse(payload["executes_recipient"])
+        self.assertEqual(payload["writes"], "no")
+        self.assertEqual(payload["message"]["recipient"], "memory")
+        self.assertEqual(payload["message"]["trace_id"], "trace-memory")
+
 
 if __name__ == "__main__":
     unittest.main()
