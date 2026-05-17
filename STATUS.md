@@ -6,7 +6,8 @@ turnkey public application.
 ## Current Maturity
 
 The project has completed its Phase 2 hardening work, Phase 3 memory groundwork,
-and Stage 25 public-readiness MVP:
+Stage 25 public-readiness MVP, Phase 3.5 productization bridge, and most of
+Phase 4's specialist-boundary work:
 
 - typed Sprockets/Cogs writes;
 - deterministic smoke test and unit tests;
@@ -18,13 +19,16 @@ and Stage 25 public-readiness MVP:
 - public README, design note, license, CI workflow, and sensitive-data audit.
 - Stage 26 planning-note maintenance helpers for current weekly/monthly/annual
   notes.
+- Phase 4 specialist previews for Rosie, RUDI, Cogs, Sprockets, Jane, and
+  Uniblab.
 
 ## Current Runtime Posture
 
-- The service runs the file-based `agentic_loop.py` watcher.
+- The service runs Rosie, the file-based `agentic_loop.py` watcher.
 - Local classification uses the configured Ollama model.
 - OpenAI fallback is review-first when configured.
-- Semantic memory retrieval can be enabled for compact post-classification guards.
+- RUDI owns reasoning/orchestration previews and semantic memory retrieval for
+  compact post-classification guards.
 - Prompt-appended memory context remains disabled.
 - Nightly Cogs carry is scheduled by a user-level systemd timer.
 - `scripts/cogs-planning` previews Stage 26 naming choices, planning inventory,
@@ -62,6 +66,8 @@ and Stage 25 public-readiness MVP:
   `2026-05-12 04:30 EDT` succeeded, carried six open Cogs items to `2026-05-13`,
   left `scripts/nightly --report` with 0 open candidates, and kept review count
   at 0.
+- Phase 4's message bus is a handoff contract and rehearsal surface only. It is
+  not a live dispatch engine.
 
 ## Known Limitations
 
@@ -92,5 +98,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Stage 32F gate passed 318 tests, smoke test, fallback contract, and
+The latest Phase 4 gate passed 431 tests, smoke test, fallback contract, and
 review count 0.

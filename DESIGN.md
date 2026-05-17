@@ -14,6 +14,37 @@ OpenAI fallback. Most adjacent tools cover one or two of those jobs; this
 project is intentionally exploring how they work together in a local,
 inspectable personal system.
 
+## Phase 4 Specialist Architecture
+
+Phase 4 makes the agent boundaries visible without prematurely turning each
+role into a separate daemon.
+
+The runtime names are:
+
+- **Rosie**: live intake and classifier service.
+- **RUDI**: reasoning, orchestration, and memory/retrieval specialist.
+- **Cogs**: planning, carry, migration, and time-horizon specialist.
+- **Sprockets**: hierarchy, graph, and durable structure specialist.
+- **Jane**: human-in-the-loop review specialist.
+- **Uniblab**: operations, health, status, model, and timer specialist.
+
+Rosie is the only always-on real-time service for now. The other specialists are
+commands, scheduled jobs, preview harnesses, or library providers. This gives
+the repo visual multi-agent separation while keeping operational complexity
+low.
+
+The `specialists/` directory is the public map of those roles. It is currently
+an index layer over the working modules rather than a wholesale package move.
+
+RUDI owns both orchestration and memory because the canonical Jetsons meaning of
+RUDI, "Referential Universal Digital Indexer," fits retrieval and reasoning
+better than creating an extra persona. RUDI can preview routes, build handoffs,
+and provide retrieval candidates without directly writing to the vault.
+
+The message bus is a handoff contract and rehearsal surface, not a live dispatch
+engine. Live dispatch is deferred until specialist commands are idempotent,
+review boundaries are explicit, and failure handling is designed.
+
 ## Core Loop
 
 The production loop is file based. Source adapters or a person place `.input`
@@ -67,8 +98,8 @@ unseen authority over the vault.
 
 ## Memory Design
 
-Sprockets-Cogs has a semantic memory layer, but it is not simply pasted into the
-classifier prompt.
+Sprockets-Cogs has a semantic memory layer, owned by RUDI, but it is not simply
+pasted into the classifier prompt.
 
 Earlier rehearsals showed that prompt-appended memory could contaminate generated
 fields: the model might copy retrieved context into the wrong place. The current

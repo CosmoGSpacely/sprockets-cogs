@@ -23,8 +23,9 @@ system easier to test and debug.
 
 ## Prompt-Appended Memory Is Off
 
-Semantic memory is not pasted into the classifier prompt in production. Earlier
-rehearsals showed that retrieved context could contaminate generated fields.
+Semantic memory is owned by RUDI, the reasoning/orchestration specialist, but it
+is not pasted into the classifier prompt in production. Earlier rehearsals
+showed that retrieved context could contaminate generated fields.
 
 The current production memory path is post-classification:
 
@@ -35,6 +36,32 @@ The current production memory path is post-classification:
 
 Why: this gives useful memory behavior without asking the classifier to mix
 retrieved context into structured output perfectly.
+
+## Specialist Boundaries Are Visible Before Services Multiply
+
+Phase 4 uses named specialist boundaries:
+
+- Rosie for live intake/classification;
+- RUDI for reasoning, orchestration, and memory/retrieval;
+- Cogs for planning and carry;
+- Sprockets for graph/hierarchy;
+- Jane for review;
+- Uniblab for operations.
+
+Only Rosie is currently an always-on service. The other specialists are commands,
+scheduled jobs, preview harnesses, or library providers.
+
+Why: the project needs clear multi-agent architecture for public and portfolio
+readers, but multiple live services would add retry, ordering, idempotency, and
+failure-handling complexity before those costs are justified.
+
+## Message Bus Is A Contract, Not Dispatch
+
+The local message bus is a schema and rehearsal surface for specialist handoffs.
+It is not a live queue and does not automatically execute recipients.
+
+Why: handoff contracts are useful now; live dispatch should wait until
+specialist commands are idempotent and review boundaries are explicit.
 
 ## Hierarchy Nodes Are Human Authored Or Review Approved
 

@@ -4,7 +4,16 @@ Agentic loop that processes natural-language inputs and writes Obsidian-compatib
 Markdown files to a configured vault directory.
 
 ## Files
-- `agentic_loop.py` — file watcher + processing pipeline
+- `specialists/` — visible Phase 4 specialist map; README/index surfaces only
+- `agentic_loop.py` — Rosie file watcher + processing pipeline
+- `orchestrator_contract.py` — RUDI route decisions and handoff contracts
+- `orchestrated_rehearsal.py` — read-only end-to-end RUDI rehearsal
+- `agent_message_bus.py` — handoff contract/message-bus preview, not live dispatch
+- `cogs_specialist.py` — Cogs specialist preview facade
+- `sprockets_specialist.py` — Sprockets specialist preview facade
+- `memory_specialist.py` — RUDI memory/retrieval specialist facade
+- `review_specialist.py` — Jane review specialist preview/import/apply safety facade
+- `system_status.py` and `job_status.py` — Uniblab operational status helpers
 - `models.py`       — Pydantic schemas per node type (Stage 5)
 - `prompts.py`      — Qwen3 system prompts and few-shot examples (Stage 4)
 - `openai_fallback.py` — review-first OpenAI fallback using Responses API structured output
@@ -31,9 +40,21 @@ Runtime paths can be overridden for tests/dry-runs with environment variables:
 OpenAI fallback is disabled unless `OPENAI_API_KEY` is set. Override the fallback
 model with `OPENAI_FALLBACK_MODEL`; default is `gpt-4o-mini`.
 
-## Pipeline (two Qwen3 calls per input)
-startup scan / watchdog input/ → extract_nodes() → classify_nodes() → validate_output()
-       → resolve_parents() → write_node() → append_reflection() → archive/
+## Pipeline (two local-model calls per input)
+startup scan / watchdog input/ → Rosie extract_nodes() → Rosie classify_nodes()
+       → validate_output() → resolve_parents() → guarded RUDI memory hint
+       → write_node() → append_reflection() → archive/
+
+## Phase 4 specialist posture
+
+- Rosie is the only always-on service.
+- RUDI owns reasoning, orchestration previews, and memory/retrieval support.
+- Cogs, Sprockets, Jane, and Uniblab are command/scheduled/review-first
+  specialists.
+- The message bus is a handoff contract and rehearsal surface, not live
+  dispatch.
+- The `specialists/` directories are public entry points, not a package move;
+  root modules remain the implementation source of truth for now.
 
 ## Review commands
 - `scripts/review --count` — count pending review items

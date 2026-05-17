@@ -11,6 +11,23 @@ The project is also a learning lab for practical agentic AI design: local model
 operation, review-first fallbacks, semantic memory, retrieval traces, and careful
 automation around a personal information system.
 
+## Phase 4 Specialist Map
+
+The current architecture is intentionally multi-agent in shape while remaining
+conservative at runtime:
+
+- **Rosie** is the live intake and classifier service.
+- **RUDI** is the reasoning, orchestration, and memory/retrieval specialist.
+- **Cogs** owns time-based planning, carry, and reconciliation workflows.
+- **Sprockets** owns hierarchy, graph, and durable knowledge/work structure.
+- **Jane** owns human-in-the-loop review boundaries.
+- **Uniblab** owns operational status, timers, model checks, and readiness.
+
+The message bus exists as a handoff contract and rehearsal surface. It is not
+yet a live dispatch engine.
+
+See [`specialists/`](specialists/) for the visible Phase 4 agent map.
+
 ## What It Produces
 
 The loop currently writes two related kinds of Markdown:
@@ -53,6 +70,8 @@ review rather than silently written to the vault.
 - Local semantic memory using Ollama embeddings.
 - Guarded production retrieval for parent/task linking.
 - Retrieval preview and trace-reporting tools.
+- Preview-first specialist commands for Cogs, Sprockets, RUDI/memory, review,
+  operations, and orchestration rehearsals.
 - Read-only benchmark harness for retrieval quality.
 - Deterministic smoke test and unit test suite.
 
@@ -73,17 +92,22 @@ Current boundaries:
 
 ## Repository Map
 
-- `agentic_loop.py` - watcher and processing pipeline.
+- `specialists/` - visible Phase 4 specialist homes and responsibility map.
+- `agentic_loop.py` - Rosie watcher and processing pipeline.
+- `orchestrator_contract.py` and `orchestrated_rehearsal.py` - RUDI routing and read-only orchestration rehearsal.
+- `cogs_specialist.py` and `cogs_planning.py` - Cogs planning and carry-facing specialist surfaces.
+- `sprockets_specialist.py` - Sprockets hierarchy specialist preview.
+- `memory_specialist.py` and `memory_index.py` - RUDI memory/retrieval facades and index contracts.
+- `review_specialist.py` and `review.py` - Jane review packet and queue tools.
+- `system_status.py` and `job_status.py` - Uniblab operational status helpers.
 - `models.py` - Pydantic schemas for generated nodes.
 - `prompts.py` - local-model prompts and structured schemas.
 - `openai_fallback.py` - review-first OpenAI fallback.
-- `memory_index.py` - semantic memory contracts and in-memory index.
 - `production_retrieval.py` - guarded production retrieval adapter.
 - `memory_guards.py` - post-classification parent/task guard behavior.
 - `retrieval_eval.py` - retrieval benchmark CLI facade.
 - `retrieval_*` modules - retrieval cases, strategies, nodes, memory bridges, and reports.
 - `carry.py` and `nightly.py` - Cogs carry/reconciliation tooling.
-- `review.py` - review queue CLI.
 - `scripts/` - venv-aware operational wrappers.
 - `tests/` - focused unittest coverage.
 

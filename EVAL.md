@@ -12,9 +12,9 @@ Run:
 scripts/check
 ```
 
-Current closeout result on 2026-05-12:
+Current Phase 4 result on 2026-05-17:
 
-- unit tests: 318 passing
+- unit tests: 431 passing
 - smoke test: passed
 - fallback contract: passed
 - review queue: 0 items
@@ -58,7 +58,9 @@ benchmark drift as well as retrieval quality.
 
 ## Production Memory Safety
 
-Production memory retrieval is guarded and compact.
+Production memory retrieval is guarded and compact. In the Phase 4 specialist
+map, this is RUDI's memory function: retrieval informs post-classification
+guards and previews, but it does not directly write to the vault.
 
 Current live posture:
 
@@ -87,7 +89,7 @@ Run:
 scripts/status
 ```
 
-Current closeout result on 2026-05-12:
+Current sampled result on 2026-05-12:
 
 - service active/running;
 - local model installed;
