@@ -221,6 +221,68 @@ foundation modules second, and `agentic_loop.py` only when a live-pipeline seam
 must be adjusted. If a change crosses multiple owners, add or update a test at
 the boundary before moving behavior.
 
+## Dependency tour
+
+Stage 46D records the current import direction before any dependency cleanup.
+This is a map, not a refactor request.
+
+### Healthy dependency spine
+
+Most imports follow this shape:
+
+```text
+scripts/*
+  -> CLI/facade modules
+  -> specialist modules
+  -> shared foundations
+  -> standard library / third-party libraries
+```
+
+Useful foundation modules:
+
+- `models.py` is the schema/validation anchor.
+- `slug_utils.py`, `vector_math.py`, and `cogs_naming.py` are small shared
+  utility modules.
+- `vault.py` owns low-level Cogs daily-note primitives.
+- `vault_graph.py` owns Sprockets graph reads.
+- `retrieval_types.py` owns retrieval dataclasses shared by retrieval modules.
+- `prompts.py` owns local-model prompt contracts.
+
+Specialist facades generally sit one layer above these foundations:
+
+- Cogs facades import `carry.py`, `cogs_planning.py`, `nightly.py`, and
+  `vault.py`.
+- Sprockets facades import `vault_graph.py`, `inspect_hierarchy.py`, and
+  `slug_utils.py`.
+- RUDI memory facades import retrieval, embeddings, trace, and preview modules.
+- Jane facades import `review.py` and `models.py`.
+- Uniblab status modules import other modules to summarize posture, not to own
+  their behavior.
+
+### Cross-boundary seams to watch
+
+| Import seam | Current reason | Later refactor thought |
+|---|---|---|
+| `review.py` imports `agentic_loop.ARCHIVE_DIR`, `REVIEW_DIR`, and `write_node` | Interactive approve/discard reuses the live write path and paths. | A future Jane apply module could depend on a smaller write/review-path interface instead of the whole live loop. |
+| `capture_preview.py` imports `agentic_loop.build_context` | Preview wants the same classifier context as Rosie. | If context building is extracted, preview and Rosie can share it without importing the live watcher module. |
+| `system_status.py` imports `agentic_loop`, `review`, retrieval, embeddings, and job modules | Uniblab summarizes current runtime configuration and paths. | This is acceptable for read-only status, but keep it from becoming a behavior owner. |
+| `production_retrieval.py` imports `retrieval_eval` | Production adapter reuses benchmark retriever construction. | If retrieval grows, extract shared retriever construction out of the eval facade. |
+| `retrieval_preview.py` imports `retrieval_eval` and `production_retrieval` | Preview compares experimental and production retrieval surfaces. | Acceptable while preview-only; avoid making production depend on preview. |
+| `retrieval_eval.py` imports `agentic_loop` for the `current` retriever mode | Benchmarks compare against production behavior. | Keep this one-way from eval to production; do not let live code depend on eval-only cases. |
+| `nightly.py` imports `cogs_specialist` inside a report path while `cogs_specialist.py` imports `nightly.py` | Keeps existing CLI behavior while adding specialist report delegation. | Watch for circular import pressure; prefer explicit facade seams if this grows. |
+
+### Dependency rules for Phase 5 refactors
+
+- Prefer extracting a small shared module when two specialists need the same
+  behavior.
+- Keep live writes behind narrow functions that tests can exercise.
+- Keep production modules from depending on benchmark or preview facades unless
+  the dependency is deliberately temporary and documented.
+- Read-only status/report modules may import broadly, but they should not become
+  write owners.
+- Avoid moving files into `specialists/*` until imports are boring enough that a
+  package move is mostly mechanical.
+
 ## Review commands
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
