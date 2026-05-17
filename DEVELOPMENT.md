@@ -379,6 +379,27 @@ small, testable, already queued from review, and gives a good Python lesson:
 extract one shared utility, align callers, add regression tests, and preserve
 all live behavior.
 
+### Slug/title boundary inspection
+
+Stage 47A found that the canonical slug behavior already lives in
+`slug_utils.slugify(text, max_length=60)`.
+
+Current callers:
+
+- `agentic_loop.py` uses slugging for live Sprockets filenames and fuzzy
+  duplicate checks.
+- `sprockets_specialist.py` uses slugging for review-only hierarchy proposal
+  previews.
+- `entity_state.py` uses slugging for contact/entity working-memory keys.
+
+Current finding:
+
+- There is no observed live-vs-preview truncation mismatch right now; the live
+  writer and Sprockets proposal preview both route through `slug_utils.slugify`.
+- The remaining cleanup is smaller: remove thin local `_slugify()` wrappers
+  where they add no behavior, and add regression tests proving preview/live
+  slug behavior stays aligned for long hierarchy titles.
+
 ## How to use this developer map
 
 Stage 46G closes the map by turning it into a reading path for future work.
