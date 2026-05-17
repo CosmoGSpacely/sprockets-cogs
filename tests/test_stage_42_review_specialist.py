@@ -196,6 +196,85 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("- actionable: 1", output)
             self.assertIn("- writes: no", output)
 
+    def test_operational_packet_combines_queue_preview_and_decision_template(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Write packet",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+
+            packet = specialist.operational_packet_markdown()
+
+            self.assertIn("# Sprockets-Cogs Review Operations Packet", packet)
+            self.assertIn("## Queue Preview", packet)
+            self.assertIn("# Sprockets-Cogs Review Packet", packet)
+            self.assertIn("## Decision Template", packet)
+            self.assertIn("| pending.md |  |  |", packet)
+
+    def test_write_operational_packet_is_idempotent_and_outside_review_queue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            output_path = root / "output" / "review-packet.md"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Packet write",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(
+                    review_dir=review_dir,
+                    packet_path=output_path,
+                )
+            )
+
+            first = specialist.write_operational_packet()
+            second = specialist.write_operational_packet()
+
+            self.assertEqual(first.packet_path, output_path)
+            self.assertEqual(first.bytes_written, second.bytes_written)
+            self.assertTrue(output_path.exists())
+            self.assertTrue((review_dir / "pending.md").exists())
+            self.assertIn("# Sprockets-Cogs Review Operations Packet", output_path.read_text())
+
+    def test_main_writes_operational_packet_to_configured_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            packet_path = root / "output" / "review-packet.md"
+            review_dir.mkdir()
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                review_specialist.main(
+                    [
+                        "--review-dir",
+                        str(review_dir),
+                        "--packet-path",
+                        str(packet_path),
+                        "--write-packet",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Review specialist packet write", output)
+            self.assertIn("- vault writes: no", output)
+            self.assertTrue(packet_path.exists())
+
 
 def _write_review_file(path: Path, reason: str, raw: dict) -> None:
     path.write_text(

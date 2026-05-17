@@ -7,11 +7,15 @@ adding decision import/apply behavior.
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
 import review
+
+SC_ROOT_ENV = "SPROCKETS_COGS_SC_ROOT"
+DEFAULT_REVIEW_PACKET_PATH = Path(os.environ.get(SC_ROOT_ENV, str(Path.home() / "sc"))) / "output" / "review-packet.md"
 
 
 @dataclass(frozen=True)
@@ -19,6 +23,7 @@ class ReviewSpecialistConfig:
     """Filesystem roots owned by the Review specialist."""
 
     review_dir: Path = review.REVIEW_DIR
+    packet_path: Path = DEFAULT_REVIEW_PACKET_PATH
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,16 @@ class ReviewDecisionImportPreview:
     actionable_count: int
     pending_count: int
     invalid_count: int
+
+
+@dataclass(frozen=True)
+class ReviewPacketWriteResult:
+    """Result of writing an operational review packet."""
+
+    review_dir: Path
+    packet_path: Path
+    item_count: int
+    bytes_written: int
 
 
 class ReviewSpecialist:
@@ -115,6 +130,25 @@ class ReviewSpecialist:
             actionable_count=sum(1 for row in checked if row.valid and row.decision in VALID_REVIEW_DECISIONS),
             pending_count=sum(1 for row in checked if row.valid and row.decision == "pending"),
             invalid_count=sum(1 for row in checked if not row.valid),
+        )
+
+    def operational_packet_markdown(self) -> str:
+        """Return the complete operational packet intended for file output."""
+
+        return review_operational_packet_markdown(self.config.review_dir)
+
+    def write_operational_packet(self, packet_path: Path | None = None) -> ReviewPacketWriteResult:
+        """Write an idempotent operational packet outside the vault."""
+
+        destination = packet_path or self.config.packet_path
+        content = self.operational_packet_markdown()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8")
+        return ReviewPacketWriteResult(
+            review_dir=self.config.review_dir,
+            packet_path=destination,
+            item_count=len(review.list_pending(self.config.review_dir)),
+            bytes_written=len(content.encode("utf-8")),
         )
 
 
@@ -229,6 +263,27 @@ def review_decision_template(review_dir: Path = review.REVIEW_DIR) -> str:
     return "\n".join(lines)
 
 
+def review_operational_packet_markdown(review_dir: Path = review.REVIEW_DIR) -> str:
+    """Return a regenerated packet combining queue preview and decision template."""
+
+    return "\n".join(
+        [
+            "# Sprockets-Cogs Review Operations Packet",
+            "",
+            "> Generated from the canonical review queue. The queue in `review/`",
+            "> remains the source of truth until a guarded apply path exists.",
+            "",
+            "## Queue Preview",
+            "",
+            review.review_packet_markdown(review_dir),
+            "",
+            "## Decision Template",
+            "",
+            review_decision_template(review_dir),
+        ]
+    )
+
+
 def parse_review_decision_template(markdown: str) -> tuple[ReviewDecisionRow, ...]:
     """Parse the simple decision table used by review decision templates."""
 
@@ -334,6 +389,22 @@ def format_decision_import_preview(preview: ReviewDecisionImportPreview) -> str:
     return "\n".join(lines)
 
 
+def format_packet_write_result(result: ReviewPacketWriteResult) -> str:
+    """Format an operational packet write result."""
+
+    return "\n".join(
+        [
+            "Review specialist packet write",
+            f"- review dir: {result.review_dir}",
+            f"- packet: {result.packet_path}",
+            f"- review items: {result.item_count}",
+            f"- bytes written: {result.bytes_written}",
+            "- vault writes: no",
+            "- review queue writes: no",
+        ]
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Read-only Review specialist preview.")
     parser.add_argument(
@@ -342,17 +413,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=review.REVIEW_DIR,
         help="Review queue directory. Defaults to the configured vault review directory.",
     )
+    parser.add_argument(
+        "--packet-path",
+        type=Path,
+        default=DEFAULT_REVIEW_PACKET_PATH,
+        help="Operational review packet path. Defaults to SPROCKETS_COGS_SC_ROOT/output/review-packet.md.",
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--inventory", action="store_true", help="Preview review queue summary without writing.")
     mode.add_argument("--list", action="store_true", help="Preview review queue items without writing.")
     mode.add_argument("--packet-preview", action="store_true", help="Preview Obsidian review packet without writing.")
     mode.add_argument("--decision-template", action="store_true", help="Print an editable review decision template without writing.")
     mode.add_argument("--decision-import-preview", type=Path, metavar="PATH", help="Parse a filled decision template without applying it.")
+    mode.add_argument("--write-packet", action="store_true", help="Regenerate the operational review packet outside the vault.")
     return parser
 
 
 def specialist_from_args(args: argparse.Namespace) -> ReviewSpecialist:
-    return ReviewSpecialist(ReviewSpecialistConfig(review_dir=args.review_dir))
+    return ReviewSpecialist(ReviewSpecialistConfig(review_dir=args.review_dir, packet_path=args.packet_path))
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -370,6 +448,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(format_decision_template(specialist.decision_template()))
     elif args.decision_import_preview:
         print(format_decision_import_preview(specialist.decision_import_preview(args.decision_import_preview)))
+    elif args.write_packet:
+        print(format_packet_write_result(specialist.write_operational_packet()))
 
 
 if __name__ == "__main__":
