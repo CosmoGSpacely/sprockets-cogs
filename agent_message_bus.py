@@ -220,14 +220,14 @@ def format_append_result(result: MessageAppendResult) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Preview the local Phase 4 agent message bus.")
-    parser.add_argument("--path", type=Path, default=DEFAULT_MESSAGE_BUS_PATH, help="JSONL message bus path.")
-    parser.add_argument("--recipient", default="", help="Filter messages by recipient.")
-    parser.add_argument("--status-filter", choices=("pending", "done", "failed"), default=None, help="Filter messages by status.")
+    parser = argparse.ArgumentParser(description="Inspect or append local Phase 4 message-bus records.")
+    parser.add_argument("--path", type=Path, default=DEFAULT_MESSAGE_BUS_PATH, help="JSONL message bus path. Defaults under SC output/.")
+    parser.add_argument("--recipient", default="", help="Filter messages by recipient for --list.")
+    parser.add_argument("--status-filter", choices=("pending", "done", "failed"), default=None, help="Filter messages by status for --list.")
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--status", action="store_true", help="Show message bus status.")
-    mode.add_argument("--list", action="store_true", help="List messages.")
-    mode.add_argument("--append", action="store_true", help="Append one message idempotently.")
+    mode.add_argument("--status", action="store_true", help="Report message bus status. Read-only.")
+    mode.add_argument("--list", action="store_true", help="List messages. Read-only.")
+    mode.add_argument("--append", action="store_true", help="Append one message idempotently. Writes the JSONL bus file, not the vault.")
     parser.add_argument("--sender", default="orchestrator", help="Sender for --append.")
     parser.add_argument("--to", default="review", help="Recipient for --append.")
     parser.add_argument("--kind", default="preview", help="Message kind for --append.")
@@ -246,9 +246,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     elif args.list:
         print(format_messages(bus.messages(recipient=args.recipient, status=args.status_filter)))
     elif args.append:
-        payload = json.loads(args.payload)
+        try:
+            payload = json.loads(args.payload)
+        except json.JSONDecodeError as exc:
+            parser.error(f"--payload must be valid JSON: {exc.msg}")
         if not isinstance(payload, dict):
-            raise SystemExit("--payload must be a JSON object")
+            parser.error("--payload must be a JSON object")
         result = bus.append(
             new_message(
                 sender=args.sender,

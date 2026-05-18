@@ -7,6 +7,7 @@ import calendar
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Sequence
 
 from cogs_naming import (
     annual_filename,
@@ -435,49 +436,49 @@ def ensure_current_planning_notes(cogs_dir: Path, reference_date: str | None = N
     return create_planning_notes(cogs_dir, reference_date or date.today().isoformat(), "all")
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--names",
         metavar="YYYY-MM-DD",
-        help="Preview ISO-first daily/weekly/monthly/annual names for a date.",
+        help="Preview ISO-first daily/weekly/monthly/annual names for a date. Read-only.",
     )
     parser.add_argument(
         "--daily-rename-plan",
         action="store_true",
-        help="Preview legacy daily-note renames without writing.",
+        help="Preview legacy daily-note renames. Read-only; does not rename files.",
     )
     parser.add_argument(
         "--inventory",
         action="store_true",
-        help="Inspect existing Cogs planning-note files without writing.",
+        help="Report existing Cogs planning-note files. Read-only.",
     )
     parser.add_argument(
         "--month",
         metavar="YYYY-MM",
-        help="Preview a monthly planning note and 5WOW section shape.",
+        help="Preview a monthly planning note and 5WOW section shape. Read-only.",
     )
     parser.add_argument(
         "--template",
         choices=("weekly", "monthly", "annual"),
-        help="Preview a full planning-note Markdown template without writing.",
+        help="Preview a full planning-note Markdown template. Read-only.",
     )
     parser.add_argument(
         "--preview-create",
         nargs="?",
         const="",
         metavar="YYYY-MM-DD|YYYY-MM",
-        help="Preview planning-note files to create for a date or month without writing.",
+        help="Preview planning-note files to create for a date or month. Read-only.",
     )
     parser.add_argument(
         "--create",
         metavar="YYYY-MM-DD|YYYY-MM",
-        help="Create missing planning-note files for a date or month.",
+        help="Create missing planning-note files for a date or month. Writes Cogs weekly/monthly/annual notes.",
     )
     parser.add_argument(
         "--ensure-current",
         action="store_true",
-        help="Create missing weekly, monthly, and annual notes for today.",
+        help="Create missing weekly, monthly, and annual notes for today. Writes Cogs planning notes.",
     )
     parser.add_argument(
         "--kind",
@@ -501,7 +502,7 @@ def main() -> None:
         default=str(DEFAULT_DAILY_DIR),
         help="Cogs daily-note directory. Defaults to the real vault daily directory.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.names:
         print(format_planning_names(args.names))

@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import frontmatter
 
@@ -393,59 +393,59 @@ def preview_plan(decisions: list[CarryDecision]) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--list",
         action="store_true",
-        help="List open carry candidates. Read-only.",
+        help="Report open carry candidates. Read-only; no vault writes.",
     )
     parser.add_argument(
         "--through",
         default=None,
-        help="YYYY-MM-DD cutoff for scanned daily notes. Defaults to today.",
+        help="YYYY-MM-DD cutoff for scanned daily notes. Defaults to today. Read-only unless used with --apply.",
     )
     parser.add_argument(
         "--plan",
         action="store_true",
-        help="Preview a carry-all plan. Dry-run only.",
+        help="Preview a carry-all plan. Read-only unless paired with --out.",
     )
     parser.add_argument(
         "--to",
         default=datetime.now().strftime("%Y-%m-%d"),
-        help="Destination date for --plan carry decisions. Defaults to today.",
+        help="Destination date for --plan carry decisions. Defaults to today. Used for preview/plan generation only.",
     )
     parser.add_argument(
         "--out",
         default=None,
-        help="Write --plan output to an editable JSON plan file. No vault writes.",
+        help="Write --plan output to an editable JSON plan file. Writes only the requested plan file; no vault writes.",
     )
     parser.add_argument(
         "--validate-plan",
         default=None,
-        help="Validate an editable JSON carry plan file. No vault writes.",
+        help="Validate an editable JSON carry plan file. Read-only; exits nonzero if invalid.",
     )
     parser.add_argument(
         "--preview-plan",
         default=None,
-        help="Preview an editable JSON carry plan file. No vault writes.",
+        help="Preview an editable JSON carry plan file. Read-only; no vault writes.",
     )
     parser.add_argument(
         "--preview-apply",
         default=None,
-        help="Preview exact edits from a JSON carry plan file. No vault writes.",
+        help="Preview exact edits from a JSON carry plan file. Read-only; no vault writes.",
     )
     parser.add_argument(
         "--check-plan",
         default=None,
-        help="Check that source blocks in a JSON carry plan still match the vault. No vault writes.",
+        help="Check that source blocks in a JSON carry plan still match the vault. Read-only; exits nonzero on mismatch.",
     )
     parser.add_argument(
         "--apply",
         default=None,
-        help="Apply a JSON carry plan to the vault after validation and source checks.",
+        help="Apply a JSON carry plan to the vault after validation and source checks. Writes Cogs daily notes.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.validate_plan:
         issues = validate_plan_document(load_plan_document(Path(args.validate_plan)))
@@ -486,7 +486,10 @@ def main() -> None:
         else:
             print(preview_plan(build_default_plan(candidates, args.to)))
     else:
-        parser.print_help()
+        parser.error(
+            "choose --list, --plan, --validate-plan, --preview-plan, "
+            "--preview-apply, --check-plan, or --apply"
+        )
 
 
 if __name__ == "__main__":

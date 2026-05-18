@@ -121,6 +121,19 @@ Naming guidance:
 - Validation or source-check failures should exit nonzero; "nothing to do" should
   usually be a successful, explicit result.
 
+CLI implementation guidance:
+
+- Prefer `main(argv: Sequence[str] | None = None)` for script modules so tests
+  can exercise parser behavior without mutating `sys.argv`.
+- Use `parser.error(...)` for invalid CLI input. It gives a consistent usage
+  summary and exits with code 2.
+- Use `SystemExit(1)` for valid command syntax that discovers an operational
+  failure, such as an invalid plan or stale source check.
+- Catch parse errors at the CLI boundary when the default exception would show a
+  traceback for ordinary user input, such as invalid JSON passed to `--payload`.
+- Keep read-only command output explicit about zero-result success. A clean
+  "No items found" is better than silence.
+
 ## Runtime data flow
 
 Stage 46B maps the live Rosie pipeline before refactoring it.

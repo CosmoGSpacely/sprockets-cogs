@@ -119,27 +119,27 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--through",
         default=None,
-        help="YYYY-MM-DD cutoff for source daily notes. Defaults to today.",
+        help="YYYY-MM-DD cutoff for source daily notes. Defaults to today. Read-only with --dry-run or --report.",
     )
     parser.add_argument(
         "--to",
         default=None,
-        help="YYYY-MM-DD destination daily note. Defaults to tomorrow.",
+        help="YYYY-MM-DD destination daily note. Defaults to tomorrow. Used for carry actions.",
     )
     parser.add_argument(
         "--daily-dir",
         default=str(DEFAULT_DAILY_DIR),
-        help="Cogs daily-note directory. Defaults to the real vault daily directory.",
+        help="Cogs daily-note directory. Defaults to the real vault daily directory. Writes unless --dry-run or --report is used.",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Preview nightly carry actions without writing.",
+        help="Preview nightly carry actions. Read-only; no vault writes.",
     )
     parser.add_argument(
         "--report",
         action="store_true",
-        help="Summarize the nightly plan without writing.",
+        help="Summarize the nightly plan. Read-only; no vault writes.",
     )
     args = parser.parse_args(argv)
 

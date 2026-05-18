@@ -562,7 +562,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--decision-template", action="store_true", help="Print an editable review decision template without writing.")
     mode.add_argument("--decision-import-preview", type=Path, metavar="PATH", help="Parse a filled decision template without applying it.")
     mode.add_argument("--apply-preview", type=Path, metavar="PATH", help="Preview guarded decision effects without applying them.")
-    mode.add_argument("--write-packet", action="store_true", help="Regenerate the operational review packet outside the vault.")
+    mode.add_argument("--write-packet", action="store_true", help="Regenerate the operational review packet outside the vault. Writes only --packet-path.")
     return parser
 
 
