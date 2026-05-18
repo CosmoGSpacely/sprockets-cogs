@@ -60,6 +60,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - `DEVELOPMENT.md` now maps public entry points, module responsibilities,
   runtime data flow, CLI posture, tests, safe refactor boundaries, and direct
   CLI testability patterns.
+- `scripts/input-adapter-preview` previews adapter-produced `.input` files and
+  can explicitly write one `.input` file to a chosen input directory.
 
 ## Known Limitations
 
@@ -80,6 +82,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.
 - More complete packaging, onboarding, and non-local deployment polish remain
   future work.
+- Real bot and document-ingestion adapters are not wired yet; Stage 53 only
+  defines the shared `.input` adapter boundary.
 
 ## Verification
 
