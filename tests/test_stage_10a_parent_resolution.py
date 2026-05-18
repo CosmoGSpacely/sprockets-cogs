@@ -10,13 +10,7 @@ import inspect_hierarchy
 import networkx as nx
 import vault_graph
 from models import validate_node
-
-
-def write_node(vault: Path, folder: str, slug: str, metadata: str = "") -> Path:
-    path = vault / "Sprockets" / folder / f"{slug}.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"---\n{metadata}---\n\n# {slug}\n")
-    return path
+from tests.helpers import write_sprockets_node
 
 
 class Stage10AParentResolutionTests(unittest.TestCase):
@@ -40,7 +34,7 @@ class Stage10AParentResolutionTests(unittest.TestCase):
     def test_build_graph_reads_metadata_and_child_parent_edges(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "stage-10a",
@@ -48,7 +42,7 @@ class Stage10AParentResolutionTests(unittest.TestCase):
                 "uuid: project-1\n"
                 "title: Stage 10A\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "tasks",
                 "harden-parent-resolution",
@@ -68,8 +62,13 @@ class Stage10AParentResolutionTests(unittest.TestCase):
     def test_build_graph_accepts_obsidian_wikilink_aliases_and_headings(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(vault, "projects", "stage-10a", "title: Stage 10A\n")
-            write_node(
+            write_sprockets_node(
+                vault,
+                "projects",
+                "stage-10a",
+                "title: Stage 10A\n",
+            )
+            write_sprockets_node(
                 vault,
                 "tasks",
                 "aliased-task",
@@ -84,7 +83,12 @@ class Stage10AParentResolutionTests(unittest.TestCase):
     def test_build_graph_skips_unreadable_frontmatter(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(vault, "projects", "good-project", "title: Good Project\n")
+            write_sprockets_node(
+                vault,
+                "projects",
+                "good-project",
+                "title: Good Project\n",
+            )
             bad = vault / "Sprockets" / "projects" / "bad-project.md"
             bad.write_text("---\n: bad yaml\n---\n\n# bad\n")
 
@@ -96,7 +100,7 @@ class Stage10AParentResolutionTests(unittest.TestCase):
     def test_find_node_by_title_handles_match_and_no_match(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "sprockets-builder-roadmap",
@@ -271,7 +275,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
     def test_existing_hierarchy_chain_is_graph_visible(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "career",
@@ -279,7 +283,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
                 "uuid: area-1\n"
                 "title: Career\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "goals",
                 "bar-exam",
@@ -288,7 +292,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
                 "title: Pass the bar exam\n"
                 "parent: [[career]]\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "study-plan-q2",
@@ -297,7 +301,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
                 "title: Study plan Q2\n"
                 "parent: [[bar-exam]]\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "tasks",
                 "read-chapters-4-6",
@@ -339,7 +343,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
     def test_project_can_link_directly_under_area_when_no_goal_exists(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "career",
@@ -347,7 +351,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
                 "uuid: area-1\n"
                 "title: Career\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "portfolio-refresh",
@@ -392,7 +396,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
     def test_hierarchy_inspection_flags_invalid_parent_type(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "study-plan-q2",
@@ -400,7 +404,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
                 "uuid: project-1\n"
                 "title: Study plan Q2\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "goals",
                 "bar-exam",
@@ -421,7 +425,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
     def test_build_hierarchy_context_lists_frontmatter_titles_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "learn-agentic-ai",
@@ -436,7 +440,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
                 "---\n\n"
                 "Private reflection text should not enter classifier context.\n"
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "goals",
                 "build-sprockets-cogs",
@@ -445,7 +449,7 @@ class Stage10BHierarchyReadinessTests(unittest.TestCase):
                 "title: Build Sprockets-Cogs\n"
                 "parent: [[learn-agentic-ai]]\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-2-hardening",

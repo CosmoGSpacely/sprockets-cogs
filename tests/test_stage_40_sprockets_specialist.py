@@ -5,20 +5,14 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 import sprockets_specialist
-
-
-def write_node(vault: Path, folder: str, slug: str, metadata: str = "") -> Path:
-    path = vault / "Sprockets" / folder / f"{slug}.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"---\n{metadata}---\n\n# {slug}\n")
-    return path
+from tests.helpers import write_sprockets_node
 
 
 class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_inventory_delegates_to_existing_hierarchy_inspection_without_writes(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "learn-agentic-ai",
@@ -26,7 +20,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 "uuid: area-1\n"
                 "title: Learn Agentic AI\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "goals",
                 "build-sprockets-cogs",
@@ -51,7 +45,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_parent_match_preview_matches_hierarchy_titles_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-3-memory-enhancement",
@@ -59,7 +53,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 "uuid: project-1\n"
                 "title: Phase 3 - Memory Enhancement\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "contacts",
                 "phase-3-contact",
@@ -81,7 +75,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_parent_match_preview_reports_ambiguity_without_guessing(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-2-hardening",
@@ -89,7 +83,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 "uuid: project-1\n"
                 "title: Phase 2 - Hardening\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-2-handoff",
@@ -113,7 +107,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_hierarchy_context_preview_formats_parent_context_without_note_bodies(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "goals",
                 "build-sprockets-cogs",
@@ -121,7 +115,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 "uuid: goal-1\n"
                 "title: Build Sprockets-Cogs\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-4-multi-agent",
@@ -145,7 +139,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_hierarchy_titles_returns_longest_first_parent_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "learn-agentic-ai",
@@ -153,7 +147,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 "uuid: area-1\n"
                 "title: Learn Agentic AI\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-4-multi-agent",
@@ -173,7 +167,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_ambiguous_parent_matches_reports_hierarchy_matches_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-2-hardening",
@@ -181,7 +175,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 "uuid: project-1\n"
                 "title: Phase 2 - Hardening\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-2-handoff",
@@ -189,7 +183,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 "uuid: project-2\n"
                 "title: Phase 2 - Handoff\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "contacts",
                 "phase-2-contact",
@@ -211,7 +205,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_hierarchy_proposal_preview_accepts_project_under_goal_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "goals",
                 "build-sprockets-cogs",
@@ -251,7 +245,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_hierarchy_proposal_preview_rejects_parent_for_area(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "learn-agentic-ai",
@@ -275,7 +269,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_hierarchy_proposal_preview_detects_duplicate_titles(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-4-multi-agent",
@@ -303,7 +297,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_hierarchy_proposal_preview_reports_ambiguous_parent(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "learn-agentic-ai",
@@ -311,7 +305,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
                 "uuid: area-1\n"
                 "title: Learn Agentic AI\n",
             )
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "learn-advanced-ai",
@@ -348,7 +342,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_main_prints_read_only_inventory_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "learn-agentic-ai",
@@ -369,7 +363,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_main_prints_parent_match_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "projects",
                 "phase-3-memory-enhancement",
@@ -392,7 +386,7 @@ class Stage40SprocketsSpecialistTests(unittest.TestCase):
     def test_main_prints_hierarchy_proposal_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            write_node(
+            write_sprockets_node(
                 vault,
                 "areas",
                 "learn-agentic-ai",
