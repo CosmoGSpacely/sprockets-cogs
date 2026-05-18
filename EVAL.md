@@ -12,9 +12,9 @@ Run:
 scripts/check
 ```
 
-Current Phase 4 result on 2026-05-17:
+Current local result on 2026-05-18:
 
-- unit tests: 437 passing
+- unit tests: 449 passing
 - smoke test: passed
 - fallback contract: passed
 - review queue: 0 items
@@ -38,7 +38,7 @@ scripts/retrieval-eval --retriever memory-embedding-graph-gated-vault --case-set
 scripts/retrieval-eval --retriever memory-packet-embedding-gated-vault --case-set real-vault
 ```
 
-Current closeout result on 2026-05-12 over the live vault:
+Recent live-vault retrieval result from Phase 4 closeout:
 
 | Retriever | Nodes | Result |
 | --- | ---: | ---: |
@@ -78,7 +78,7 @@ Useful preview commands:
 scripts/retrieval-preview --status
 scripts/retrieval-preview --production-return "Need to write retrieval trace notes for Phase 3 - Memory Enhancement"
 scripts/retrieval-preview --memory-guard "Need to write retrieval trace notes for Phase 3 - Memory Enhancement"
-scripts/retrieval-traces --jsonl /home/cosmo/sc/output/memory-parent-traces.jsonl --limit 10
+scripts/retrieval-traces --jsonl "$SPROCKETS_COGS_SC_ROOT/output/memory-parent-traces.jsonl" --limit 10
 ```
 
 ## Operational Status
@@ -89,7 +89,8 @@ Run:
 scripts/status
 ```
 
-Current sampled result on 2026-05-12:
+Current operational status is inspected with `scripts/status`. A healthy local
+deployment should report:
 
 - service active/running;
 - local model installed;
@@ -98,7 +99,7 @@ Current sampled result on 2026-05-12:
 - review queue: 0;
 - current weekly, monthly, and annual Cogs planning notes exist;
 - nightly timer active/waiting;
-- backup gap visible: vault and `/home/cosmo/sc` need point-in-time backup
+- backup gap visible: the vault and SC runtime directory need point-in-time backup
   beyond Syncthing.
 
 ## Promotion Rule

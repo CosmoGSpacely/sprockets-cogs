@@ -11,7 +11,7 @@ Create a `.input` file in the configured input directory:
 Need to write retrieval trace notes for Phase 3 - Memory Enhancement.
 ```
 
-In the live setup, the service watches `/home/cosmo/sc/input`.
+In the local setup, the service watches the configured SC input directory.
 
 ## 2. Rosie Processes It
 
@@ -81,7 +81,7 @@ Run:
 scripts/check
 ```
 
-The current Phase 4 gate passes 437 tests, a temp-vault smoke test, fallback
+The current local gate passes 449 tests, a temp-vault smoke test, fallback
 contract checks, and review count 0.
 
 ## What This Demonstrates

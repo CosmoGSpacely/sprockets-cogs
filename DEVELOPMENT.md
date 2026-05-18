@@ -3,6 +3,45 @@
 Agentic loop that processes natural-language inputs and writes Obsidian-compatible
 Markdown files to a configured vault directory.
 
+## Developer Reading Path
+
+If you are new to the repo, read in this order:
+
+1. `README.md` for the project shape and current capabilities.
+2. `DESIGN.md` for the local-first, review-first architecture decisions.
+3. `DEVELOPMENT.md` for entry points, module ownership, CLI posture, and safe
+   refactor boundaries.
+4. `STATUS.md` for current runtime posture and known limitations.
+5. `EVAL.md` for the verification gate and retrieval benchmark posture.
+
+Then run:
+
+```bash
+scripts/check
+```
+
+That is the main local confidence gate. It runs unit tests, a temp-vault smoke
+test, fallback contract checks, and review-count inspection.
+
+Safe exploration commands:
+
+```bash
+scripts/status
+scripts/review --count
+scripts/capture-preview "Need to follow up with Alex tomorrow"
+scripts/retrieval-preview --status
+scripts/orchestrated-rehearsal --source cli --request-id docs-tour "check service status"
+```
+
+Development rules:
+
+- Prefer read-only previews before live writes.
+- Keep tests and smoke runs pointed at temp/runtime override paths.
+- Do not use the live vault as a test fixture.
+- Keep prompt-appended memory context disabled unless a future design proves it
+  safe.
+- Treat `scripts/check` as the gate before publishing or merging changes.
+
 ## Files
 - `specialists/` — visible Phase 4 specialist map and importable catalog
 - `specialists/catalog.py` — stable specialist metadata for docs/tests/status surfaces
@@ -15,8 +54,8 @@ Markdown files to a configured vault directory.
 - `memory_specialist.py` — RUDI memory/retrieval specialist facade
 - `review_specialist.py` — Jane review specialist preview/import/apply safety facade
 - `system_status.py` and `job_status.py` — Uniblab operational status helpers
-- `models.py`       — Pydantic schemas per node type (Stage 5)
-- `prompts.py`      — Qwen3 system prompts and few-shot examples (Stage 4)
+- `models.py`       — Pydantic schemas per node type
+- `prompts.py`      — Qwen3 system prompts and few-shot examples
 - `openai_fallback.py` — review-first OpenAI fallback using Responses API structured output
 - `entity_state.py` — JSON working memory for recently seen contacts/entities
 - `vault_graph.py`  — NetworkX graph builder for testable Sprockets parent resolution
@@ -25,7 +64,7 @@ Markdown files to a configured vault directory.
 - `scripts/smoke`   — venv-aware wrapper for deterministic temp-vault smoke test
 - `scripts/check`   — operational sanity check: tests + smoke + review count
 - `smoke_test.py`   — deterministic temp-vault smoke test with model calls stubbed
-- `tools.py`        — date/time tool definitions (Stage 4)
+- `tools.py`        — date/time tool definitions
 - `tests/`          — focused unittest coverage for parent resolution and operational hardening
 - `requirements.txt`— Python dependencies
 
@@ -93,10 +132,10 @@ run while exploring.
 | `scripts/review` | `review.py` | Jane | Count/list/report/packet/interactive review queue. | Mixed: report/count are read-only; interactive approve/discard changes queue and may write vault. |
 | `scripts/review-specialist` | `review_specialist.py` | Jane | Review inventory, packet write, decision import/apply preview. | Mixed: preview/import checks are read-only; packet write writes operational output. |
 
-Runtime directories are outside the repo under the configured SC root, usually
-`/home/cosmo/sc`: `input/`, `processing/`, `archive/`, `review/`, and
-`output/`. The vault is also outside the repo. Tests and dry-runs should use
-environment overrides rather than writing to live paths.
+Runtime directories are outside the repo under the configured SC root:
+`input/`, `processing/`, `archive/`, `review/`, and `output/`. The vault is also
+outside the repo. Tests and dry-runs should use environment overrides rather
+than writing to live paths.
 
 ## CLI posture inventory
 

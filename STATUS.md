@@ -6,8 +6,8 @@ turnkey public application.
 ## Current Maturity
 
 The project has completed its Phase 2 hardening work, Phase 3 memory groundwork,
-Stage 25 public-readiness MVP, Phase 3.5 productization bridge, and most of
-Phase 4's specialist-boundary work:
+Stage 25 public-readiness MVP, Phase 3.5 productization bridge, Phase 4
+specialist-boundary work, and early Phase 5 codebase-maturity work:
 
 - typed Sprockets/Cogs writes;
 - deterministic smoke test and unit tests;
@@ -16,11 +16,12 @@ Phase 4's specialist-boundary work:
 - guarded production retrieval;
 - retrieval traces and reports;
 - memory tool-call readiness probe;
-- public README, design note, license, CI workflow, and sensitive-data audit.
-- Stage 26 planning-note maintenance helpers for current weekly/monthly/annual
-  notes.
+- planning-note maintenance helpers for current weekly/monthly/annual notes;
+- scheduled nightly carry supervision;
 - Phase 4 specialist previews for Rosie, RUDI, Cogs, Sprockets, Jane, and
-  Uniblab.
+  Uniblab;
+- public README, design note, license, CI workflow, sensitive-data audit,
+  developer map, and CLI posture documentation.
 
 ## Current Runtime Posture
 
@@ -51,27 +52,17 @@ Phase 4's specialist-boundary work:
 - `scripts/job-supervisor --preview-install nightly` shows the exact future
   install targets and `systemctl --user` commands without writing.
 - `scripts/job-supervisor --preview-disable nightly` and
-  `--preview-recovery nightly` show pause/recovery commands before live
-  scheduling exists.
+  `--preview-recovery nightly` show pause/recovery commands.
 - `sprockets-cogs-nightly.timer` is installed and enabled as a user timer. The
   next run can be inspected with `scripts/job-status`.
-- Stage 27G host verification confirmed the timer is loaded, enabled, and
-  active/waiting for `2026-05-12 04:30 EDT`; the manual oneshot service result
-  remains `success` with exit status 0.
-- Stage 27H live rehearsal created one harmless test input, verified extraction
-  and classification through the live service, restarted the service to confirm
-  model/env reload, and left exactly one open Cogs item for the first scheduled
-  nightly timer run to carry.
-- Stage 27 scheduled-job supervision is complete: the first scheduled run on
-  `2026-05-12 04:30 EDT` succeeded, carried six open Cogs items to `2026-05-13`,
-  left `scripts/nightly --report` with 0 open candidates, and kept review count
-  at 0.
 - Phase 4's message bus is a handoff contract and rehearsal surface only. It is
   not a live dispatch engine.
+- `DEVELOPMENT.md` now maps public entry points, module responsibilities,
+  runtime data flow, CLI posture, tests, and safe refactor boundaries.
 
 ## Known Limitations
 
-- Public setup and configuration examples are intentionally deferred.
+- Public setup and configuration examples are intentionally minimal.
 - Weekly, monthly, annual, and 5WOW planning notes are maintained manually or
   through `scripts/cogs-planning`; they are not maintained by the live loop.
 - The nightly timer is now installed and enabled. Prompt-appended memory context
@@ -79,16 +70,15 @@ Phase 4's specialist-boundary work:
 - ISO-first daily naming is preview-only. Existing daily-note writes still use
   compatible lookup and preserve current legacy naming unless an ISO-first file
   already exists.
-- Current live planning notes exist at `/home/cosmo/vault/Cogs/weekly/2026-W20.md`,
-  `/home/cosmo/vault/Cogs/monthly/2026-05.md`, and
-  `/home/cosmo/vault/Cogs/annual/2026.md`. The monthly note puts the seven-day
-  `Calendar` grid before the vertical weekday `5WOW` table.
+- Current planning notes are expected under the configured vault's
+  `Cogs/weekly/`, `Cogs/monthly/`, and `Cogs/annual/` directories. Monthly
+  notes put the seven-day `Calendar` grid before the vertical weekday `5WOW`
+  table.
 - Higher-level hierarchy nodes are human-authored or review-approved.
 - Native local tool calling is not production-ready for the current model tag.
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.
-- The sensitive-data audit passed before the public repository flip.
-- Phase 3.5 closeout added public-facing `EVAL.md`, `DECISIONS.md`, and
-  `DEMO.md` as a bounded portfolio checkpoint before Phase 4.
+- More complete packaging, onboarding, and non-local deployment polish remain
+  future work.
 
 ## Verification
 
@@ -98,5 +88,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest Phase 4 gate passed 437 tests, smoke test, fallback contract, and
+The latest local gate passed 449 tests, smoke test, fallback contract, and
 review count 0.
