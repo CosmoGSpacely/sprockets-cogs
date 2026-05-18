@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from agentic_loop import build_context
+from classifier_context import build_default_context as build_context
 from extractor_classifier import CAPTURE_MODEL, ExtractClassifier, ExtractClassifierConfig
 
 

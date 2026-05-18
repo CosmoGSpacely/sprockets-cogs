@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from datetime import datetime
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,17 @@ from vault_graph import build_graph
 EntityProvider = Callable[[str], Sequence[dict[str, Any]]]
 HierarchyContextBuilder = Callable[[], Sequence[str]]
 RetrievalProvider = Callable[[str], Sequence[Any]]
+
+DEFAULT_VAULT_DIR = Path.home() / "vault"
+VAULT_DIR_ENV = "SPROCKETS_COGS_VAULT_DIR"
+
+
+def configured_vault_dir() -> Path:
+    return Path(os.environ.get(VAULT_DIR_ENV, str(DEFAULT_VAULT_DIR)))
+
+
+def configured_daily_dir() -> Path:
+    return configured_vault_dir() / "Cogs" / "daily"
 
 
 def build_hierarchy_context(
@@ -37,6 +49,10 @@ def build_hierarchy_context(
         )
     )
     return specialist.hierarchy_context_lines(max_nodes)
+
+
+def build_default_hierarchy_context(max_nodes: int = 30) -> list[str]:
+    return build_hierarchy_context(configured_vault_dir(), max_nodes=max_nodes)
 
 
 def build_base_context(
@@ -82,6 +98,13 @@ def build_base_context(
                 "Known hierarchy parent targets:\n" + "\n".join(hierarchy_context)
             )
     return "\n".join(parts)
+
+
+def build_default_context() -> str:
+    return build_base_context(
+        configured_daily_dir(),
+        hierarchy_context_builder=build_default_hierarchy_context,
+    )
 
 
 def build_input_context(

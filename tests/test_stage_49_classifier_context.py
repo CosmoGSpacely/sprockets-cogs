@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import agentic_loop
 import capture_preview
+import classifier_context
 import production_retrieval
 
 
@@ -91,6 +92,9 @@ class Stage49ClassifierContextTests(unittest.TestCase):
                 ("classify", [{"raw": "Call Alex", "type_hint": "task"}], "Base context"),
             ],
         )
+
+    def test_capture_preview_context_builder_uses_context_module_seam(self) -> None:
+        self.assertIs(capture_preview.build_context, classifier_context.build_default_context)
 
 
 if __name__ == "__main__":
