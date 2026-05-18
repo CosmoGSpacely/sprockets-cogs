@@ -200,7 +200,7 @@ class SprocketsSpecialist:
         if not clean_title:
             issues.append("title is required")
 
-        slug = _slugify(clean_title)
+        slug = slugify(clean_title)
         duplicate = self._exact_title_duplicate(clean_title, normalized_type)
         duplicate_slug = duplicate.slug if duplicate else ""
         duplicate_title = duplicate.title if duplicate else ""
@@ -327,11 +327,6 @@ def _node_type_order(node_type: str) -> int:
         "sprockets/goal": 1,
         "sprockets/project": 2,
     }.get(node_type, 99)
-
-
-def _slugify(text: str) -> str:
-    """Return a filesystem-safe slug preview without writing a file."""
-    return slugify(text)
 
 
 def format_sprockets_specialist_preview(

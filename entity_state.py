@@ -25,10 +25,6 @@ STATE_PATH = Path(
 TRACKABLE_TYPES = {"sprockets/contact", "sprockets/entity"}
 
 
-def _slugify(text: str) -> str:
-    return slugify(text)
-
-
 def load_state() -> dict:
     if not STATE_PATH.exists():
         return {}
@@ -48,7 +44,7 @@ def upsert_entity(node) -> None:
     if node.node_type not in TRACKABLE_TYPES:
         return
     state = load_state()
-    slug = _slugify(node.title)
+    slug = slugify(node.title)
     today = datetime.now().strftime("%Y-%m-%d")
     existing = state.get(slug, {})
     state[slug] = {

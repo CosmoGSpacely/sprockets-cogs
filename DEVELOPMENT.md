@@ -396,9 +396,10 @@ Current finding:
 
 - There is no observed live-vs-preview truncation mismatch right now; the live
   writer and Sprockets proposal preview both route through `slug_utils.slugify`.
-- The remaining cleanup is smaller: remove thin local `_slugify()` wrappers
-  where they add no behavior, and add regression tests proving preview/live
-  slug behavior stays aligned for long hierarchy titles.
+- Stage 47B added regression tests proving preview/live/entity-state slug
+  behavior stays aligned for long titles.
+- Stage 47C removed thin local `_slugify()` wrappers where they added no
+  behavior.
 
 ## How to use this developer map
 

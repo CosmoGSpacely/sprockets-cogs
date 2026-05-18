@@ -73,11 +73,6 @@ _NODE_BODY = Template("")
 
 # ── File I/O helpers ───────────────────────────────────────────────────────────
 
-def _slugify(text: str) -> str:
-    """Return a filesystem-safe slug from a title."""
-    return slugify(text)
-
-
 def _find_duplicate(title: str, folder: Path, threshold: int = 85) -> Path | None:
     """
     Return the path of an existing node whose slug fuzzy-matches title, or None.
@@ -87,7 +82,7 @@ def _find_duplicate(title: str, folder: Path, threshold: int = 85) -> Path | Non
     """
     if not folder.exists():
         return None
-    new_slug = _slugify(title)
+    new_slug = slugify(title)
     for existing in folder.glob("*.md"):
         if fuzz.ratio(new_slug, existing.stem) >= threshold:
             return existing
@@ -118,7 +113,7 @@ def _write_sprockets_node(node: NodeBase, folder: Path) -> None:
     Skips silently if the file already exists (deduplication stub — Stage 11 hardens this).
     """
     folder.mkdir(parents=True, exist_ok=True)
-    slug = _slugify(node.title)
+    slug = slugify(node.title)
     path = folder / f"{slug}.md"
 
     duplicate = _find_duplicate(node.title, folder)
