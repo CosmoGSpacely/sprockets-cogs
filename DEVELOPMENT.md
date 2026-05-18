@@ -439,7 +439,7 @@ code changes, use `scripts/check` as the local gate.
 
 ## Test architecture notes
 
-Stage 48A begins the test architecture pass by inspecting repeated setup before
+Stage 48 began the test architecture pass by inspecting repeated setup before
 creating shared helpers.
 
 Current findings:
@@ -460,10 +460,23 @@ Current findings:
   `input/`, `processing/`, `archive/`, `review/`, `output/`, and temporary
   vault roots.
 
-Stage 48 should start with a tiny `unittest`-friendly helper module, not a
-framework migration. The first good helper is a shared Sprockets node writer
-for tests. A temp runtime helper is useful, but should come after one small
-helper migration proves the pattern.
+Current helper rule:
+
+- Use `tests.helpers.write_sprockets_node()` when a test needs a simple
+  `Sprockets/<folder>/<slug>.md` fixture.
+- Omit `body` when the fixture should be a heading-style note body:
+  `# <slug>`.
+- Pass `body=` explicitly when the test needs custom note text.
+- Keep local setup when the fixture is testing a production writer, a mock
+  boundary, or a one-off malformed file.
+- Do not hide important runtime directories behind broad helpers yet. Repeated
+  `TemporaryDirectory()` setup is acceptable when it makes a test's contract
+  easier to read.
+
+Stage 48 added the shared Sprockets node writer and migrated the heading-style
+fixtures in the Stage 10A parent-resolution tests and Stage 40 Sprockets
+specialist tests. Retrieval benchmark fixtures were left local for now because
+they use custom bodies and are easier to review separately.
 
 ## Review commands
 - `scripts/review --count` — count pending review items
