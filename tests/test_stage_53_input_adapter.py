@@ -1,8 +1,12 @@
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+import json
 
 import frontmatter
 
 import input_adapter
+import input_adapter_preview
 
 
 class Stage53InputAdapterTests(unittest.TestCase):
@@ -98,6 +102,67 @@ class Stage53InputAdapterTests(unittest.TestCase):
         self.assertIn("- filename: cli-preview-session.input", preview)
         self.assertIn("session_id: preview-session", preview)
         self.assertIn("Preview me", preview)
+
+    def test_preview_cli_prints_read_only_input_file(self):
+        stdout = StringIO()
+
+        with redirect_stdout(stdout):
+            input_adapter_preview.main([
+                "--source",
+                "telegram",
+                "--session-id",
+                "chat-123",
+                "--source-id",
+                "msg-456",
+                "--metadata",
+                "author=cosmo",
+                "Remember the adapter boundary",
+            ])
+
+        output = stdout.getvalue()
+        self.assertIn("Input adapter preview", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn("- filename: telegram-msg-456.input", output)
+        self.assertIn("source: telegram", output)
+        self.assertIn("session_id: chat-123", output)
+        self.assertIn("Remember the adapter boundary", output)
+
+    def test_preview_cli_json_is_machine_readable(self):
+        stdout = StringIO()
+
+        with redirect_stdout(stdout):
+            input_adapter_preview.main([
+                "--json",
+                "--source",
+                "markitdown",
+                "--modality",
+                "document",
+                "--attachment",
+                "name=paper.pdf,path=/tmp/paper.pdf,media_type=application/pdf",
+                "Summarize this document",
+            ])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["writes"], "none")
+        self.assertTrue(payload["filename"].startswith("markitdown-"))
+        self.assertEqual(payload["frontmatter"]["modality"], "document")
+        self.assertEqual(payload["frontmatter"]["attachments"][0]["name"], "paper.pdf")
+
+    def test_preview_cli_reports_metadata_errors_without_traceback(self):
+        stderr = StringIO()
+
+        with self.assertRaises(SystemExit) as raised, redirect_stderr(stderr):
+            input_adapter_preview.main([
+                "--source",
+                "cli",
+                "--metadata",
+                "bad-metadata",
+                "Hello",
+            ])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("metadata entries must use KEY=VALUE", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
 
 
 if __name__ == "__main__":
