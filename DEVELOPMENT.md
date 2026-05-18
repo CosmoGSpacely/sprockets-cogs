@@ -176,12 +176,15 @@ Important safety boundaries:
 
 ## Classifier context seam
 
-Stage 49A maps the current classifier context path before extracting it from
-`agentic_loop.py`.
+Stage 49 extracted classifier context assembly from the live loop while
+preserving behavior.
 
 Current behavior:
 
-- `agentic_loop.build_context()` builds the base classifier context.
+- `classifier_context.py` owns base classifier context assembly and
+  input-specific memory-context appending.
+- `agentic_loop.build_context()` and `agentic_loop.build_context_for_input()`
+  remain live-loop wrappers around the context seam.
 - Base context includes today's Cogs checkbox items, hot contact/entity names,
   and compact hierarchy parent targets from Sprockets frontmatter.
 - `_build_hierarchy_context()` delegates through the Sprockets specialist facade
@@ -189,20 +192,22 @@ Current behavior:
 - `agentic_loop.build_context_for_input(input_text)` starts with base context
   and appends compact retrieved memory only when
   `SPROCKETS_COGS_MEMORY_CONTEXT` is enabled.
-- `capture_preview.py` currently imports `agentic_loop.build_context()` for
-  read-only previews, while tests can pass an explicit `context=` override.
+- `capture_preview.py` imports `classifier_context.build_default_context()` for
+  read-only previews, while tests can still pass an explicit `context=`
+  override or patch `capture_preview.build_context`.
 
-Recommended extraction boundary:
+Boundary rules:
 
-- Extract base context assembly and input-specific memory-context appending into
-  a small module such as `classifier_context.py`.
 - Keep `agentic_loop.py` as the live orchestration owner.
-- Keep `capture_preview.py` read-only and pointed at the same base context seam.
+- Keep capture preview read-only and pointed at the context seam, not the live
+  watcher.
 - Preserve the default safety posture: prompt-appended memory context remains
   disabled unless explicitly enabled.
 
-Tests that already protect the seam:
+Tests that protect the seam:
 
+- `test_stage_49_classifier_context.py` covers base context composition,
+  memory-context empty behavior, and capture preview's context seam.
 - `test_stage_10a_parent_resolution.py` covers hierarchy context content.
 - `test_stage_17_production_retrieval.py` covers memory-context disabled/enabled
   behavior for `build_context_for_input()`.
