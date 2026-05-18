@@ -11,6 +11,7 @@ import argparse
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -175,7 +176,7 @@ def format_all_statuses(statuses: list[MaintenanceJobStatus]) -> str:
     return "\n\n".join(format_job_status(status) for status in statuses)
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Report read-only maintenance job status.")
     parser.add_argument(
         "job",
@@ -183,7 +184,7 @@ def main() -> None:
         choices=sorted(KNOWN_JOBS),
         help="Maintenance job to inspect. Defaults to all known jobs.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     jobs = [KNOWN_JOBS[args.job]] if args.job else list(KNOWN_JOBS.values())
     print(format_all_statuses([build_job_status(job) for job in jobs]))

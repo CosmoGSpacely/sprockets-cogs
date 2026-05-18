@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 from job_status import KNOWN_JOBS, MaintenanceJob
 
@@ -122,7 +123,7 @@ def format_command_preview(preview: CommandPreview) -> str:
     )
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Preview maintenance job supervision actions.")
     parser.add_argument(
         "--preview-install",
@@ -144,7 +145,7 @@ def main() -> None:
         default=str(DEFAULT_USER_UNIT_DIR),
         help="Target user systemd unit directory for previews.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     requested = [
         bool(args.preview_install),

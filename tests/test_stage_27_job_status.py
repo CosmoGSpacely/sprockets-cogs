@@ -1,4 +1,7 @@
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from unittest.mock import patch
 
 import job_status
 
@@ -90,6 +93,29 @@ class Stage27JobStatusTests(unittest.TestCase):
         self.assertIn("Persistent=true", timer)
         self.assertIn("Unit=sprockets-cogs-nightly.service", timer)
         self.assertIn("WantedBy=timers.target", timer)
+
+    def test_main_accepts_argv_for_direct_cli_tests(self):
+        status = job_status.MaintenanceJobStatus(
+            job=job_status.NIGHTLY_JOB,
+            service=job_status.UnitStatus(
+                name="sprockets-cogs-nightly.service",
+                exists=False,
+                load_state="not-found",
+            ),
+            timer=job_status.UnitStatus(
+                name="sprockets-cogs-nightly.timer",
+                exists=False,
+                load_state="not-found",
+            ),
+        )
+        stdout = StringIO()
+
+        with patch("job_status.build_job_status", return_value=status), redirect_stdout(stdout):
+            job_status.main(["nightly"])
+
+        output = stdout.getvalue()
+        self.assertIn("nightly: Nightly Cogs carry safety net", output)
+        self.assertIn("timer is not installed", output)
 
 
 if __name__ == "__main__":

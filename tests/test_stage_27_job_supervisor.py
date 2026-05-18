@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 import job_status
@@ -68,6 +70,25 @@ class Stage27JobSupervisorTests(unittest.TestCase):
         self.assertIn("systemctl --user status sprockets-cogs-nightly.service", output)
         self.assertIn("systemctl --user start sprockets-cogs-nightly.service", output)
         self.assertIn("before manually starting the service", output)
+
+    def test_main_accepts_argv_for_direct_cli_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                job_supervisor.main(
+                    [
+                        "--preview-install",
+                        "nightly",
+                        "--user-unit-dir",
+                        tmp,
+                    ]
+                )
+
+        output = stdout.getvalue()
+        self.assertIn("nightly: install preview", output)
+        self.assertIn("- writes: no", output)
+        self.assertIn(f"- user unit dir: {tmp}", output)
 
 
 if __name__ == "__main__":
