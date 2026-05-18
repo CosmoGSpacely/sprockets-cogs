@@ -400,6 +400,8 @@ Current finding:
   behavior stays aligned for long titles.
 - Stage 47C removed thin local `_slugify()` wrappers where they added no
   behavior.
+- Stage 47D closed the slug cleanup as the right-sized module-boundary refactor
+  and left larger seams for later stages.
 
 ## How to use this developer map
 
