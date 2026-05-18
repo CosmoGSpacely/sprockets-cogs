@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+import classifier_context
 from entity_state import get_entities_by_tier, upsert_entity
 from extractor_classifier import ExtractClassifier, ExtractClassifierConfig
 import memory_guards
@@ -178,31 +179,11 @@ def build_context() -> str:
     target existing area/goal/project nodes without creating new hierarchy nodes.
     Phase 3: queries vector DB for semantically relevant nodes.
     """
-    today     = datetime.now().strftime("%a %d %b %Y")
-    note_path = DAILY_DIR / f"{today}.md"
-    if not note_path.exists():
-        cogs_line = "Already in today's note: (none)"
-    else:
-        items = [
-            line.strip().lstrip("-").strip().lstrip("[ ]>x-").strip()
-            for line in note_path.read_text().splitlines()
-            if line.strip().startswith("- [")
-        ]
-        cogs_line = "Already in today's note: " + ("; ".join(items) if items else "(none)")
-
-    hot       = get_entities_by_tier("hot")
-    contacts  = [e["title"] for e in hot if e["node_type"] == "sprockets/contact"]
-    entities  = [e["title"] for e in hot if e["node_type"] == "sprockets/entity"]
-
-    parts = [cogs_line]
-    if contacts:
-        parts.append("Known contacts: " + ", ".join(contacts))
-    if entities:
-        parts.append("Known entities: " + ", ".join(entities))
-    hierarchy_context = _build_hierarchy_context()
-    if hierarchy_context:
-        parts.append("Known hierarchy parent targets:\n" + "\n".join(hierarchy_context))
-    return "\n".join(parts)
+    return classifier_context.build_base_context(
+        DAILY_DIR,
+        entity_provider=get_entities_by_tier,
+        hierarchy_context_builder=_build_hierarchy_context,
+    )
 
 
 def build_context_for_input(input_text: str) -> str:
@@ -212,16 +193,11 @@ def build_context_for_input(input_text: str) -> str:
     Stage 17 keeps retrieved memory behind SPROCKETS_COGS_MEMORY_CONTEXT so we
     can rehearse the prompt shape before enabling it in the service.
     """
-    from production_retrieval import format_retrieval_context, memory_context_enabled
-
-    context = build_context()
-    if not memory_context_enabled():
-        return context
-
-    memory_context = format_retrieval_context(tuple(retrieve_relevant_nodes(input_text)))
-    if not memory_context:
-        return context
-    return context + "\n\n" + memory_context
+    return classifier_context.build_input_context(
+        input_text,
+        base_context_builder=build_context,
+        retrieval_provider=retrieve_relevant_nodes,
+    )
 
 
 def retrieve_relevant_nodes(query: str) -> list:
