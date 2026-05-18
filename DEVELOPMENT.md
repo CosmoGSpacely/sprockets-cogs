@@ -98,6 +98,29 @@ Runtime directories are outside the repo under the configured SC root, usually
 `output/`. The vault is also outside the repo. Tests and dry-runs should use
 environment overrides rather than writing to live paths.
 
+## CLI posture inventory
+
+Stage 50A groups script commands by their operational posture. This is the
+starting point for help text, exit behavior, and error-message cleanup.
+
+| Posture | Commands | Rule of thumb |
+|---|---|---|
+| Read-only reports | `scripts/status`, `scripts/job-status`, `scripts/hierarchy`, `scripts/retrieval-traces`, `scripts/sprockets-specialist --inventory`, `scripts/cogs-specialist --inventory`, `scripts/memory-specialist --inventory`, `scripts/review-specialist --inventory` | Safe to run during exploration. Empty reports should usually exit successfully and explain that there is nothing to show. |
+| Read-only previews | `scripts/capture-preview`, `scripts/retrieval-preview`, `scripts/orchestrator-route`, `scripts/orchestrated-rehearsal`, `scripts/cogs-specialist --carry-preview`, `scripts/cogs-specialist --planning-preview`, `scripts/sprockets-specialist --propose`, `scripts/review-specialist --apply-preview` | Should say "preview" or "without writing" in help text and output. |
+| Benchmarks and probes | `scripts/check`, `scripts/smoke`, `scripts/retrieval-eval`, `scripts/fallback-eval`, `scripts/memory-tool-probe`, `scripts/memory-specialist --benchmark`, `scripts/memory-specialist --cache-coverage` | May use temp files, model calls, API calls, or embedding cache, but should not write the live vault. |
+| Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/agent-message-bus --append`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus paths. Help text should name the target path when practical. |
+| Guarded vault writers | `scripts/carry --apply`, `scripts/nightly`, `scripts/cogs-planning --create`, `scripts/cogs-planning --ensure-current`, `scripts/review` interactive apply/discard flows | Should have a dry-run, preview, report, or source-check path before writes. Validation failures should exit nonzero. |
+| Service and job controls | `systemctl --user ...`, commands previewed by `scripts/job-supervisor` | `scripts/job-supervisor` remains preview-only; actual service/timer changes happen through explicit system commands. |
+
+Naming guidance:
+
+- `preview` means no live writes.
+- `report`, `status`, `inventory`, and `list` should be read-only.
+- `apply`, `create`, `ensure`, `append`, and `write-packet` signal writes and
+  should say where they write.
+- Validation or source-check failures should exit nonzero; "nothing to do" should
+  usually be a successful, explicit result.
+
 ## Runtime data flow
 
 Stage 46B maps the live Rosie pipeline before refactoring it.
