@@ -2,6 +2,8 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
+from pathlib import Path
+import tempfile
 
 import frontmatter
 
@@ -163,6 +165,61 @@ class Stage53InputAdapterTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         self.assertIn("metadata entries must use KEY=VALUE", stderr.getvalue())
         self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_write_input_file_uses_final_name_and_refuses_collision(self):
+        envelope = input_adapter.InputEnvelope(
+            content="Queue me",
+            source="cli",
+            session_id="queue-session",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = Path(tmp) / "input"
+
+            result = input_adapter.write_input_file(envelope, input_dir)
+
+            self.assertEqual(result.path, input_dir / "cli-queue-session.input")
+            self.assertTrue(result.path.exists())
+            self.assertFalse((input_dir / ".cli-queue-session.input.tmp").exists())
+            self.assertIn("Queue me", result.path.read_text(encoding="utf-8"))
+            with self.assertRaises(FileExistsError):
+                input_adapter.write_input_file(envelope, input_dir)
+
+    def test_preview_cli_write_requires_input_dir(self):
+        stderr = StringIO()
+
+        with self.assertRaises(SystemExit) as raised, redirect_stderr(stderr):
+            input_adapter_preview.main([
+                "--write",
+                "--source",
+                "cli",
+                "Hello",
+            ])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("--input-dir is required with --write", stderr.getvalue())
+
+    def test_preview_cli_write_creates_input_file_only_when_explicit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = Path(tmp) / "input"
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                input_adapter_preview.main([
+                    "--write",
+                    "--input-dir",
+                    str(input_dir),
+                    "--source",
+                    "cli",
+                    "--session-id",
+                    "write-session",
+                    "Write me",
+                ])
+
+            path = input_dir / "cli-write-session.input"
+            self.assertTrue(path.exists())
+            self.assertIn("Input adapter write", stdout.getvalue())
+            self.assertIn("- writes: input", stdout.getvalue())
+            self.assertIn("Write me", path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

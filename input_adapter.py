@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
+from pathlib import Path
 from typing import Any, Mapping
 
 import frontmatter
@@ -67,6 +68,15 @@ class InputEnvelope:
         for key in self.metadata:
             if not isinstance(key, str) or not key.strip():
                 raise ValueError("metadata keys must be non-empty strings")
+
+
+@dataclass(frozen=True)
+class InputWriteResult:
+    """Result of writing an adapter envelope to an input queue."""
+
+    path: Path
+    wrote: bool
+    temporary_path: Path | None = None
 
 
 def stable_content_hash(content: str, length: int = 12) -> str:
@@ -154,3 +164,29 @@ def preview_input_file(envelope: InputEnvelope) -> str:
             rendered,
         ]
     )
+
+
+def write_input_file(
+    envelope: InputEnvelope,
+    input_dir: Path,
+    *,
+    overwrite: bool = False,
+) -> InputWriteResult:
+    """
+    Atomically write an envelope into an input queue.
+
+    The write uses a temporary sibling file and then renames it to the final
+    `.input` filename so Rosie does not see a partially written input. Existing
+    final paths are refused unless overwrite is explicitly requested.
+    """
+
+    input_dir.mkdir(parents=True, exist_ok=True)
+    final_path = input_dir / input_filename(envelope)
+    if final_path.exists() and not overwrite:
+        raise FileExistsError(f"input file already exists: {final_path}")
+
+    rendered = render_input_file(envelope)
+    temp_path = final_path.with_name(f".{final_path.name}.tmp")
+    temp_path.write_text(rendered, encoding="utf-8")
+    temp_path.replace(final_path)
+    return InputWriteResult(path=final_path, wrote=True, temporary_path=temp_path)

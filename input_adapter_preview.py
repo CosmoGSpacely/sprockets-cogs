@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from typing import Sequence
 
 from input_adapter import (
@@ -14,6 +15,7 @@ from input_adapter import (
     input_session_id,
     preview_input_file,
     render_input_file,
+    write_input_file,
 )
 
 
@@ -73,13 +75,19 @@ def build_envelope_from_args(args: argparse.Namespace) -> InputEnvelope:
     )
 
 
-def envelope_preview_to_json(envelope: InputEnvelope) -> str:
+def envelope_preview_to_json(
+    envelope: InputEnvelope,
+    *,
+    writes: str = "none",
+    path: Path | None = None,
+) -> str:
     """Return a stable JSON payload for preview automation."""
 
     return json.dumps(
         {
-            "writes": "none",
+            "writes": writes,
             "filename": input_filename(envelope),
+            "path": str(path) if path is not None else "",
             "frontmatter": input_frontmatter(envelope),
             "content": envelope.content.strip(),
             "rendered": render_input_file(envelope),
@@ -138,6 +146,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print machine-readable preview JSON",
     )
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="write the rendered .input file to --input-dir; refuses existing files",
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        help="target input directory for --write; required when writing",
+    )
     return parser
 
 
@@ -149,10 +167,30 @@ def main(argv: Sequence[str] | None = None) -> None:
     except ValueError as exc:
         parser.error(str(exc))
 
+    if args.write:
+        if args.input_dir is None:
+            parser.error("--input-dir is required with --write")
+        try:
+            result = write_input_file(envelope, args.input_dir)
+        except FileExistsError as exc:
+            parser.error(str(exc))
+        if args.json:
+            print(envelope_preview_to_json(envelope, writes="input", path=result.path))
+        else:
+            print("\n".join([
+                "Input adapter write",
+                "- writes: input",
+                f"- path: {result.path}",
+                f"- source: {envelope.source}",
+                f"- session_id: {input_session_id(envelope)}",
+                f"- modality: {envelope.modality}",
+            ]))
+        return
+
     if args.json:
         print(envelope_preview_to_json(envelope))
-    else:
-        print(preview_input_file(envelope))
+        return
+    print(preview_input_file(envelope))
 
 
 if __name__ == "__main__":
