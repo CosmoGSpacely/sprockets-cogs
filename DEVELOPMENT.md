@@ -437,6 +437,34 @@ Before a behavior-changing refactor:
 For documentation-only map updates, `git diff --check` is usually enough. For
 code changes, use `scripts/check` as the local gate.
 
+## Test architecture notes
+
+Stage 48A begins the test architecture pass by inspecting repeated setup before
+creating shared helpers.
+
+Current findings:
+
+- The suite should remain on `unittest` for now. A pytest migration may be
+  useful later, but switching frameworks is larger than the current Phase 5
+  goal.
+- `TemporaryDirectory()` setup is repeated heavily across the suite. The
+  repetition is sometimes valuable because each test shows its filesystem
+  contract plainly.
+- Several test files define nearly identical `write_node()` helpers for
+  Sprockets Markdown fixtures:
+  - `test_stage_10a_parent_resolution.py`
+  - `test_stage_15_retrieval_eval.py`
+  - `test_stage_20_graph_retrieval.py`
+  - `test_stage_40_sprockets_specialist.py`
+- Runtime directory setup is also repeated in live-loop/status tests:
+  `input/`, `processing/`, `archive/`, `review/`, `output/`, and temporary
+  vault roots.
+
+Stage 48 should start with a tiny `unittest`-friendly helper module, not a
+framework migration. The first good helper is a shared Sprockets node writer
+for tests. A temp runtime helper is useful, but should come after one small
+helper migration proves the pattern.
+
 ## Review commands
 - `scripts/review --count` — count pending review items
 - `scripts/review --list` — show pending review summaries
