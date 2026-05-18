@@ -174,6 +174,41 @@ Important safety boundaries:
 - If processing fails unexpectedly, the source input is not archived; it stays
   in `processing/` so the failure is inspectable.
 
+## Classifier context seam
+
+Stage 49A maps the current classifier context path before extracting it from
+`agentic_loop.py`.
+
+Current behavior:
+
+- `agentic_loop.build_context()` builds the base classifier context.
+- Base context includes today's Cogs checkbox items, hot contact/entity names,
+  and compact hierarchy parent targets from Sprockets frontmatter.
+- `_build_hierarchy_context()` delegates through the Sprockets specialist facade
+  and reads frontmatter only; note bodies stay out of classifier context.
+- `agentic_loop.build_context_for_input(input_text)` starts with base context
+  and appends compact retrieved memory only when
+  `SPROCKETS_COGS_MEMORY_CONTEXT` is enabled.
+- `capture_preview.py` currently imports `agentic_loop.build_context()` for
+  read-only previews, while tests can pass an explicit `context=` override.
+
+Recommended extraction boundary:
+
+- Extract base context assembly and input-specific memory-context appending into
+  a small module such as `classifier_context.py`.
+- Keep `agentic_loop.py` as the live orchestration owner.
+- Keep `capture_preview.py` read-only and pointed at the same base context seam.
+- Preserve the default safety posture: prompt-appended memory context remains
+  disabled unless explicitly enabled.
+
+Tests that already protect the seam:
+
+- `test_stage_10a_parent_resolution.py` covers hierarchy context content.
+- `test_stage_17_production_retrieval.py` covers memory-context disabled/enabled
+  behavior for `build_context_for_input()`.
+- `test_stage_38_extractor_classifier.py` covers capture preview using the
+  context builder and explicit context injection.
+
 ## Module responsibility map
 
 Stage 46C groups modules by ownership before any package or import refactor. Use
