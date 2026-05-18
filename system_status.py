@@ -10,6 +10,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 import agentic_loop
 import cogs_planning
@@ -511,14 +512,14 @@ def format_system_status(status: SystemStatus) -> str:
     return "\n\n".join(section for section in sections if section)
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Report read-only Sprockets-Cogs system status.")
     parser.add_argument(
         "--show-env",
         action="store_true",
         help="Also print selected environment variable values.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     print(format_system_status(build_system_status()))
     if args.show_env:

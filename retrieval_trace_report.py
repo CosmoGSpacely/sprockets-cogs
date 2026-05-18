@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 import subprocess
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from memory_trace_log import read_memory_parent_trace_records
 
@@ -202,7 +202,7 @@ def _unquote_parent(value: str) -> str:
     return parsed if isinstance(parsed, str) else value
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Review recent memory parent guard decisions from service logs.",
     )
@@ -238,7 +238,7 @@ def main() -> None:
         type=Path,
         help="Parse a durable memory trace JSONL file instead of service logs.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.jsonl:
         lines = (

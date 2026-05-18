@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -10,130 +12,133 @@ import system_status
 
 
 class Stage32SystemStatusTests(unittest.TestCase):
-    def test_format_system_status_includes_runtime_review_memory_and_jobs(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            runtime = system_status.RuntimeStatus(
-                model="test-model",
+    def build_sample_system_status(self, root: Path) -> system_status.SystemStatus:
+        runtime = system_status.RuntimeStatus(
+            model="test-model",
+            sc_root=root / "sc",
+            input_dir=root / "sc" / "input",
+            processing_dir=root / "sc" / "processing",
+            archive_dir=root / "sc" / "archive",
+            output_dir=root / "sc" / "output",
+            vault_dir=root / "vault",
+            embed_model="test-embed",
+            embed_keep_alive="1h",
+            embed_cache_path=root / "embeddings.json",
+        )
+        retrieval = production_retrieval.ProductionRetrievalStatus(
+            enabled=True,
+            context_enabled=False,
+            retriever_name="memory-embedding-gated-vault",
+            vault_dir=root / "vault",
+            raw_retriever_name="memory-embedding-gated-vault",
+            allowed_retrievers=("memory-embedding-gated-vault", "memory-vault"),
+            node_limit=5,
+            text_limit=240,
+        )
+        return system_status.SystemStatus(
+            runtime=runtime,
+            service=system_status.ServiceStatus(
+                unit=job_status.UnitStatus(
+                    name="sprockets-cogs.service",
+                    exists=True,
+                    load_state="loaded",
+                    active_state="active",
+                    sub_state="running",
+                    unit_file_state="enabled",
+                    result="success",
+                    last_exit_status="0",
+                ),
+                main_pid=1234,
+                env={
+                    "SPROCKETS_COGS_MODEL": "test-model",
+                    "SPROCKETS_COGS_MEMORY_RETRIEVAL": "1",
+                    "SPROCKETS_COGS_MEMORY_CONTEXT": "0",
+                },
+            ),
+            specialists=SPECIALISTS,
+            directories=system_status.DirectoryStatus(
+                pending_inputs=1,
+                processing_files=0,
+                archived_inputs=12,
+                output_files=1,
+                memory_trace_exists=True,
+                oldest_pending_input="capture.input",
+            ),
+            models=system_status.ModelAvailabilityStatus(
+                ollama_available=True,
+                configured_model="test-model",
+                embedding_model="test-embed",
+                installed_models=("test-model", "test-embed"),
+            ),
+            planning=system_status.PlanningStatus(
+                cogs_dir=root / "vault" / "Cogs",
+                reference_date="2026-05-12",
+                daily_count=3,
+                weekly_count=1,
+                monthly_count=1,
+                annual_count=1,
+                daily_legacy_count=2,
+                daily_iso_count=1,
+                daily_invalid_count=0,
+                current_weekly_name="2026-W20.md",
+                current_weekly_exists=True,
+                current_monthly_name="2026-05.md",
+                current_monthly_exists=True,
+                current_annual_name="2026.md",
+                current_annual_exists=True,
+                current_5wow_anchor="2026-05",
+            ),
+            backup_sync=system_status.BackupSyncStatus(
+                vault_dir=root / "vault",
                 sc_root=root / "sc",
-                input_dir=root / "sc" / "input",
-                processing_dir=root / "sc" / "processing",
-                archive_dir=root / "sc" / "archive",
-                output_dir=root / "sc" / "output",
-                vault_dir=root / "vault",
-                embed_model="test-embed",
-                embed_keep_alive="1h",
-                embed_cache_path=root / "embeddings.json",
-            )
-            retrieval = production_retrieval.ProductionRetrievalStatus(
-                enabled=True,
-                context_enabled=False,
-                retriever_name="memory-embedding-gated-vault",
-                vault_dir=root / "vault",
-                raw_retriever_name="memory-embedding-gated-vault",
-                allowed_retrievers=("memory-embedding-gated-vault", "memory-vault"),
-                node_limit=5,
-                text_limit=240,
-            )
-            status = system_status.SystemStatus(
-                runtime=runtime,
-                service=system_status.ServiceStatus(
-                    unit=job_status.UnitStatus(
-                        name="sprockets-cogs.service",
+                code_repo=root / "repo",
+                vault_exists=True,
+                sc_root_exists=True,
+                code_repo_exists=True,
+                timeshift_home_note="system snapshots only",
+                syncthing_note="replication/sync only",
+                github_note="protects committed repository history",
+                backup_gap="vault and SC runtime need point-in-time backup",
+            ),
+            review_report={
+                "total": 2,
+                "parseable": 1,
+                "unparseable": 1,
+                "by_source": {},
+                "by_node_type": {},
+                "by_confidence": {},
+                "by_reason": {},
+            },
+            retrieval_status=retrieval,
+            jobs=(
+                job_status.MaintenanceJobStatus(
+                    job=job_status.NIGHTLY_JOB,
+                    service=job_status.UnitStatus(
+                        name="sprockets-cogs-nightly.service",
                         exists=True,
                         load_state="loaded",
-                        active_state="active",
-                        sub_state="running",
-                        unit_file_state="enabled",
+                        active_state="inactive",
+                        sub_state="dead",
+                        unit_file_state="static",
                         result="success",
                         last_exit_status="0",
                     ),
-                    main_pid=1234,
-                    env={
-                        "SPROCKETS_COGS_MODEL": "test-model",
-                        "SPROCKETS_COGS_MEMORY_RETRIEVAL": "1",
-                        "SPROCKETS_COGS_MEMORY_CONTEXT": "0",
-                    },
-                ),
-                specialists=SPECIALISTS,
-                directories=system_status.DirectoryStatus(
-                    pending_inputs=1,
-                    processing_files=0,
-                    archived_inputs=12,
-                    output_files=1,
-                    memory_trace_exists=True,
-                    oldest_pending_input="capture.input",
-                ),
-                models=system_status.ModelAvailabilityStatus(
-                    ollama_available=True,
-                    configured_model="test-model",
-                    embedding_model="test-embed",
-                    installed_models=("test-model", "test-embed"),
-                ),
-                planning=system_status.PlanningStatus(
-                    cogs_dir=root / "vault" / "Cogs",
-                    reference_date="2026-05-12",
-                    daily_count=3,
-                    weekly_count=1,
-                    monthly_count=1,
-                    annual_count=1,
-                    daily_legacy_count=2,
-                    daily_iso_count=1,
-                    daily_invalid_count=0,
-                    current_weekly_name="2026-W20.md",
-                    current_weekly_exists=True,
-                    current_monthly_name="2026-05.md",
-                    current_monthly_exists=True,
-                    current_annual_name="2026.md",
-                    current_annual_exists=True,
-                    current_5wow_anchor="2026-05",
-                ),
-                backup_sync=system_status.BackupSyncStatus(
-                    vault_dir=root / "vault",
-                    sc_root=root / "sc",
-                    code_repo=root / "repo",
-                    vault_exists=True,
-                    sc_root_exists=True,
-                    code_repo_exists=True,
-                    timeshift_home_note="system snapshots only",
-                    syncthing_note="replication/sync only",
-                    github_note="protects committed repository history",
-                    backup_gap="vault and SC runtime need point-in-time backup",
-                ),
-                review_report={
-                    "total": 2,
-                    "parseable": 1,
-                    "unparseable": 1,
-                    "by_source": {},
-                    "by_node_type": {},
-                    "by_confidence": {},
-                    "by_reason": {},
-                },
-                retrieval_status=retrieval,
-                jobs=(
-                    job_status.MaintenanceJobStatus(
-                        job=job_status.NIGHTLY_JOB,
-                        service=job_status.UnitStatus(
-                            name="sprockets-cogs-nightly.service",
-                            exists=True,
-                            load_state="loaded",
-                            active_state="inactive",
-                            sub_state="dead",
-                            unit_file_state="static",
-                            result="success",
-                            last_exit_status="0",
-                        ),
-                        timer=job_status.UnitStatus(
-                            name="sprockets-cogs-nightly.timer",
-                            exists=True,
-                            load_state="loaded",
-                            active_state="active",
-                            sub_state="waiting",
-                            unit_file_state="enabled",
-                        ),
+                    timer=job_status.UnitStatus(
+                        name="sprockets-cogs-nightly.timer",
+                        exists=True,
+                        load_state="loaded",
+                        active_state="active",
+                        sub_state="waiting",
+                        unit_file_state="enabled",
                     ),
                 ),
-            )
+            ),
+        )
+
+    def test_format_system_status_includes_runtime_review_memory_and_jobs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status = self.build_sample_system_status(root)
 
             output = system_status.format_system_status(status)
 
@@ -170,6 +175,19 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("- memory context: disabled", output)
             self.assertIn("nightly: Nightly Cogs carry safety net", output)
             self.assertIn("sprockets-cogs-nightly.timer", output)
+
+    def test_main_accepts_argv_for_direct_cli_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            status = self.build_sample_system_status(Path(tmp))
+            stdout = StringIO()
+
+            with patch("system_status.build_system_status", return_value=status), redirect_stdout(stdout):
+                system_status.main(["--show-env"])
+
+        output = stdout.getvalue()
+        self.assertIn("Sprockets-Cogs status", output)
+        self.assertIn("Environment", output)
+        self.assertIn("SPROCKETS_COGS_MODEL", output)
 
     def test_build_runtime_status_uses_configured_module_values(self):
         runtime = system_status.build_runtime_status()

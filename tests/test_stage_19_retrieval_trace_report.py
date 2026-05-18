@@ -1,7 +1,12 @@
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
+import tempfile
 
 from retrieval_trace_report import (
     format_memory_guard_report,
+    main,
     parse_memory_guard_log,
     parse_memory_guard_log_line,
 )
@@ -144,6 +149,24 @@ class Stage19RetrievalTraceReportTests(unittest.TestCase):
         self.assertIn("- selected: 0", output)
         self.assertIn("- skipped: 0", output)
         self.assertIn("no selected/skipped memory parent guard events found", output)
+
+    def test_main_accepts_argv_for_direct_cli_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "service.log"
+            log_path.write_text(
+                "2026-05-04T10:01:02-0400 host python[123]: "
+                "Memory parent guard selected: parent='Production' "
+                "node_id=projects/production node_type=sprockets/project retrieved=3\n",
+                encoding="utf-8",
+            )
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                main(["--file", str(log_path), "--limit", "1"])
+
+        output = stdout.getvalue()
+        self.assertIn("- events: 1", output)
+        self.assertIn("parent: Production", output)
 
 
 if __name__ == "__main__":
