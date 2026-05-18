@@ -7,7 +7,7 @@ turnkey public application.
 
 The project has completed its Phase 2 hardening work, Phase 3 memory groundwork,
 Stage 25 public-readiness MVP, Phase 3.5 productization bridge, Phase 4
-specialist-boundary work, and early Phase 5 codebase-maturity work:
+specialist-boundary work, and Phase 5 codebase-maturity work:
 
 - typed Sprockets/Cogs writes;
 - deterministic smoke test and unit tests;
@@ -58,7 +58,8 @@ specialist-boundary work, and early Phase 5 codebase-maturity work:
 - Phase 4's message bus is a handoff contract and rehearsal surface only. It is
   not a live dispatch engine.
 - `DEVELOPMENT.md` now maps public entry points, module responsibilities,
-  runtime data flow, CLI posture, tests, and safe refactor boundaries.
+  runtime data flow, CLI posture, tests, safe refactor boundaries, and direct
+  CLI testability patterns.
 
 ## Known Limitations
 
@@ -88,5 +89,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest local gate passed 449 tests, smoke test, fallback contract, and
+The latest local gate passed 453 tests, smoke test, fallback contract, and
 review count 0.

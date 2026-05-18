@@ -81,7 +81,7 @@ Run:
 scripts/check
 ```
 
-The current local gate passes 449 tests, a temp-vault smoke test, fallback
+The current local gate passes 453 tests, a temp-vault smoke test, fallback
 contract checks, and review count 0.
 
 ## What This Demonstrates

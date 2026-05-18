@@ -14,7 +14,7 @@ scripts/check
 
 Current local result on 2026-05-18:
 
-- unit tests: 449 passing
+- unit tests: 453 passing
 - smoke test: passed
 - fallback contract: passed
 - review queue: 0 items
