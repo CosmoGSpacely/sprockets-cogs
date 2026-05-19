@@ -70,6 +70,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - `scripts/telegram-response` previews conservative Telegram responses and can
   manually send only with explicit `--send`; Rosie does not automatically reply
   to bot messages.
+- `scripts/markitdown-preview` previews text/Markdown document ingestion as a
+  `.input` file and can explicitly write one converted document to a chosen
+  input directory.
 
 ## Known Limitations
 
@@ -94,7 +97,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   token-safe update probing, local update normalization, allowlist checks,
   preview/write rehearsal, and manual response preview/send.
 - Automatic bot replies are not wired into the live service.
-- Real document-ingestion adapters are not wired yet.
+- Rich PDF/Office document ingestion requires the optional `markitdown`
+  dependency; current document adapter tests and previews cover text/Markdown
+  files without that dependency.
 
 ## Verification
 
@@ -104,5 +109,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest local gate passed 496 tests, smoke test, fallback contract, and
+The latest local gate passed 504 tests, smoke test, fallback contract, and
 review count 0.
