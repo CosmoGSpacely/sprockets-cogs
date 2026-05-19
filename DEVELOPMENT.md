@@ -59,6 +59,8 @@ Development rules:
 - `telegram_adapter.py` — Telegram update normalization and allowlist checks before `.input` creation
 - `telegram_adapter_preview.py` — local Telegram update preview/write CLI with no network dependency
 - `telegram_update_probe.py` — token-safe Telegram getUpdates status/fetch helper
+- `response_routing.py` — source-aware response envelope and conservative route decisions
+- `telegram_response.py` — token-safe Telegram response preview/manual-send helper
 - `models.py`       — Pydantic schemas per node type
 - `prompts.py`      — Qwen3 system prompts and few-shot examples
 - `openai_fallback.py` — review-first OpenAI fallback using Responses API structured output
@@ -117,6 +119,7 @@ run while exploring.
 | `scripts/input-adapter-preview` | `input_adapter_preview.py` | Rosie | Preview or explicitly write adapter-produced `.input` files. | Mixed: preview is read-only; `--write --input-dir` writes one `.input` file. |
 | `scripts/telegram-adapter-preview` | `telegram_adapter_preview.py` | Rosie | Preview or explicitly write a Telegram update as a `.input` file. | Mixed: preview is read-only; `--write --input-dir` writes one allowlisted `.input` file. |
 | `scripts/telegram-update-probe` | `telegram_update_probe.py` | Rosie | Inspect Telegram token/allowlist readiness and optionally fetch updates without printing the token. | Mixed: status/fetch are read-only; `--write-update-json` writes one local JSON file for preview. |
+| `scripts/telegram-response` | `telegram_response.py` | Rosie / output adapter | Preview or explicitly send a conservative Telegram acknowledgement/status response. | Mixed: preview is read-only; `--send` contacts Telegram after route guards pass. |
 | `scripts/job-status` | `job_status.py` | Uniblab | Read-only timer/job status. | No. |
 | `scripts/job-supervisor` | `job_supervisor.py` | Uniblab | Preview install/disable/recovery commands for maintenance jobs. | No. |
 | `scripts/smoke` | `smoke_test.py` | Uniblab | Deterministic temp-vault smoke test. | Temp files only. |
@@ -153,11 +156,12 @@ starting point for help text, exit behavior, and error-message cleanup.
 | Posture | Commands | Rule of thumb |
 |---|---|---|
 | Read-only reports | `scripts/status`, `scripts/job-status`, `scripts/hierarchy`, `scripts/retrieval-traces`, `scripts/telegram-update-probe --status`, `scripts/sprockets-specialist --inventory`, `scripts/cogs-specialist --inventory`, `scripts/memory-specialist --inventory`, `scripts/review-specialist --inventory` | Safe to run during exploration. Empty reports should usually exit successfully and explain that there is nothing to show. |
-| Read-only previews | `scripts/capture-preview`, `scripts/input-adapter-preview`, `scripts/telegram-adapter-preview`, `scripts/retrieval-preview`, `scripts/orchestrator-route`, `scripts/orchestrated-rehearsal`, `scripts/cogs-specialist --carry-preview`, `scripts/cogs-specialist --planning-preview`, `scripts/sprockets-specialist --propose`, `scripts/review-specialist --apply-preview` | Should say "preview" or "without writing" in help text and output. |
+| Read-only previews | `scripts/capture-preview`, `scripts/input-adapter-preview`, `scripts/telegram-adapter-preview`, `scripts/telegram-response` without `--send`, `scripts/retrieval-preview`, `scripts/orchestrator-route`, `scripts/orchestrated-rehearsal`, `scripts/cogs-specialist --carry-preview`, `scripts/cogs-specialist --planning-preview`, `scripts/sprockets-specialist --propose`, `scripts/review-specialist --apply-preview` | Should say "preview" or "without writing" in help text and output. |
 | Benchmarks and probes | `scripts/check`, `scripts/smoke`, `scripts/retrieval-eval`, `scripts/fallback-eval`, `scripts/memory-tool-probe`, `scripts/memory-specialist --benchmark`, `scripts/memory-specialist --cache-coverage` | May use temp files, model calls, API calls, or embedding cache, but should not write the live vault. |
 | Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/agent-message-bus --append`, `scripts/telegram-update-probe --write-update-json ...`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus paths. Help text should name the target path when practical. |
 | Guarded vault writers | `scripts/carry --apply`, `scripts/nightly`, `scripts/cogs-planning --create`, `scripts/cogs-planning --ensure-current`, `scripts/review` interactive apply/discard flows | Should have a dry-run, preview, report, or source-check path before writes. Validation failures should exit nonzero. |
 | Guarded input writers | `scripts/input-adapter-preview --write --input-dir ...`, `scripts/telegram-adapter-preview --write --input-dir ...` | Writes only `.input` files into an explicitly selected input directory; refuses existing final files. |
+| Guarded source replies | `scripts/telegram-response --send ...` | Contacts Telegram only after response-route guards pass. Review-required/operator-report/local-reflection outputs stay local. |
 | Service and job controls | `systemctl --user ...`, commands previewed by `scripts/job-supervisor` | `scripts/job-supervisor` remains preview-only; actual service/timer changes happen through explicit system commands. |
 
 Naming guidance:
@@ -213,7 +217,8 @@ Safety rules:
 - existing final files are refused by the CLI;
 - adapters must write only to `input/`, never directly to `processing/`,
   `archive/`, the vault, or the review queue;
-- response routing belongs to a later stage.
+- response routing is source-aware, conservative, and does not change adapter
+  input writes.
 
 Useful examples:
 
@@ -244,7 +249,8 @@ Safety rules:
 - preview mode can show whether a local update would be accepted;
 - `--write` still requires an explicit `--input-dir`;
 - Telegram adapters write `.input` files only and do not bypass Rosie;
-- bot replies are deferred to the response/output routing stage.
+- automatic bot replies are deferred; manual replies use the response/output
+  routing helper.
 
 Useful example:
 
@@ -253,6 +259,44 @@ scripts/telegram-update-probe --status
 scripts/telegram-update-probe --fetch --limit 5 --write-update-json /tmp/telegram-update.json
 scripts/telegram-adapter-preview --update-json /tmp/telegram-update.json
 ```
+
+## Telegram response/output routing
+
+Stage 55 adds source-aware response routing without changing Rosie’s live
+service behavior. The live `send_response()` function still appends a local
+daily Cog reflection. It does not inspect Telegram metadata and does not call
+the Telegram response adapter.
+
+The response contract separates response intent from delivery:
+
+- `acknowledgement`, `processed`, and `error` may become short Telegram replies
+  when the source is Telegram and a chat id is present;
+- `review_required`, `local_reflection`, and `operator_report` stay local and
+  review-first;
+- non-Telegram sources stay local until a future source-specific adapter is
+  deliberately added.
+
+The Telegram response helper defaults to preview mode and prints no token:
+
+```bash
+scripts/telegram-response --chat-id 783798616 "Queued."
+scripts/telegram-response --input-file /path/to/telegram.input "Queued."
+```
+
+Actual sends require explicit `--send`:
+
+```bash
+scripts/telegram-response --chat-id 783798616 --send "Queued."
+```
+
+Safety rules:
+
+- no automatic replies from `sprockets-cogs.service`;
+- no review-required or operator-only output is sent to Telegram;
+- no raw review packet, retrieval trace, vault path, model debug output, or
+  token value should be sent or printed;
+- reply text should be short status text, not model-generated reasoning;
+- automatic bot acknowledgement is a future stage, not part of Stage 55.
 
 ## Runtime data flow
 
