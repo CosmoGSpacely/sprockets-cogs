@@ -62,6 +62,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   CLI testability patterns.
 - `scripts/input-adapter-preview` previews adapter-produced `.input` files and
   can explicitly write one `.input` file to a chosen input directory.
+- `scripts/telegram-adapter-preview` previews local Telegram update JSON as a
+  Rosie `.input` file and only writes when the update is allowlisted and
+  `--write --input-dir` are explicit.
 
 ## Known Limitations
 
@@ -82,8 +85,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.
 - More complete packaging, onboarding, and non-local deployment polish remain
   future work.
-- Real bot and document-ingestion adapters are not wired yet; Stage 53 only
-  defines the shared `.input` adapter boundary.
+- The Telegram adapter has no live polling loop yet; Stage 54 currently provides
+  local update normalization, allowlist checks, and preview/write rehearsal.
+- Real document-ingestion adapters are not wired yet.
 
 ## Verification
 
@@ -93,5 +97,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest local gate passed 453 tests, smoke test, fallback contract, and
+The latest local gate passed 472 tests, smoke test, fallback contract, and
 review count 0.
