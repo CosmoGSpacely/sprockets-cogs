@@ -62,6 +62,7 @@ Development rules:
 - `response_routing.py` — source-aware response envelope and conservative route decisions
 - `telegram_response.py` — token-safe Telegram response preview/manual-send helper
 - `markitdown_adapter.py` — document-to-Markdown `.input` preview/write helper
+- `markitdown_batch.py` — bounded document batch inventory/apply helper
 - `models.py`       — Pydantic schemas per node type
 - `prompts.py`      — Qwen3 system prompts and few-shot examples
 - `openai_fallback.py` — review-first OpenAI fallback using Responses API structured output
@@ -122,6 +123,7 @@ run while exploring.
 | `scripts/telegram-update-probe` | `telegram_update_probe.py` | Rosie | Inspect Telegram token/allowlist readiness and optionally fetch updates without printing the token. | Mixed: status/fetch are read-only; `--write-update-json` writes one local JSON file for preview. |
 | `scripts/telegram-response` | `telegram_response.py` | Rosie / output adapter | Preview or explicitly send a conservative Telegram acknowledgement/status response. | Mixed: preview is read-only; `--send` contacts Telegram after route guards pass. |
 | `scripts/markitdown-preview` | `markitdown_adapter.py` | Rosie / adapter layer | Preview or explicitly write converted document Markdown as a `.input` file. | Mixed: preview is read-only; `--write --input-dir` writes one `.input` file. |
+| `scripts/markitdown-batch` | `markitdown_batch.py` | Rosie / Uniblab-visible adapter layer | Inventory a folder of documents and explicitly apply a bounded batch as `.input` files. | Mixed: plan is read-only; `--apply --input-dir` writes bounded `.input` files. |
 | `scripts/job-status` | `job_status.py` | Uniblab | Read-only timer/job status. | No. |
 | `scripts/job-supervisor` | `job_supervisor.py` | Uniblab | Preview install/disable/recovery commands for maintenance jobs. | No. |
 | `scripts/smoke` | `smoke_test.py` | Uniblab | Deterministic temp-vault smoke test. | Temp files only. |
@@ -158,11 +160,11 @@ starting point for help text, exit behavior, and error-message cleanup.
 | Posture | Commands | Rule of thumb |
 |---|---|---|
 | Read-only reports | `scripts/status`, `scripts/job-status`, `scripts/hierarchy`, `scripts/retrieval-traces`, `scripts/telegram-update-probe --status`, `scripts/sprockets-specialist --inventory`, `scripts/cogs-specialist --inventory`, `scripts/memory-specialist --inventory`, `scripts/review-specialist --inventory` | Safe to run during exploration. Empty reports should usually exit successfully and explain that there is nothing to show. |
-| Read-only previews | `scripts/capture-preview`, `scripts/input-adapter-preview`, `scripts/telegram-adapter-preview`, `scripts/telegram-response` without `--send`, `scripts/markitdown-preview`, `scripts/retrieval-preview`, `scripts/orchestrator-route`, `scripts/orchestrated-rehearsal`, `scripts/cogs-specialist --carry-preview`, `scripts/cogs-specialist --planning-preview`, `scripts/sprockets-specialist --propose`, `scripts/review-specialist --apply-preview` | Should say "preview" or "without writing" in help text and output. |
+| Read-only previews | `scripts/capture-preview`, `scripts/input-adapter-preview`, `scripts/telegram-adapter-preview`, `scripts/telegram-response` without `--send`, `scripts/markitdown-preview`, `scripts/markitdown-batch`, `scripts/retrieval-preview`, `scripts/orchestrator-route`, `scripts/orchestrated-rehearsal`, `scripts/cogs-specialist --carry-preview`, `scripts/cogs-specialist --planning-preview`, `scripts/sprockets-specialist --propose`, `scripts/review-specialist --apply-preview` | Should say "preview" or "without writing" in help text and output. |
 | Benchmarks and probes | `scripts/check`, `scripts/smoke`, `scripts/retrieval-eval`, `scripts/fallback-eval`, `scripts/memory-tool-probe`, `scripts/memory-specialist --benchmark`, `scripts/memory-specialist --cache-coverage` | May use temp files, model calls, API calls, or embedding cache, but should not write the live vault. |
 | Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/agent-message-bus --append`, `scripts/telegram-update-probe --write-update-json ...`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus paths. Help text should name the target path when practical. |
 | Guarded vault writers | `scripts/carry --apply`, `scripts/nightly`, `scripts/cogs-planning --create`, `scripts/cogs-planning --ensure-current`, `scripts/review` interactive apply/discard flows | Should have a dry-run, preview, report, or source-check path before writes. Validation failures should exit nonzero. |
-| Guarded input writers | `scripts/input-adapter-preview --write --input-dir ...`, `scripts/telegram-adapter-preview --write --input-dir ...`, `scripts/markitdown-preview --write --input-dir ...` | Writes only `.input` files into an explicitly selected input directory; refuses existing final files. |
+| Guarded input writers | `scripts/input-adapter-preview --write --input-dir ...`, `scripts/telegram-adapter-preview --write --input-dir ...`, `scripts/markitdown-preview --write --input-dir ...`, `scripts/markitdown-batch --apply --input-dir ...` | Writes only `.input` files into an explicitly selected input directory; refuses existing final files. |
 | Guarded source replies | `scripts/telegram-response --send ...` | Contacts Telegram only after response-route guards pass. Review-required/operator-report/local-reflection outputs stay local. |
 | Service and job controls | `systemctl --user ...`, commands previewed by `scripts/job-supervisor` | `scripts/job-supervisor` remains preview-only; actual service/timer changes happen through explicit system commands. |
 
@@ -327,6 +329,35 @@ Safety rules:
 - converted content enters through `.input`, not through a direct vault write;
 - source path, file hash, converter, truncation, and review metadata are
   preserved in frontmatter for Jane/future audit.
+
+## MarkItDown batch adapter
+
+Stage 57 adds a batch wrapper around the same single-document adapter. It does
+not add a separate ingestion core and does not write directly to the vault.
+
+Dry-run inventory is the default:
+
+```bash
+scripts/markitdown-batch /path/to/documents
+scripts/markitdown-batch /path/to/documents --recursive --json
+```
+
+Apply is explicit, bounded, and idempotent:
+
+```bash
+scripts/markitdown-batch /path/to/documents --apply --input-dir /tmp/sc/input --limit 5
+```
+
+Safety rules:
+
+- plans report ready, unsupported, too-large, conversion-error, and
+  requires-MarkItDown files;
+- rich PDF/Office/image candidates are reported as requiring MarkItDown when
+  the optional dependency is not installed;
+- apply attempts only ready files up to `--limit`;
+- existing deterministic `.input` outputs are skipped instead of duplicated;
+- unsupported files are reported clearly and never written;
+- generated files still enter through Rosie as `.input`.
 
 ## Runtime data flow
 

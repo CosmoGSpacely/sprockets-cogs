@@ -73,6 +73,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - `scripts/markitdown-preview` previews text/Markdown document ingestion as a
   `.input` file and can explicitly write one converted document to a chosen
   input directory.
+- `scripts/markitdown-batch` inventories a folder of documents and can
+  explicitly apply a bounded, idempotent batch as `.input` files.
 
 ## Known Limitations
 
@@ -100,6 +102,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - Rich PDF/Office document ingestion requires the optional `markitdown`
   dependency; current document adapter tests and previews cover text/Markdown
   files without that dependency.
+- Batch document ingestion reports rich-format candidates as requiring
+  MarkItDown when the optional dependency is not installed.
 
 ## Verification
 
