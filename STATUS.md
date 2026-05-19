@@ -113,5 +113,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest local gate passed 504 tests, smoke test, fallback contract, and
+The latest local gate passed 511 tests, smoke test, fallback contract, and
 review count 0.
