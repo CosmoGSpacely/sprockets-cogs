@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from pathlib import Path
 from typing import Mapping, Any
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 from input_adapter import InputEnvelope
 
@@ -13,6 +16,9 @@ TELEGRAM_SOURCE = "telegram"
 TELEGRAM_TOKEN_ENV = "SPROCKETS_COGS_TELEGRAM_BOT_TOKEN"
 TELEGRAM_ALLOWED_USERS_ENV = "SPROCKETS_COGS_TELEGRAM_ALLOWED_USER_IDS"
 TELEGRAM_ALLOWED_CHATS_ENV = "SPROCKETS_COGS_TELEGRAM_ALLOWED_CHAT_IDS"
+TELEGRAM_POLLING_ENV = "SPROCKETS_COGS_TELEGRAM_POLLING"
+DEFAULT_TELEGRAM_ENV_FILE = Path.home() / ".config" / "sprockets-cogs" / "env"
+TELEGRAM_API_BASE = "https://api.telegram.org"
 
 
 @dataclass(frozen=True)
@@ -126,3 +132,106 @@ def telegram_envelope(message: TelegramMessage) -> InputEnvelope:
             "telegram_chat_type": message.chat_type,
         },
     )
+
+
+def load_env_file(path: Path) -> dict[str, str]:
+    """Load simple KEY=VALUE lines from an env file without shell evaluation."""
+
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if key:
+            values[key] = value.strip().strip("\"'")
+    return values
+
+
+def merged_env_with_file(
+    *,
+    env_file: Path = DEFAULT_TELEGRAM_ENV_FILE,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Return env-file values overlaid by the process environment."""
+
+    process_env = env if env is not None else os.environ
+    values = load_env_file(env_file)
+    values.update(process_env)
+    return values
+
+
+def telegram_token_configured(env: Mapping[str, str] | None = None) -> bool:
+    """Return whether a Telegram bot token is present without exposing it."""
+
+    values = env if env is not None else os.environ
+    return bool(values.get(TELEGRAM_TOKEN_ENV, "").strip())
+
+
+def build_get_updates_url(
+    token: str,
+    *,
+    offset: int | None = None,
+    limit: int = 10,
+    timeout: int = 0,
+) -> str:
+    """Build the Telegram getUpdates URL without logging the token."""
+
+    query: dict[str, int] = {"limit": limit, "timeout": timeout}
+    if offset is not None:
+        query["offset"] = offset
+    return f"{TELEGRAM_API_BASE}/bot{token}/getUpdates?{urlencode(query)}"
+
+
+def fetch_telegram_updates(
+    token: str,
+    *,
+    offset: int | None = None,
+    limit: int = 10,
+    timeout: int = 0,
+    opener=urlopen,
+) -> dict[str, Any]:
+    """Fetch Telegram updates using the Bot API."""
+
+    if not token.strip():
+        raise ValueError("telegram token is not configured")
+    url = build_get_updates_url(
+        token,
+        offset=offset,
+        limit=limit,
+        timeout=timeout,
+    )
+    with opener(url, timeout=timeout + 10) as response:
+        data = response.read()
+    import json
+
+    payload = json.loads(data.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("telegram response must be a JSON object")
+    return payload
+
+
+def summarize_update(update: Mapping[str, Any]) -> dict[str, str]:
+    """Return a token-free compact summary for a Telegram update."""
+
+    try:
+        message = parse_telegram_update(update)
+    except ValueError as exc:
+        return {
+            "update_id": str(update.get("update_id", "")),
+            "kind": "unsupported",
+            "reason": str(exc),
+        }
+    return {
+        "update_id": str(message.update_id),
+        "kind": "message",
+        "message_id": str(message.message_id),
+        "chat_id": str(message.chat_id),
+        "from_user_id": str(message.from_user_id),
+        "username": message.username,
+        "chat_type": message.chat_type,
+        "text_excerpt": message.text[:80],
+    }
