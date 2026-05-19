@@ -14,8 +14,12 @@ from input_adapter import (
     write_input_file,
 )
 from telegram_adapter import (
+    DEFAULT_TELEGRAM_ENV_FILE,
+    TELEGRAM_ALLOWED_CHATS_ENV,
+    TELEGRAM_ALLOWED_USERS_ENV,
+    merged_env_with_file,
     parse_telegram_update,
-    telegram_allowlist_from_env,
+    parse_id_list,
     telegram_envelope,
     telegram_message_is_allowed,
 )
@@ -30,6 +34,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="path to a Telegram getUpdates-style JSON object for preview",
+    )
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=DEFAULT_TELEGRAM_ENV_FILE,
+        help="private env file containing Telegram allowlist values",
     )
     parser.add_argument(
         "--write",
@@ -54,7 +64,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         parser.error(str(exc))
 
-    allowed_user_ids, allowed_chat_ids = telegram_allowlist_from_env()
+    env = merged_env_with_file(env_file=args.env_file)
+    allowed_user_ids = parse_id_list(env.get(TELEGRAM_ALLOWED_USERS_ENV, ""))
+    allowed_chat_ids = parse_id_list(env.get(TELEGRAM_ALLOWED_CHATS_ENV, ""))
     allowed = telegram_message_is_allowed(
         message,
         allowed_user_ids=allowed_user_ids,

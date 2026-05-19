@@ -69,6 +69,25 @@ class Stage135HardeningTests(unittest.TestCase):
             self.assertEqual(count, 2)
             self.assertEqual(processed, ["a.input", "b.input"])
 
+    def test_input_handler_processes_moved_input_files(self):
+        class Event:
+            is_directory = False
+            src_path = "/tmp/.adapter.input.tmp"
+            dest_path = "/tmp/adapter.input"
+
+        processed = []
+
+        def fake_process(path):
+            processed.append(Path(path).name)
+
+        with (
+            patch.object(agentic_loop, "process_input", side_effect=fake_process),
+            patch.object(agentic_loop.time, "sleep"),
+        ):
+            agentic_loop.InputHandler().on_moved(Event())
+
+        self.assertEqual(processed, ["adapter.input"])
+
     def test_ensure_runtime_dirs_creates_operational_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

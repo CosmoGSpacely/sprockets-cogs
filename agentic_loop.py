@@ -757,14 +757,21 @@ def process_input(file_path: Path) -> None:
 # ── Watchdog handler ───────────────────────────────────────────────────────────
 
 class InputHandler(FileSystemEventHandler):
-    def on_created(self, event):
-        if event.is_directory:
-            return
-        path = Path(event.src_path)
+    def _handle_input_path(self, path: Path) -> None:
         if path.suffix == ".input":
             log.info("Detected: %s", path.name)
             time.sleep(0.5)
             process_input(path)
+
+    def on_created(self, event):
+        if event.is_directory:
+            return
+        self._handle_input_path(Path(event.src_path))
+
+    def on_moved(self, event):
+        if event.is_directory:
+            return
+        self._handle_input_path(Path(event.dest_path))
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

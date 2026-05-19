@@ -107,15 +107,21 @@ class Stage54TelegramAdapterTests(unittest.TestCase):
     def test_preview_cli_is_read_only_and_shows_allowlist_status(self):
         with tempfile.TemporaryDirectory() as tmp:
             update_path = Path(tmp) / "update.json"
+            env_file = Path(tmp) / "env"
             update_path.write_text(json.dumps(sample_update()), encoding="utf-8")
+            env_file.write_text(
+                "SPROCKETS_COGS_TELEGRAM_ALLOWED_USER_IDS=777\n",
+                encoding="utf-8",
+            )
             stdout = StringIO()
 
-            with patch.dict(
-                os.environ,
-                {"SPROCKETS_COGS_TELEGRAM_ALLOWED_USER_IDS": "777"},
-                clear=False,
-            ), redirect_stdout(stdout):
-                telegram_adapter_preview.main(["--update-json", str(update_path)])
+            with redirect_stdout(stdout):
+                telegram_adapter_preview.main([
+                    "--update-json",
+                    str(update_path),
+                    "--env-file",
+                    str(env_file),
+                ])
 
             output = stdout.getvalue()
             self.assertIn("Telegram adapter preview", output)
@@ -144,18 +150,21 @@ class Stage54TelegramAdapterTests(unittest.TestCase):
     def test_preview_cli_write_creates_input_when_allowlisted(self):
         with tempfile.TemporaryDirectory() as tmp:
             update_path = Path(tmp) / "update.json"
+            env_file = Path(tmp) / "env"
             input_dir = Path(tmp) / "input"
             update_path.write_text(json.dumps(sample_update()), encoding="utf-8")
+            env_file.write_text(
+                "SPROCKETS_COGS_TELEGRAM_ALLOWED_CHAT_IDS=888\n",
+                encoding="utf-8",
+            )
             stdout = StringIO()
 
-            with patch.dict(
-                os.environ,
-                {"SPROCKETS_COGS_TELEGRAM_ALLOWED_CHAT_IDS": "888"},
-                clear=False,
-            ), redirect_stdout(stdout):
+            with redirect_stdout(stdout):
                 telegram_adapter_preview.main([
                     "--update-json",
                     str(update_path),
+                    "--env-file",
+                    str(env_file),
                     "--write",
                     "--input-dir",
                     str(input_dir),
@@ -166,6 +175,27 @@ class Stage54TelegramAdapterTests(unittest.TestCase):
             self.assertIn("Telegram adapter write", stdout.getvalue())
             self.assertIn("- allowed: yes", stdout.getvalue())
             self.assertIn("Capture from Telegram", files[0].read_text(encoding="utf-8"))
+
+    def test_preview_cli_reads_allowlist_from_private_env_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            update_path = Path(tmp) / "update.json"
+            env_file = Path(tmp) / "env"
+            update_path.write_text(json.dumps(sample_update()), encoding="utf-8")
+            env_file.write_text(
+                "SPROCKETS_COGS_TELEGRAM_ALLOWED_USER_IDS=777\n",
+                encoding="utf-8",
+            )
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                telegram_adapter_preview.main([
+                    "--update-json",
+                    str(update_path),
+                    "--env-file",
+                    str(env_file),
+                ])
+
+            self.assertIn("- allowed: yes", stdout.getvalue())
 
     def test_env_file_loader_reads_private_runtime_values(self):
         with tempfile.TemporaryDirectory() as tmp:
