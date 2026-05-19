@@ -3,8 +3,10 @@ from io import StringIO
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 from urllib.parse import parse_qs
 
+import agentic_loop
 import input_adapter
 import response_routing
 import telegram_response
@@ -143,6 +145,41 @@ class Stage55TelegramResponseTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, 2)
         self.assertIn("response text is required", stderr.getvalue())
+
+    def test_cli_send_review_required_does_not_build_telegram_request(self):
+        stderr = StringIO()
+
+        with (
+            patch("telegram_response.build_send_message_request") as build_request,
+            self.assertRaises(SystemExit) as raised,
+            redirect_stderr(stderr),
+        ):
+            telegram_response.main([
+                "--chat-id",
+                "888",
+                "--response-type",
+                "review_required",
+                "--send",
+                "Needs review.",
+            ])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertFalse(build_request.called)
+        self.assertIn("not sendable to Telegram", stderr.getvalue())
+
+    def test_agentic_loop_send_response_stays_local(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_note = Path(tmp) / "daily.md"
+            daily_note.write_text("# Daily\n", encoding="utf-8")
+
+            with (
+                patch.object(agentic_loop, "_ensure_daily_note", return_value=daily_note),
+                patch("telegram_response.send_telegram_response", Mock()) as send_mock,
+            ):
+                agentic_loop.send_response("telegram-chat-888", "Processed 1 node.")
+
+            self.assertFalse(send_mock.called)
+            self.assertIn("agent: Processed 1 node.", daily_note.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

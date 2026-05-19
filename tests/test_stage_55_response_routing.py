@@ -106,6 +106,65 @@ class Stage55ResponseRoutingTests(unittest.TestCase):
         self.assertIn("- target: 888", preview)
         self.assertIn("Processed 1 node.", preview)
 
+    def test_only_simple_telegram_response_types_are_sendable(self):
+        sendable = {
+            response_routing.ResponseType.ACKNOWLEDGEMENT,
+            response_routing.ResponseType.PROCESSED,
+            response_routing.ResponseType.ERROR,
+        }
+        context = response_routing.ResponseContext(
+            source="telegram",
+            session_id="telegram-chat-888",
+            metadata={"telegram_chat_id": "888"},
+        )
+
+        for response_type in response_routing.ResponseType:
+            with self.subTest(response_type=response_type):
+                route = response_routing.route_response(
+                    response_routing.ResponseEnvelope(
+                        context=context,
+                        response_type=response_type,
+                        text="Status.",
+                    )
+                )
+
+                self.assertEqual(route.would_send, response_type in sendable)
+
+    def test_non_telegram_sources_never_source_reply(self):
+        for source in ["local", "cli", "markitdown", "obsidian"]:
+            with self.subTest(source=source):
+                envelope = response_routing.ResponseEnvelope(
+                    context=response_routing.ResponseContext(
+                        source=source,
+                        session_id=f"{source}-session",
+                    ),
+                    response_type=response_routing.ResponseType.PROCESSED,
+                    text="Processed.",
+                )
+
+                route = response_routing.route_response(envelope)
+
+                self.assertEqual(route.sink, "local")
+                self.assertFalse(route.would_send)
+                self.assertEqual(route.target, "")
+
+    def test_operator_reports_stay_local_even_for_telegram(self):
+        envelope = response_routing.ResponseEnvelope(
+            context=response_routing.ResponseContext(
+                source="telegram",
+                session_id="telegram-chat-888",
+                metadata={"telegram_chat_id": "888"},
+            ),
+            response_type=response_routing.ResponseType.OPERATOR_REPORT,
+            text="Operator-only detail.",
+        )
+
+        route = response_routing.route_response(envelope)
+
+        self.assertEqual(route.sink, "local")
+        self.assertFalse(route.would_send)
+        self.assertIn("operator_report", route.reason)
+
 
 if __name__ == "__main__":
     unittest.main()
