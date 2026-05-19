@@ -65,6 +65,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - `scripts/telegram-adapter-preview` previews local Telegram update JSON as a
   Rosie `.input` file and only writes when the update is allowlisted and
   `--write --input-dir` are explicit.
+- `scripts/telegram-update-probe` reports Telegram token/allowlist readiness
+  without printing the token and can fetch updates for local preview.
 
 ## Known Limitations
 
@@ -86,7 +88,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - More complete packaging, onboarding, and non-local deployment polish remain
   future work.
 - The Telegram adapter has no live polling loop yet; Stage 54 currently provides
-  local update normalization, allowlist checks, and preview/write rehearsal.
+  token-safe update probing, local update normalization, allowlist checks, and
+  preview/write rehearsal.
 - Real document-ingestion adapters are not wired yet.
 
 ## Verification
@@ -97,5 +100,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest local gate passed 472 tests, smoke test, fallback contract, and
+The latest local gate passed 477 tests, smoke test, fallback contract, and
 review count 0.

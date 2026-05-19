@@ -58,6 +58,7 @@ Development rules:
 - `input_adapter_preview.py` — read-only/guarded preview CLI for adapter-produced `.input` files
 - `telegram_adapter.py` — Telegram update normalization and allowlist checks before `.input` creation
 - `telegram_adapter_preview.py` — local Telegram update preview/write CLI with no network dependency
+- `telegram_update_probe.py` — token-safe Telegram getUpdates status/fetch helper
 - `models.py`       — Pydantic schemas per node type
 - `prompts.py`      — Qwen3 system prompts and few-shot examples
 - `openai_fallback.py` — review-first OpenAI fallback using Responses API structured output
@@ -115,6 +116,7 @@ run while exploring.
 | `scripts/status` | `system_status.py` | Uniblab | Read-only operational status, specialist map, review and job posture. | No. |
 | `scripts/input-adapter-preview` | `input_adapter_preview.py` | Rosie | Preview or explicitly write adapter-produced `.input` files. | Mixed: preview is read-only; `--write --input-dir` writes one `.input` file. |
 | `scripts/telegram-adapter-preview` | `telegram_adapter_preview.py` | Rosie | Preview or explicitly write a Telegram update as a `.input` file. | Mixed: preview is read-only; `--write --input-dir` writes one allowlisted `.input` file. |
+| `scripts/telegram-update-probe` | `telegram_update_probe.py` | Rosie | Inspect Telegram token/allowlist readiness and optionally fetch updates without printing the token. | Mixed: status/fetch are read-only; `--write-update-json` writes one local JSON file for preview. |
 | `scripts/job-status` | `job_status.py` | Uniblab | Read-only timer/job status. | No. |
 | `scripts/job-supervisor` | `job_supervisor.py` | Uniblab | Preview install/disable/recovery commands for maintenance jobs. | No. |
 | `scripts/smoke` | `smoke_test.py` | Uniblab | Deterministic temp-vault smoke test. | Temp files only. |
@@ -150,10 +152,10 @@ starting point for help text, exit behavior, and error-message cleanup.
 
 | Posture | Commands | Rule of thumb |
 |---|---|---|
-| Read-only reports | `scripts/status`, `scripts/job-status`, `scripts/hierarchy`, `scripts/retrieval-traces`, `scripts/sprockets-specialist --inventory`, `scripts/cogs-specialist --inventory`, `scripts/memory-specialist --inventory`, `scripts/review-specialist --inventory` | Safe to run during exploration. Empty reports should usually exit successfully and explain that there is nothing to show. |
+| Read-only reports | `scripts/status`, `scripts/job-status`, `scripts/hierarchy`, `scripts/retrieval-traces`, `scripts/telegram-update-probe --status`, `scripts/sprockets-specialist --inventory`, `scripts/cogs-specialist --inventory`, `scripts/memory-specialist --inventory`, `scripts/review-specialist --inventory` | Safe to run during exploration. Empty reports should usually exit successfully and explain that there is nothing to show. |
 | Read-only previews | `scripts/capture-preview`, `scripts/input-adapter-preview`, `scripts/telegram-adapter-preview`, `scripts/retrieval-preview`, `scripts/orchestrator-route`, `scripts/orchestrated-rehearsal`, `scripts/cogs-specialist --carry-preview`, `scripts/cogs-specialist --planning-preview`, `scripts/sprockets-specialist --propose`, `scripts/review-specialist --apply-preview` | Should say "preview" or "without writing" in help text and output. |
 | Benchmarks and probes | `scripts/check`, `scripts/smoke`, `scripts/retrieval-eval`, `scripts/fallback-eval`, `scripts/memory-tool-probe`, `scripts/memory-specialist --benchmark`, `scripts/memory-specialist --cache-coverage` | May use temp files, model calls, API calls, or embedding cache, but should not write the live vault. |
-| Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/agent-message-bus --append`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus paths. Help text should name the target path when practical. |
+| Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/agent-message-bus --append`, `scripts/telegram-update-probe --write-update-json ...`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus paths. Help text should name the target path when practical. |
 | Guarded vault writers | `scripts/carry --apply`, `scripts/nightly`, `scripts/cogs-planning --create`, `scripts/cogs-planning --ensure-current`, `scripts/review` interactive apply/discard flows | Should have a dry-run, preview, report, or source-check path before writes. Validation failures should exit nonzero. |
 | Guarded input writers | `scripts/input-adapter-preview --write --input-dir ...`, `scripts/telegram-adapter-preview --write --input-dir ...` | Writes only `.input` files into an explicitly selected input directory; refuses existing final files. |
 | Service and job controls | `systemctl --user ...`, commands previewed by `scripts/job-supervisor` | `scripts/job-supervisor` remains preview-only; actual service/timer changes happen through explicit system commands. |
@@ -247,6 +249,8 @@ Safety rules:
 Useful example:
 
 ```bash
+scripts/telegram-update-probe --status
+scripts/telegram-update-probe --fetch --limit 5 --write-update-json /tmp/telegram-update.json
 scripts/telegram-adapter-preview --update-json /tmp/telegram-update.json
 ```
 
