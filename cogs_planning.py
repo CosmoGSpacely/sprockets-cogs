@@ -11,6 +11,7 @@ from typing import Sequence
 
 from cogs_naming import (
     annual_filename,
+    apply_daily_rename_plan,
     build_daily_rename_plan,
     monthly_filename,
     planned_note_filenames,
@@ -162,6 +163,26 @@ def format_daily_rename_plan(daily_dir: Path) -> str:
             lines.append(f"- block  {item.source_path.name} -> {item.target_path.name} ({item.reason})")
         else:
             lines.append(f"- skip   {item.source_path.name} ({item.reason})")
+    return "\n".join(lines)
+
+
+def apply_daily_renames(daily_dir: Path) -> str:
+    """Apply reviewed daily renames and format one result per note."""
+    applied = apply_daily_rename_plan(daily_dir)
+    if not applied:
+        return f"No daily notes found in {daily_dir}."
+
+    counts = {
+        "renamed": sum(1 for item in applied if item.status == "rename"),
+        "already-current": sum(1 for item in applied if item.status == "already-current"),
+    }
+    summary = ", ".join(f"{status}: {count}" for status, count in counts.items() if count)
+    lines = [f"Daily rename apply for {daily_dir}", f"Summary: {summary}"]
+    for item in applied:
+        if item.status == "rename":
+            lines.append(f"- renamed {item.source_path.name} -> {item.target_path.name}")
+        else:
+            lines.append(f"- kept    {item.source_path.name} ({item.reason})")
     return "\n".join(lines)
 
 
@@ -449,6 +470,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Preview legacy daily-note renames. Read-only; does not rename files.",
     )
     parser.add_argument(
+        "--daily-rename-apply",
+        action="store_true",
+        help="Rename daily notes from a reviewed ISO-first plan. Refuses blocked items.",
+    )
+    parser.add_argument(
         "--inventory",
         action="store_true",
         help="Report existing Cogs planning-note files. Read-only.",
@@ -510,6 +536,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.daily_rename_plan:
         print(format_daily_rename_plan(Path(args.daily_dir)))
         return
+    if args.daily_rename_apply:
+        print(apply_daily_renames(Path(args.daily_dir)))
+        return
     if args.inventory:
         print(format_inventory(Path(args.cogs_dir)))
         return
@@ -532,7 +561,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
 
     parser.error(
-        "choose --names, --daily-rename-plan, --inventory, --month, --template, "
+        "choose --names, --daily-rename-plan, --daily-rename-apply, --inventory, --month, --template, "
         "--preview-create, --create, or --ensure-current"
     )
 

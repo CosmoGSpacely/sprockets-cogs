@@ -32,10 +32,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   compact post-classification guards.
 - Prompt-appended memory context remains disabled.
 - Nightly Cogs carry is scheduled by a user-level systemd timer.
-- `scripts/cogs-planning` previews Stage 26 naming choices, planning inventory,
-  monthly seven-day calendar grids plus vertical 5WOW tables,
-  weekly/monthly/annual templates, planning-note creation plans, and daily
-  rename plans without writing to the vault.
+- `scripts/cogs-planning` previews planning names, planning inventory, monthly
+  seven-day calendar grids plus vertical 5WOW tables, weekly/monthly/annual
+  templates, planning-note creation plans, and daily rename plans.
 - `scripts/cogs-planning --create ... --kind ...` can create missing planning
   notes and refuses to overwrite existing files.
 - `scripts/cogs-planning --ensure-current` creates the current weekly, monthly,
@@ -83,9 +82,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   through `scripts/cogs-planning`; they are not maintained by the live loop.
 - The nightly timer is now installed and enabled. Prompt-appended memory context
   remains disabled, and planning-note maintenance is still manual/script-driven.
-- ISO-first daily naming is preview-only. Existing daily-note writes still use
-  compatible lookup and preserve current legacy naming unless an ISO-first file
-  already exists.
+- Daily-note writes prefer ISO-first daily names. Compatible lookup still
+  accepts legacy daily names if older vault data is imported later.
 - Current planning notes are expected under the configured vault's
   `Cogs/weekly/`, `Cogs/monthly/`, and `Cogs/annual/` directories. Monthly
   notes put the seven-day `Calendar` grid before the vertical weekday `5WOW`
@@ -113,5 +111,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest local gate passed 511 tests, smoke test, fallback contract, and
+The latest local gate passed 525 tests, smoke test, fallback contract, and
 review count 0.

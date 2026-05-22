@@ -43,6 +43,16 @@ def stage_58_view_notes() -> tuple[ObsidianViewNote, ...]:
     )
 
 
+def stage_59_navigation_notes() -> tuple[ObsidianViewNote, ...]:
+    """Return the reviewed Stage 59 navigation notes that may be refreshed."""
+
+    return tuple(
+        note
+        for note in stage_58_view_notes()
+        if note.relative_path in {Path("HOME.md"), Path("Cogs/cogs-navigation.md")}
+    )
+
+
 def format_view_preview(
     notes: Sequence[ObsidianViewNote],
     *,
@@ -84,6 +94,23 @@ def create_view_notes(
     return tuple(results)
 
 
+def refresh_navigation_notes(
+    notes: Sequence[ObsidianViewNote],
+    *,
+    vault_dir: Path = DEFAULT_VAULT_DIR,
+) -> tuple[ObsidianViewWriteResult, ...]:
+    """Write reviewed navigation notes and report whether each replaced a note."""
+
+    results: list[ObsidianViewWriteResult] = []
+    for note in notes:
+        target_path = note.target_path(vault_dir)
+        status = "updated" if target_path.exists() else "created"
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(note.markdown, encoding="utf-8")
+        results.append(ObsidianViewWriteResult(note, target_path, status))
+    return tuple(results)
+
+
 def format_view_write_result(results: Sequence[ObsidianViewWriteResult]) -> str:
     """Format guarded Stage 58 view-note creation results."""
 
@@ -108,9 +135,6 @@ def _home_note() -> str:
 ## Cogs
 
 - [[Cogs/cogs-navigation|Cogs navigation]]
-- [[Cogs/daily|Daily notes]]
-- [[Cogs/weekly|Weekly notes]]
-- [[Cogs/monthly|Monthly notes]]
 
 ## Sprockets
 
@@ -119,19 +143,9 @@ def _home_note() -> str:
 - [[Sprockets/contacts-index|Contacts]]
 - [[Sprockets/hierarchy-view|Hierarchy]]
 
-## Recent Sprockets
-
-```dataview
-TABLE WITHOUT ID file.link AS Node, node_type AS Type, created AS Created
-FROM "Sprockets"
-WHERE created
-SORT created DESC
-LIMIT 10
-```
-
 ## Review
 
-Jane review surfacing arrives in Stage 60.
+Jane review landing arrives in Stage 60.
 """
 
 
@@ -189,6 +203,48 @@ SORT node_type ASC, title ASC
 def _cogs_navigation_note() -> str:
     return """# Cogs Navigation
 
+## Current Planning
+
+### Today
+
+```dataview
+TABLE WITHOUT ID file.link AS Daily, date AS Date
+FROM "Cogs/daily"
+WHERE node_type = "cogs/daily" AND date = date(today)
+LIMIT 1
+```
+
+### This Week
+
+```dataview
+TABLE WITHOUT ID file.link AS Week, week AS Week
+FROM "Cogs/weekly"
+WHERE node_type = "cogs/weekly" AND week = dateformat(date(today), "kkkk-'W'WW")
+LIMIT 1
+```
+
+### This Month and 5WOW
+
+The current 5WOW planning view lives in the current monthly Cogs note.
+
+```dataview
+TABLE WITHOUT ID file.link AS Month, link(file.path + "#5WOW", "Open 5WOW") AS "5WOW"
+FROM "Cogs/monthly"
+WHERE node_type = "cogs/monthly" AND month = dateformat(date(today), "yyyy-MM")
+LIMIT 1
+```
+
+### Far Horizon
+
+The implemented far-horizon surface is the current annual note for now.
+
+```dataview
+TABLE WITHOUT ID file.link AS Year, year AS Year
+FROM "Cogs/annual"
+WHERE node_type = "cogs/annual" AND string(year) = dateformat(date(today), "yyyy")
+LIMIT 1
+```
+
 ## Periods
 
 - [[Cogs/daily|Daily notes]]
@@ -233,12 +289,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="create missing view notes in --vault-dir and preserve existing notes",
     )
+    parser.add_argument(
+        "--refresh-navigation",
+        action="store_true",
+        help="write the reviewed Stage 59 HOME and Cogs navigation notes in --vault-dir",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     notes = stage_58_view_notes()
+    if args.refresh_navigation:
+        print(format_view_write_result(refresh_navigation_notes(stage_59_navigation_notes(), vault_dir=args.vault_dir)))
+        return
     if args.create:
         print(format_view_write_result(create_view_notes(notes, vault_dir=args.vault_dir)))
         return

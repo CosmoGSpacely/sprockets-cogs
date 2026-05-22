@@ -15,7 +15,7 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
 
             path = vault.ensure_daily_note("2026-05-04", daily_dir)
 
-            self.assertEqual(path.name, "Mon 04 May 2026.md")
+            self.assertEqual(path.name, "2026-05-04 Mon.md")
             text = path.read_text()
             self.assertIn("node_type: cogs/daily", text)
             self.assertIn("date: 2026-05-04", text)

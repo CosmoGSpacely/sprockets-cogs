@@ -184,3 +184,26 @@ def build_daily_rename_plan(
             )
         )
     return plan
+
+
+def apply_daily_rename_plan(
+    daily_dir: Path,
+    target_style: str = "iso-weekday",
+) -> list[DailyRenamePlanItem]:
+    """Apply a collision-free daily rename plan one file at a time."""
+    plan = build_daily_rename_plan(daily_dir, target_style)
+    blocked = [item for item in plan if item.status not in {"rename", "already-current"}]
+    if blocked:
+        reasons = "; ".join(f"{item.source_path.name}: {item.reason}" for item in blocked)
+        raise ValueError(f"Daily rename plan has blocked items: {reasons}")
+
+    applied: list[DailyRenamePlanItem] = []
+    for item in plan:
+        if item.status == "already-current":
+            applied.append(item)
+            continue
+        if item.target_path.exists():
+            raise FileExistsError(f"Daily rename target already exists: {item.target_path}")
+        item.source_path.rename(item.target_path)
+        applied.append(item)
+    return applied

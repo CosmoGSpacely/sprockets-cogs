@@ -60,7 +60,7 @@ def main() -> int:
             agentic_loop.ARCHIVE_DIR / "smoke.input",
             vault_dir / "Sprockets" / "tasks" / "call-alex-about-the-proposal.md",
             vault_dir / "Sprockets" / "contacts" / "alex.md",
-            vault_dir / "Cogs" / "daily" / "Sat 02 May 2026.md",
+            vault_dir / "Cogs" / "daily" / "2026-05-02 Sat.md",
             sc_root / "entity_state.json",
         ]
         missing = [path for path in expected_paths if not path.exists()]

@@ -48,7 +48,7 @@ class Stage26CogsNamingTests(unittest.TestCase):
     def test_build_daily_rename_plan_is_read_only_and_detects_safe_renames(self):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
-            legacy = vault.ensure_daily_note("2026-05-11", daily_dir)
+            legacy = _write_legacy_daily_note(daily_dir, "2026-05-11")
 
             plan = cogs_naming.build_daily_rename_plan(daily_dir)
 
@@ -63,7 +63,7 @@ class Stage26CogsNamingTests(unittest.TestCase):
     def test_build_daily_rename_plan_detects_collisions_and_invalid_notes(self):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
-            vault.ensure_daily_note("2026-05-11", daily_dir)
+            _write_legacy_daily_note(daily_dir, "2026-05-11")
             (daily_dir / "2026-05-11 Mon.md").write_text("---\ndate: 2026-05-11\n---\n")
             (daily_dir / "loose.md").write_text("no date here\n")
 
@@ -85,7 +85,7 @@ class Stage26CogsNamingTests(unittest.TestCase):
     def test_daily_rename_plan_preview_is_readable(self):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)
-            vault.ensure_daily_note("2026-05-11", daily_dir)
+            _write_legacy_daily_note(daily_dir, "2026-05-11")
 
             output = cogs_planning.format_daily_rename_plan(daily_dir)
 
@@ -102,7 +102,7 @@ class Stage26CogsNamingTests(unittest.TestCase):
             weekly_dir.mkdir(parents=True)
             monthly_dir.mkdir(parents=True)
             annual_dir.mkdir(parents=True)
-            vault.ensure_daily_note("2026-05-11", daily_dir)
+            _write_legacy_daily_note(daily_dir, "2026-05-11")
             (weekly_dir / "2026-W20.md").write_text("# Week\n")
             (monthly_dir / "2026-05.md").write_text("# Month\n")
             (annual_dir / "2026.md").write_text("# Year\n")
@@ -116,6 +116,40 @@ class Stage26CogsNamingTests(unittest.TestCase):
             self.assertTrue(inventory.current_monthly_exists)
             self.assertTrue(inventory.current_annual_exists)
             self.assertEqual(inventory.current_5wow_anchor, "2026-05")
+
+    def test_vault_daily_note_path_prefers_iso_first_for_new_daily_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+
+            path = vault.ensure_daily_note("2026-05-11", daily_dir)
+
+            self.assertEqual(path.name, "2026-05-11 Mon.md")
+            self.assertFalse((daily_dir / "Mon 11 May 2026.md").exists())
+
+    def test_daily_rename_apply_renames_reviewed_legacy_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            legacy = _write_legacy_daily_note(daily_dir, "2026-05-11")
+
+            output = cogs_planning.apply_daily_renames(daily_dir)
+
+            target = daily_dir / "2026-05-11 Mon.md"
+            self.assertIn("Summary: renamed: 1", output)
+            self.assertIn("renamed Mon 11 May 2026.md -> 2026-05-11 Mon.md", output)
+            self.assertFalse(legacy.exists())
+            self.assertTrue(target.exists())
+
+    def test_daily_rename_apply_refuses_blocked_plan_before_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            legacy = _write_legacy_daily_note(daily_dir, "2026-05-11")
+            (daily_dir / "loose.md").write_text("no date here\n")
+
+            with self.assertRaisesRegex(ValueError, "blocked items"):
+                cogs_naming.apply_daily_rename_plan(daily_dir)
+
+            self.assertTrue(legacy.exists())
+            self.assertFalse((daily_dir / "2026-05-11 Mon.md").exists())
 
     def test_inventory_preview_reports_missing_current_planning_notes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -315,6 +349,16 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
             self.assertIn(f"exists monthly: {monthly}", results)
             self.assertEqual(monthly.read_text(), "manual\n")
+
+
+def _write_legacy_daily_note(daily_dir: Path, date_iso: str) -> Path:
+    path = cogs_naming.daily_path(date_iso, daily_dir, "legacy")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\nnode_type: cogs/daily\ndate: {date_iso}\ntags: [cogs/daily]\n---\n\n"
+        f"# {cogs_naming.daily_heading(date_iso)}\n\n"
+    )
+    return path
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ class CogsBlock:
 
 
 def daily_note_path(date_iso: str, daily_dir: Path = DEFAULT_DAILY_DIR) -> Path:
-    return preferred_daily_path(date_iso, daily_dir, style="legacy")
+    return preferred_daily_path(date_iso, daily_dir, style="iso-weekday")
 
 
 def ensure_daily_note(date_iso: str, daily_dir: Path = DEFAULT_DAILY_DIR) -> Path:

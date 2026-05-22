@@ -23,6 +23,14 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
             ],
         )
 
+    def test_stage_59_navigation_refresh_scope_is_home_and_cogs_navigation_only(self):
+        notes = obsidian_views.stage_59_navigation_notes()
+
+        self.assertEqual(
+            [str(note.relative_path) for note in notes],
+            ["HOME.md", "Cogs/cogs-navigation.md"],
+        )
+
     def test_preview_shows_target_paths_and_generated_markdown(self):
         notes = obsidian_views.stage_58_view_notes()
         preview = obsidian_views.format_view_preview(notes, vault_dir=Path("/vault"))
@@ -32,14 +40,15 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
         self.assertIn("=== /vault/HOME.md ===", preview)
         self.assertIn('FROM "Sprockets/tasks"', preview)
         self.assertIn('SORT date DESC', preview)
-        self.assertIn("Jane review surfacing arrives in Stage 60.", preview)
+        self.assertIn("Jane review landing arrives in Stage 60.", preview)
 
     def test_home_note_is_stable_navigation_without_templater_tokens(self):
         home = _note_markdown("HOME.md")
 
         self.assertIn("[[Cogs/cogs-navigation|Cogs navigation]]", home)
-        self.assertIn("[[Cogs/daily|Daily notes]]", home)
         self.assertIn("[[Sprockets/hierarchy-view|Hierarchy]]", home)
+        self.assertNotIn("Recent Sprockets", home)
+        self.assertNotIn('FROM "Sprockets"', home)
         self.assertNotIn("tp.date.now", home)
 
     def test_index_notes_use_live_stage_58_field_posture(self):
@@ -66,6 +75,16 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
         self.assertIn('node_type = "cogs/daily" AND date', cogs_navigation)
         self.assertIn("SORT date DESC", cogs_navigation)
         self.assertIn('node_type = "cogs/weekly"', cogs_navigation)
+        self.assertIn("## Current Planning", cogs_navigation)
+        self.assertIn("### Today", cogs_navigation)
+        self.assertIn('date = date(today)', cogs_navigation)
+        self.assertIn("### This Week", cogs_navigation)
+        self.assertIn('week = dateformat(date(today), "kkkk-\'W\'WW")', cogs_navigation)
+        self.assertIn("### This Month and 5WOW", cogs_navigation)
+        self.assertIn('link(file.path + "#5WOW", "Open 5WOW")', cogs_navigation)
+        self.assertIn('month = dateformat(date(today), "yyyy-MM")', cogs_navigation)
+        self.assertIn("### Far Horizon", cogs_navigation)
+        self.assertIn('string(year) = dateformat(date(today), "yyyy")', cogs_navigation)
 
     def test_cli_is_read_only_for_target_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -110,6 +129,39 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
             self.assertIn("- writes: vault", first_stdout.getvalue())
             self.assertIn("- summary: created: 6", first_stdout.getvalue())
             self.assertIn("- summary: exists: 6", second_stdout.getvalue())
+
+    def test_refresh_navigation_notes_replaces_reviewed_navigation_notes_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp) / "vault"
+            home = vault / "HOME.md"
+            tasks = vault / "Sprockets" / "tasks-index.md"
+            home.parent.mkdir(parents=True)
+            tasks.parent.mkdir(parents=True)
+            home.write_text("old home\n", encoding="utf-8")
+            tasks.write_text("manual tasks\n", encoding="utf-8")
+
+            results = obsidian_views.refresh_navigation_notes(
+                obsidian_views.stage_59_navigation_notes(),
+                vault_dir=vault,
+            )
+
+            self.assertEqual([result.status for result in results], ["updated", "created"])
+            self.assertIn("# Sprockets-Cogs Home", home.read_text(encoding="utf-8"))
+            self.assertTrue((vault / "Cogs" / "cogs-navigation.md").exists())
+            self.assertEqual(tasks.read_text(encoding="utf-8"), "manual tasks\n")
+
+    def test_refresh_navigation_cli_reports_reviewed_write_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp) / "vault"
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                obsidian_views.main(["--vault-dir", str(vault), "--refresh-navigation"])
+
+            self.assertIn("- notes: 2", stdout.getvalue())
+            self.assertIn("- summary: created: 2", stdout.getvalue())
+            self.assertTrue((vault / "HOME.md").exists())
+            self.assertFalse((vault / "Sprockets" / "tasks-index.md").exists())
 
 
 def _note_markdown(relative_path: str) -> str:
