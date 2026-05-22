@@ -21,6 +21,15 @@ class ObsidianViewNote:
         return vault_dir / self.relative_path
 
 
+@dataclass(frozen=True)
+class ObsidianViewWriteResult:
+    """Result of one guarded Stage 58 view-note write."""
+
+    note: ObsidianViewNote
+    target_path: Path
+    status: str
+
+
 def stage_58_view_notes() -> tuple[ObsidianViewNote, ...]:
     """Return the first Stage 58 view-note set without touching the vault."""
 
@@ -54,6 +63,43 @@ def format_view_preview(
             note.markdown.rstrip(),
         ])
     return "\n".join(lines).rstrip() + "\n"
+
+
+def create_view_notes(
+    notes: Sequence[ObsidianViewNote],
+    *,
+    vault_dir: Path = DEFAULT_VAULT_DIR,
+) -> tuple[ObsidianViewWriteResult, ...]:
+    """Create missing view notes and preserve existing vault notes."""
+
+    results: list[ObsidianViewWriteResult] = []
+    for note in notes:
+        target_path = note.target_path(vault_dir)
+        if target_path.exists():
+            results.append(ObsidianViewWriteResult(note, target_path, "exists"))
+            continue
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(note.markdown, encoding="utf-8")
+        results.append(ObsidianViewWriteResult(note, target_path, "created"))
+    return tuple(results)
+
+
+def format_view_write_result(results: Sequence[ObsidianViewWriteResult]) -> str:
+    """Format guarded Stage 58 view-note creation results."""
+
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+    summary = ", ".join(f"{status}: {count}" for status, count in sorted(counts.items()))
+    lines = [
+        "Obsidian view-note create",
+        "- writes: vault",
+        f"- notes: {len(results)}",
+        f"- summary: {summary}",
+    ]
+    for result in results:
+        lines.append(f"- {result.status}: {result.target_path}")
+    return "\n".join(lines)
 
 
 def _home_note() -> str:
@@ -182,12 +228,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_VAULT_DIR,
         help="vault path used only to display proposed target note paths",
     )
+    parser.add_argument(
+        "--create",
+        action="store_true",
+        help="create missing view notes in --vault-dir and preserve existing notes",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    print(format_view_preview(stage_58_view_notes(), vault_dir=args.vault_dir), end="")
+    notes = stage_58_view_notes()
+    if args.create:
+        print(format_view_write_result(create_view_notes(notes, vault_dir=args.vault_dir)))
+        return
+    print(format_view_preview(notes, vault_dir=args.vault_dir), end="")
 
 
 if __name__ == "__main__":

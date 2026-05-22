@@ -78,6 +78,39 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
             self.assertIn(str(vault / "HOME.md"), stdout.getvalue())
             self.assertFalse(vault.exists())
 
+    def test_create_view_notes_writes_missing_notes_and_preserves_existing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp) / "vault"
+            home = vault / "HOME.md"
+            home.parent.mkdir(parents=True)
+            home.write_text("manual home\n", encoding="utf-8")
+
+            results = obsidian_views.create_view_notes(
+                obsidian_views.stage_58_view_notes(),
+                vault_dir=vault,
+            )
+
+            self.assertEqual(results[0].status, "exists")
+            self.assertEqual(home.read_text(encoding="utf-8"), "manual home\n")
+            self.assertEqual(results[1].status, "created")
+            self.assertTrue((vault / "Sprockets/tasks-index.md").exists())
+            self.assertTrue((vault / "Cogs/cogs-navigation.md").exists())
+
+    def test_create_cli_reports_created_then_existing_for_idempotent_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp) / "vault"
+            first_stdout = StringIO()
+            second_stdout = StringIO()
+
+            with redirect_stdout(first_stdout):
+                obsidian_views.main(["--vault-dir", str(vault), "--create"])
+            with redirect_stdout(second_stdout):
+                obsidian_views.main(["--vault-dir", str(vault), "--create"])
+
+            self.assertIn("- writes: vault", first_stdout.getvalue())
+            self.assertIn("- summary: created: 6", first_stdout.getvalue())
+            self.assertIn("- summary: exists: 6", second_stdout.getvalue())
+
 
 def _note_markdown(relative_path: str) -> str:
     return {
