@@ -34,6 +34,39 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
         self.assertIn('SORT date DESC', preview)
         self.assertIn("Jane review surfacing arrives in Stage 60.", preview)
 
+    def test_home_note_is_stable_navigation_without_templater_tokens(self):
+        home = _note_markdown("HOME.md")
+
+        self.assertIn("[[Cogs/cogs-navigation|Cogs navigation]]", home)
+        self.assertIn("[[Cogs/daily|Daily notes]]", home)
+        self.assertIn("[[Sprockets/hierarchy-view|Hierarchy]]", home)
+        self.assertNotIn("tp.date.now", home)
+
+    def test_index_notes_use_live_stage_58_field_posture(self):
+        task_index = _note_markdown("Sprockets/tasks-index.md")
+        projects_index = _note_markdown("Sprockets/projects-index.md")
+        contacts_index = _note_markdown("Sprockets/contacts-index.md")
+
+        self.assertIn('node_type = "sprockets/task"', task_index)
+        self.assertIn('status != "complete"', task_index)
+        self.assertIn("parent AS Parent", task_index)
+        self.assertNotIn("area AS Area", task_index)
+        self.assertIn('node_type = "sprockets/project"', projects_index)
+        self.assertNotIn("status = \"active\"", projects_index)
+        self.assertIn('node_type = "sprockets/contact"', contacts_index)
+        self.assertIn("SORT title ASC", contacts_index)
+
+    def test_hierarchy_and_cogs_notes_keep_safe_first_shape(self):
+        hierarchy = _note_markdown("Sprockets/hierarchy-view.md")
+        cogs_navigation = _note_markdown("Cogs/cogs-navigation.md")
+
+        self.assertIn("flat and parent-aware", hierarchy)
+        self.assertIn("parent AS Parent", hierarchy)
+        self.assertNotIn("dataviewjs", hierarchy)
+        self.assertIn('node_type = "cogs/daily" AND date', cogs_navigation)
+        self.assertIn("SORT date DESC", cogs_navigation)
+        self.assertIn('node_type = "cogs/weekly"', cogs_navigation)
+
     def test_cli_is_read_only_for_target_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp) / "vault"
@@ -44,6 +77,13 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
 
             self.assertIn(str(vault / "HOME.md"), stdout.getvalue())
             self.assertFalse(vault.exists())
+
+
+def _note_markdown(relative_path: str) -> str:
+    return {
+        str(note.relative_path): note.markdown
+        for note in obsidian_views.stage_58_view_notes()
+    }[relative_path]
 
 
 if __name__ == "__main__":

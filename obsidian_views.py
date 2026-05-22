@@ -59,14 +59,12 @@ def format_view_preview(
 def _home_note() -> str:
     return """# Sprockets-Cogs Home
 
-Today: <% tp.date.now("YYYY-MM-DD") %>
-
 ## Cogs
 
-- [[Cogs/daily/<% tp.date.now("ddd DD MMM YYYY") %>|Today's daily note]]
-- [[Cogs/weekly/<% tp.date.now("GGGG-[W]WW") %>|This week]]
-- [[Cogs/monthly/<% tp.date.now("YYYY-MM") %>|This month]]
 - [[Cogs/cogs-navigation|Cogs navigation]]
+- [[Cogs/daily|Daily notes]]
+- [[Cogs/weekly|Weekly notes]]
+- [[Cogs/monthly|Monthly notes]]
 
 ## Sprockets
 
