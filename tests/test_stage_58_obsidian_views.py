@@ -20,6 +20,7 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
                 "Sprockets/contacts-index.md",
                 "Sprockets/hierarchy-view.md",
                 "Cogs/cogs-navigation.md",
+                "REVIEW.md",
             ],
         )
 
@@ -40,13 +41,14 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
         self.assertIn("=== /vault/HOME.md ===", preview)
         self.assertIn('FROM "Sprockets/tasks"', preview)
         self.assertIn('SORT date DESC', preview)
-        self.assertIn("Jane review landing arrives in Stage 60.", preview)
+        self.assertIn('FROM "review"', preview)
 
     def test_home_note_is_stable_navigation_without_templater_tokens(self):
         home = _note_markdown("HOME.md")
 
         self.assertIn("[[Cogs/cogs-navigation|Cogs navigation]]", home)
         self.assertIn("[[Sprockets/hierarchy-view|Hierarchy]]", home)
+        self.assertIn("[[REVIEW|Jane review]]", home)
         self.assertNotIn("Recent Sprockets", home)
         self.assertNotIn('FROM "Sprockets"', home)
         self.assertNotIn("tp.date.now", home)
@@ -64,6 +66,14 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
         self.assertNotIn("status = \"active\"", projects_index)
         self.assertIn('node_type = "sprockets/contact"', contacts_index)
         self.assertIn("SORT title ASC", contacts_index)
+
+    def test_review_landing_stays_outside_queue_and_surfaces_pending_review_notes(self):
+        review_landing = _note_markdown("REVIEW.md")
+
+        self.assertIn("# Jane Review", review_landing)
+        self.assertIn('FROM "review"', review_landing)
+        self.assertIn('node_type = "review" AND reviewed = false', review_landing)
+        self.assertNotIn("scripts/review` for approve", review_landing)
 
     def test_hierarchy_and_cogs_notes_keep_safe_first_shape(self):
         hierarchy = _note_markdown("Sprockets/hierarchy-view.md")
@@ -127,8 +137,8 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
                 obsidian_views.main(["--vault-dir", str(vault), "--create"])
 
             self.assertIn("- writes: vault", first_stdout.getvalue())
-            self.assertIn("- summary: created: 6", first_stdout.getvalue())
-            self.assertIn("- summary: exists: 6", second_stdout.getvalue())
+            self.assertIn("- summary: created: 7", first_stdout.getvalue())
+            self.assertIn("- summary: exists: 7", second_stdout.getvalue())
 
     def test_refresh_navigation_notes_replaces_reviewed_navigation_notes_only(self):
         with tempfile.TemporaryDirectory() as tmp:

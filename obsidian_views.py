@@ -40,6 +40,7 @@ def stage_58_view_notes() -> tuple[ObsidianViewNote, ...]:
         ObsidianViewNote(Path("Sprockets/contacts-index.md"), _contacts_index_note()),
         ObsidianViewNote(Path("Sprockets/hierarchy-view.md"), _hierarchy_view_note()),
         ObsidianViewNote(Path("Cogs/cogs-navigation.md"), _cogs_navigation_note()),
+        ObsidianViewNote(Path("REVIEW.md"), _review_landing_note()),
     )
 
 
@@ -145,7 +146,7 @@ def _home_note() -> str:
 
 ## Review
 
-Jane review landing arrives in Stage 60.
+- [[REVIEW|Jane review]]
 """
 
 
@@ -271,6 +272,25 @@ WHERE node_type = "cogs/weekly"
 SORT week DESC
 LIMIT 7
 ```
+"""
+
+
+def _review_landing_note() -> str:
+    return """# Jane Review
+
+This landing page surfaces the canonical `review/` queue in Obsidian.
+
+```dataview
+TABLE WITHOUT ID file.link AS Item, created AS Created
+FROM "review"
+WHERE node_type = "review" AND reviewed = false
+SORT created ASC, file.name ASC
+```
+
+## Review Boundary
+
+Jane keeps uncertain output review-first. Current decisions still run through
+the guarded review tools until Stage 60 packet decisions are promoted.
 """
 
 
