@@ -32,6 +32,17 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
             self.assertFalse(appended)
             self.assertEqual(path.read_text().count("Call Alex"), 1)
 
+    def test_append_cogs_item_text_separates_from_non_newline_terminated_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            path = vault.ensure_daily_note("2026-05-04", daily_dir)
+            path.write_text(path.read_text() + "- [>] Existing item")
+
+            appended = vault.append_cogs_item_text("2026-05-04", "New item", daily_dir)
+
+            self.assertTrue(appended)
+            self.assertIn("- [>] Existing item\n- [ ] New item\n", path.read_text())
+
     def test_parse_cogs_blocks_keeps_child_lines_with_parent(self):
         content = (
             "---\n---\n\n"

@@ -641,11 +641,19 @@ class Stage135HardeningTests(unittest.TestCase):
 
             packet = review.review_packet_markdown(review_dir)
 
+            self.assertTrue(packet.startswith("---\ntype: review-packet\nstatus: pending\n"))
+            self.assertIn("item_count: 1", packet)
+            self.assertIn("queue_fingerprint:", packet)
+            self.assertIn("review_files:\n  - pending.md", packet)
             self.assertIn("# Sprockets-Cogs Review Packet", packet)
             self.assertIn("Preview only", packet)
             self.assertIn("- Total: 1", packet)
             self.assertIn("| File | Source | Type | Confidence | Date | Title | Reason |", packet)
             self.assertIn("| pending.md | local low confidence | sprockets/task | low | 2026-05-02 | Review markdown packet | confidence: low |", packet)
+            self.assertIn("## Proposed Changes", packet)
+            self.assertIn("### `pending.md`", packet)
+            self.assertIn("- Proposed node: `sprockets/task`", packet)
+            self.assertIn("- Item text: Review markdown packet", packet)
             self.assertNotIn(str(review_dir), packet)
             self.assertNotIn("```json", packet)
 
@@ -653,6 +661,7 @@ class Stage135HardeningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             packet = review.review_packet_markdown(Path(tmp))
 
+            self.assertIn("item_count: 0", packet)
             self.assertIn("- Total: 0", packet)
             self.assertIn("No pending review items.", packet)
 

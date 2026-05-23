@@ -11,6 +11,7 @@ For each file in vault/review/, shows the reason and node data, then prompts:
 """
 
 import json
+import hashlib
 import re
 import shutil
 import sys
@@ -117,15 +118,71 @@ def _markdown_cell(value: object, limit: int = 80) -> str:
     return text.replace("|", "\\|")
 
 
+def review_queue_fingerprint(review_dir: Path = REVIEW_DIR) -> str:
+    """Return a stable fingerprint of pending review-file names and contents."""
+
+    digest = hashlib.sha256()
+    for path in _review_files(review_dir):
+        digest.update(path.name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _packet_frontmatter(review_dir: Path, report: dict, items: list[dict]) -> list[str]:
+    """Return the review-packet preview frontmatter contract."""
+
+    lines = [
+        "---",
+        "type: review-packet",
+        "status: pending",
+        "queue: review",
+        f"item_count: {report['total']}",
+        f"parseable_count: {report['parseable']}",
+        f"unparseable_count: {report['unparseable']}",
+        f"queue_fingerprint: {review_queue_fingerprint(review_dir)}",
+    ]
+    if items:
+        lines.append("review_files:")
+        lines.extend(f"  - {item['file']}" for item in items)
+    else:
+        lines.append("review_files: []")
+    lines.extend([
+        "---",
+        "",
+    ])
+    return lines
+
+
+def _packet_item_section(item: dict) -> list[str]:
+    """Return one human-readable bounded proposed-change section."""
+
+    parse_note = " [UNPARSEABLE]" if not item["parseable"] else ""
+    lines = [
+        f"### `{_shorten(item['file'], 80)}`{parse_note}",
+        "",
+        f"- Source: {_shorten(item['source'], 80)}",
+        f"- Proposed node: `{_shorten(item['node_type'], 48)}`",
+        f"- Title: {_shorten(item['title'], 120)}",
+        f"- Item text: {_shorten(item['item_text'], 160)}",
+        f"- Date: {_shorten(item['date'], 48)}",
+        f"- Confidence: {_shorten(item['confidence'], 48)}",
+        f"- Review reason: {_shorten(item['reason'], 180)}",
+        "",
+    ]
+    return lines
+
+
 def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
     items = list_pending(review_dir)
     report = review_report(review_dir)
-    lines = [
+    lines = _packet_frontmatter(review_dir, report, items) + [
         "# Sprockets-Cogs Review Packet",
         "",
-        "> Preview only. Generated from the canonical review queue. Do not edit",
-        "> this packet as a source of truth; approve/discard/skip through",
-        "> `scripts/review` until a guarded decision import exists.",
+        "> Preview only. Generated from the canonical review queue. Edit",
+        "> frontmatter `status` only when using Jane's packet decision import",
+        "> preview; the packet does not apply changes by itself.",
         "",
         "## Summary",
         "",
@@ -160,6 +217,12 @@ def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
             + " |"
         )
     lines.append("")
+    lines.extend([
+        "## Proposed Changes",
+        "",
+    ])
+    for item in items:
+        lines.extend(_packet_item_section(item))
     lines.extend([
         "## Review Commands",
         "",

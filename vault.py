@@ -53,6 +53,8 @@ def append_cogs_item_text(
     if any(f"{state} {item_text}" in existing for state in ["- [ ]", "- [x]", "- [>]", "- [-]"]):
         return False
     with note_path.open("a") as f:
+        if existing and not existing.endswith("\n"):
+            f.write("\n")
         f.write(f"- [ ] {item_text}\n")
     return True
 

@@ -1,22 +1,29 @@
-"""Review specialist facade for Phase 4 orchestration.
+"""Review specialist facade for Jane review operations.
 
-Stage 42A keeps this boundary read-only. It wraps the existing review queue
-reporting and packet preview behavior without replacing `scripts/review` or
-adding decision import/apply behavior.
+Most Jane commands preview inventory, packets, and decision effects. The packet
+apply path stays explicit and source-checked for approved packet decisions.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import shutil
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
 
+import agentic_loop
+import frontmatter
 import review
 from models import validate_node
 
 SC_ROOT_ENV = "SPROCKETS_COGS_SC_ROOT"
 DEFAULT_REVIEW_PACKET_PATH = Path(os.environ.get(SC_ROOT_ENV, str(Path.home() / "sc"))) / "output" / "review-packet.md"
+DEFAULT_REVIEW_APPLY_AUDIT_PATH = (
+    Path(os.environ.get(SC_ROOT_ENV, str(Path.home() / "sc"))) / "output" / "review-apply-audit.jsonl"
+)
 
 
 @dataclass(frozen=True)
@@ -25,6 +32,8 @@ class ReviewSpecialistConfig:
 
     review_dir: Path = review.REVIEW_DIR
     packet_path: Path = DEFAULT_REVIEW_PACKET_PATH
+    archive_dir: Path = agentic_loop.ARCHIVE_DIR
+    audit_path: Path = DEFAULT_REVIEW_APPLY_AUDIT_PATH
 
 
 @dataclass(frozen=True)
@@ -100,6 +109,18 @@ class ReviewPacketWriteResult:
     bytes_written: int
 
 
+@dataclass(frozen=True)
+class ReviewPacketApplyResult:
+    """Result of an explicitly confirmed Jane packet apply."""
+
+    review_dir: Path
+    packet_path: Path
+    archive_dir: Path
+    audit_path: Path
+    approved_files: tuple[str, ...]
+    audit_record: dict[str, Any]
+
+
 class ReviewSpecialist:
     """Facade for human review reports and packet previews."""
 
@@ -159,6 +180,72 @@ class ReviewSpecialist:
             invalid_count=sum(1 for row in checked if not row.valid),
         )
 
+    def packet_decision_import_preview(self, packet_path: Path) -> ReviewDecisionImportPreview:
+        """Parse packet frontmatter status after source-checking the queue."""
+
+        rows = packet_decision_rows(packet_path, self.config.review_dir)
+        return ReviewDecisionImportPreview(
+            review_dir=self.config.review_dir,
+            packet_path=packet_path,
+            rows=rows,
+            actionable_count=sum(1 for row in rows if row.valid and row.decision in VALID_REVIEW_DECISIONS),
+            pending_count=sum(1 for row in rows if row.valid and row.decision == "pending"),
+            invalid_count=sum(1 for row in rows if not row.valid),
+        )
+
+    def packet_apply_preview(self, packet_path: Path) -> ReviewDecisionApplyPreview:
+        """Preview guarded effects from a source-checked review packet."""
+
+        import_preview = self.packet_decision_import_preview(packet_path)
+        actions = tuple(_packet_apply_action(row, self.config) for row in import_preview.rows)
+        return _apply_preview_from_actions(self.config.review_dir, packet_path, actions)
+
+    def apply_approved_packet(self, packet_path: Path, *, confirm: bool = False) -> ReviewPacketApplyResult:
+        """Apply an explicitly confirmed source-checked packet with audit."""
+
+        if not confirm:
+            raise ValueError("packet apply requires explicit confirmation")
+        packet = frontmatter.load(str(packet_path))
+        if packet.get("status") != "approved":
+            raise ValueError("packet status must be approved for apply")
+
+        preview = self.packet_apply_preview(packet_path)
+        if preview.rejected_count:
+            issues = "; ".join(action.issue for action in preview.actions if action.issue)
+            raise ValueError(f"packet apply rejected: {issues}")
+        if preview.approve_count == 0:
+            raise ValueError("packet apply found no approved review items")
+        if preview.discard_count or preview.skip_count or preview.pending_count:
+            raise ValueError("packet apply only accepts approved packet actions")
+
+        approved_files: list[str] = []
+        for action in preview.actions:
+            review_path = self.config.review_dir / action.file
+            raw = _approval_raw(review_path)
+            node = validate_node({**raw, "confidence": "high"})
+            review.write_node(node)
+            _archive_review_file(review_path, self.config.archive_dir)
+            approved_files.append(action.file)
+
+        audit_record = append_review_apply_audit(
+            packet_path=packet_path,
+            review_dir=self.config.review_dir,
+            approved_files=tuple(approved_files),
+            audit_path=self.config.audit_path,
+        )
+        packet["status"] = "applied"
+        packet["applied_at"] = audit_record["created_at"]
+        packet["audit_path"] = str(self.config.audit_path)
+        packet_path.write_text(frontmatter.dumps(packet), encoding="utf-8")
+        return ReviewPacketApplyResult(
+            review_dir=self.config.review_dir,
+            packet_path=packet_path,
+            archive_dir=self.config.archive_dir,
+            audit_path=self.config.audit_path,
+            approved_files=tuple(approved_files),
+            audit_record=audit_record,
+        )
+
     def decision_apply_preview(self, packet_path: Path) -> ReviewDecisionApplyPreview:
         """Preview guarded decision effects without applying them."""
 
@@ -193,16 +280,7 @@ class ReviewSpecialist:
             elif row.decision == "skip":
                 actions.append(_action_from_row(row, effect="skip"))
 
-        return ReviewDecisionApplyPreview(
-            review_dir=self.config.review_dir,
-            packet_path=packet_path,
-            actions=tuple(actions),
-            approve_count=sum(1 for action in actions if action.effect == "approve"),
-            discard_count=sum(1 for action in actions if action.effect == "discard"),
-            skip_count=sum(1 for action in actions if action.effect == "skip"),
-            pending_count=sum(1 for action in actions if action.effect == "pending"),
-            rejected_count=sum(1 for action in actions if action.effect == "reject"),
-        )
+        return _apply_preview_from_actions(self.config.review_dir, packet_path, tuple(actions))
 
     def operational_packet_markdown(self) -> str:
         """Return the complete operational packet intended for file output."""
@@ -214,14 +292,38 @@ class ReviewSpecialist:
 
         destination = packet_path or self.config.packet_path
         content = self.operational_packet_markdown()
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(content, encoding="utf-8")
-        return ReviewPacketWriteResult(
+        return _write_packet_content(
             review_dir=self.config.review_dir,
-            packet_path=destination,
-            item_count=len(review.list_pending(self.config.review_dir)),
-            bytes_written=len(content.encode("utf-8")),
+            destination=destination,
+            content=content,
         )
+
+    def write_review_packet(self, packet_path: Path | None = None) -> ReviewPacketWriteResult:
+        """Write the importable Jane review packet outside the vault."""
+
+        destination = packet_path or self.config.packet_path
+        content = self.packet_preview()
+        return _write_packet_content(
+            review_dir=self.config.review_dir,
+            destination=destination,
+            content=content,
+        )
+
+
+def _write_packet_content(
+    *,
+    review_dir: Path,
+    destination: Path,
+    content: str,
+) -> ReviewPacketWriteResult:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(content, encoding="utf-8")
+    return ReviewPacketWriteResult(
+        review_dir=review_dir,
+        packet_path=destination,
+        item_count=len(review.list_pending(review_dir)),
+        bytes_written=len(content.encode("utf-8")),
+    )
 
 
 def _int(value: object) -> int:
@@ -235,6 +337,48 @@ def _dict_str_int(value: object) -> dict[str, int]:
 
 
 VALID_REVIEW_DECISIONS = {"approve", "discard", "skip"}
+PACKET_STATUS_DECISIONS = {
+    "pending": "pending",
+    "approved": "approve",
+    "rejected": "discard",
+    "deferred": "skip",
+}
+
+
+def _apply_preview_from_actions(
+    review_dir: Path,
+    packet_path: Path,
+    actions: tuple[ReviewDecisionApplyAction, ...],
+) -> ReviewDecisionApplyPreview:
+    return ReviewDecisionApplyPreview(
+        review_dir=review_dir,
+        packet_path=packet_path,
+        actions=actions,
+        approve_count=sum(1 for action in actions if action.effect == "approve"),
+        discard_count=sum(1 for action in actions if action.effect == "discard"),
+        skip_count=sum(1 for action in actions if action.effect == "skip"),
+        pending_count=sum(1 for action in actions if action.effect == "pending"),
+        rejected_count=sum(1 for action in actions if action.effect == "reject"),
+    )
+
+
+def _packet_apply_action(
+    row: ReviewDecisionRow,
+    config: ReviewSpecialistConfig,
+) -> ReviewDecisionApplyAction:
+    if not row.valid:
+        return _action_from_row(row, effect="reject", valid=False, issue=row.issue)
+    if row.decision != "approve":
+        effect = "pending" if row.decision == "pending" else row.decision
+        return _action_from_row(row, effect=effect)
+    review_path = config.review_dir / row.file
+    issue = _approval_preview_issue(review_path) or _approval_collision_issue(review_path)
+    if issue:
+        return _action_from_row(row, effect="reject", valid=False, issue=issue)
+    archive_path = config.archive_dir / row.file
+    if archive_path.exists():
+        return _action_from_row(row, effect="reject", valid=False, issue="review archive file already exists")
+    return _action_from_row(row, effect="approve")
 
 
 def _replace_row(
@@ -283,6 +427,63 @@ def _approval_preview_issue(path: Path) -> str:
     except Exception as exc:
         return f"approval would fail validation: {exc}"
     return ""
+
+
+def _approval_raw(path: Path) -> dict[str, Any]:
+    raw = review._extract_json(path.read_text(encoding="utf-8"))
+    if not raw:
+        raise ValueError(f"review item is unparseable: {path.name}")
+    return dict(raw)
+
+
+def _approval_collision_issue(path: Path) -> str:
+    raw = _approval_raw(path)
+    node = validate_node({**raw, "confidence": "high"})
+    folder = agentic_loop.SPROCKETS_FOLDERS.get(node.node_type)
+    if folder is None:
+        return ""
+    duplicate = agentic_loop._find_duplicate(node.title, folder)
+    if duplicate is not None:
+        return f"approval would collide with existing node: {duplicate.name}"
+    return ""
+
+
+def _archive_review_file(path: Path, archive_dir: Path) -> Path:
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    destination = archive_dir / path.name
+    if destination.exists():
+        raise ValueError(f"review archive file already exists: {destination.name}")
+    shutil.move(str(path), destination)
+    return destination
+
+
+def append_review_apply_audit(
+    *,
+    packet_path: Path,
+    review_dir: Path,
+    approved_files: tuple[str, ...],
+    audit_path: Path,
+    created_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Append one JSONL record for a successful Jane packet apply."""
+
+    timestamp = (
+        created_at.astimezone().isoformat(timespec="seconds")
+        if created_at is not None
+        else datetime.now().astimezone().isoformat(timespec="seconds")
+    )
+    record: dict[str, Any] = {
+        "schema_version": 1,
+        "created_at": timestamp,
+        "packet_path": str(packet_path),
+        "review_dir": str(review_dir),
+        "decision": "approved",
+        "approved_files": list(approved_files),
+    }
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+    with audit_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True) + "\n")
+    return record
 
 
 def _format_counter(label: str, values: dict[str, int]) -> list[str]:
@@ -387,6 +588,46 @@ def review_operational_packet_markdown(review_dir: Path = review.REVIEW_DIR) -> 
             review_decision_template(review_dir),
         ]
     )
+
+
+def packet_decision_rows(packet_path: Path, review_dir: Path = review.REVIEW_DIR) -> tuple[ReviewDecisionRow, ...]:
+    """Build decision rows from a source-checked review packet frontmatter."""
+
+    try:
+        post = frontmatter.load(str(packet_path))
+    except OSError as exc:
+        return (_packet_error(f"cannot read packet: {exc}"),)
+    if post.get("type") != "review-packet":
+        return (_packet_error("packet type must be review-packet"),)
+    if post.get("queue") != "review":
+        return (_packet_error("packet queue must be review"),)
+
+    status = str(post.get("status", "")).strip().lower()
+    if status not in PACKET_STATUS_DECISIONS:
+        return (_packet_error("packet status must be pending, approved, rejected, or deferred"),)
+
+    review_files = post.get("review_files")
+    if not isinstance(review_files, list) or not all(isinstance(name, str) and name for name in review_files):
+        return (_packet_error("packet review_files must be a list of review filenames"),)
+
+    queue_items = review.list_pending(review_dir)
+    queue_files = [item["file"] for item in queue_items]
+    if review_files != queue_files:
+        return (_packet_error("packet review_files do not match the current review queue"),)
+    if post.get("item_count") != len(queue_items):
+        return (_packet_error("packet item_count does not match the current review queue"),)
+    if post.get("queue_fingerprint") != review.review_queue_fingerprint(review_dir):
+        return (_packet_error("packet queue_fingerprint does not match current review files"),)
+
+    decision = PACKET_STATUS_DECISIONS[status]
+    return tuple(
+        ReviewDecisionRow(file=file_name, decision=decision, notes=f"packet status: {status}")
+        for file_name in review_files
+    )
+
+
+def _packet_error(issue: str) -> ReviewDecisionRow:
+    return ReviewDecisionRow(file="(packet)", decision="", valid=False, issue=issue)
 
 
 def parse_review_decision_template(markdown: str) -> tuple[ReviewDecisionRow, ...]:
@@ -525,6 +766,24 @@ def format_decision_apply_preview(preview: ReviewDecisionApplyPreview) -> str:
     return "\n".join(lines)
 
 
+def format_packet_apply_result(result: ReviewPacketApplyResult) -> str:
+    """Format an explicitly confirmed packet apply."""
+
+    lines = [
+        "Review specialist approved packet apply",
+        f"- review dir: {result.review_dir}",
+        f"- packet: {result.packet_path}",
+        f"- archived review items: {len(result.approved_files)}",
+        f"- review archive: {result.archive_dir}",
+        f"- audit JSONL: {result.audit_path}",
+        "- packet status: applied",
+        "- vault writes: yes",
+        "- review queue writes: yes",
+    ]
+    lines.extend(f"- approved: {file_name}" for file_name in result.approved_files)
+    return "\n".join(lines)
+
+
 def format_packet_write_result(result: ReviewPacketWriteResult) -> str:
     """Format an operational packet write result."""
 
@@ -542,7 +801,7 @@ def format_packet_write_result(result: ReviewPacketWriteResult) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Read-only Review specialist preview.")
+    parser = argparse.ArgumentParser(description="Jane review specialist preview and guarded packet apply.")
     parser.add_argument(
         "--review-dir",
         type=Path,
@@ -555,19 +814,47 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_REVIEW_PACKET_PATH,
         help="Operational review packet path. Defaults to SPROCKETS_COGS_SC_ROOT/output/review-packet.md.",
     )
+    parser.add_argument(
+        "--archive-dir",
+        type=Path,
+        default=agentic_loop.ARCHIVE_DIR,
+        help="Review archive directory for confirmed packet apply. Defaults to SC archive/.",
+    )
+    parser.add_argument(
+        "--audit-path",
+        type=Path,
+        default=DEFAULT_REVIEW_APPLY_AUDIT_PATH,
+        help="JSONL audit path for confirmed packet apply. Defaults under SC output/.",
+    )
+    parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Confirm --packet-apply write effects after previewing an approved packet.",
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--inventory", action="store_true", help="Preview review queue summary without writing.")
     mode.add_argument("--list", action="store_true", help="Preview review queue items without writing.")
     mode.add_argument("--packet-preview", action="store_true", help="Preview Obsidian review packet without writing.")
     mode.add_argument("--decision-template", action="store_true", help="Print an editable review decision template without writing.")
     mode.add_argument("--decision-import-preview", type=Path, metavar="PATH", help="Parse a filled decision template without applying it.")
+    mode.add_argument("--packet-import-preview", type=Path, metavar="PATH", help="Parse packet frontmatter status after source checks without applying it.")
+    mode.add_argument("--packet-apply-preview", type=Path, metavar="PATH", help="Preview guarded packet apply from packet frontmatter without writing.")
+    mode.add_argument("--packet-apply", type=Path, metavar="PATH", help="Apply a source-checked approved packet only with --confirm.")
     mode.add_argument("--apply-preview", type=Path, metavar="PATH", help="Preview guarded decision effects without applying them.")
     mode.add_argument("--write-packet", action="store_true", help="Regenerate the operational review packet outside the vault. Writes only --packet-path.")
+    mode.add_argument("--write-review-packet", action="store_true", help="Regenerate the importable Jane review packet outside the vault. Writes only --packet-path.")
     return parser
 
 
 def specialist_from_args(args: argparse.Namespace) -> ReviewSpecialist:
-    return ReviewSpecialist(ReviewSpecialistConfig(review_dir=args.review_dir, packet_path=args.packet_path))
+    return ReviewSpecialist(
+        ReviewSpecialistConfig(
+            review_dir=args.review_dir,
+            packet_path=args.packet_path,
+            archive_dir=args.archive_dir,
+            audit_path=args.audit_path,
+        )
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -585,10 +872,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(format_decision_template(specialist.decision_template()))
     elif args.decision_import_preview:
         print(format_decision_import_preview(specialist.decision_import_preview(args.decision_import_preview)))
+    elif args.packet_import_preview:
+        print(format_decision_import_preview(specialist.packet_decision_import_preview(args.packet_import_preview)))
+    elif args.packet_apply_preview:
+        print(format_decision_apply_preview(specialist.packet_apply_preview(args.packet_apply_preview)))
+    elif args.packet_apply:
+        if not args.confirm:
+            parser.error("--packet-apply requires --confirm")
+        print(format_packet_apply_result(specialist.apply_approved_packet(args.packet_apply, confirm=args.confirm)))
     elif args.apply_preview:
         print(format_decision_apply_preview(specialist.decision_apply_preview(args.apply_preview)))
     elif args.write_packet:
         print(format_packet_write_result(specialist.write_operational_packet()))
+    elif args.write_review_packet:
+        print(format_packet_write_result(specialist.write_review_packet()))
 
 
 if __name__ == "__main__":

@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
+import frontmatter
 import review_specialist
 
 
@@ -196,6 +198,99 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("- actionable: 1", output)
             self.assertIn("- writes: no", output)
 
+    def test_packet_decision_import_preview_source_checks_frontmatter_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Packet status",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+            packet = root / "packet.md"
+            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+
+            preview = specialist.packet_decision_import_preview(packet)
+
+            self.assertEqual(preview.actionable_count, 1)
+            self.assertEqual(preview.invalid_count, 0)
+            self.assertEqual(preview.rows[0].file, "pending.md")
+            self.assertEqual(preview.rows[0].decision, "approve")
+            self.assertTrue((review_dir / "pending.md").exists())
+
+    def test_packet_decision_import_preview_rejects_stale_queue_fingerprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            pending = review_dir / "pending.md"
+            _write_review_file(
+                pending,
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Packet fingerprint",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+            packet = root / "packet.md"
+            packet.write_text(specialist.packet_preview().replace("status: pending", "status: rejected"))
+            pending.write_text(pending.read_text() + "\nchanged after packet\n")
+
+            preview = specialist.packet_decision_import_preview(packet)
+
+            self.assertEqual(preview.actionable_count, 0)
+            self.assertEqual(preview.invalid_count, 1)
+            self.assertIn("fingerprint", preview.rows[0].issue)
+
+    def test_main_prints_packet_decision_import_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Packet CLI",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+            packet = root / "packet.md"
+            packet.write_text(specialist.packet_preview().replace("status: pending", "status: deferred"))
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                review_specialist.main(
+                    [
+                        "--review-dir",
+                        str(review_dir),
+                        "--packet-import-preview",
+                        str(packet),
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Review specialist decision import preview", output)
+            self.assertIn("- actionable: 1", output)
+            self.assertIn("- pending.md: skip (ok)", output)
+            self.assertIn("- writes: no", output)
+
     def test_operational_packet_combines_queue_preview_and_decision_template(self):
         with tempfile.TemporaryDirectory() as tmp:
             review_dir = Path(tmp)
@@ -274,6 +369,62 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("Review specialist packet write", output)
             self.assertIn("- vault writes: no", output)
             self.assertTrue(packet_path.exists())
+
+    def test_write_review_packet_creates_importable_frontmatter_packet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            packet_path = root / "output" / "review-packet.md"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "cogs/daily",
+                    "item_text": "Importable review packet",
+                    "date": "2026-05-23",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(
+                    review_dir=review_dir,
+                    packet_path=packet_path,
+                )
+            )
+
+            result = specialist.write_review_packet()
+            preview = specialist.packet_decision_import_preview(packet_path)
+
+            self.assertEqual(result.packet_path, packet_path)
+            self.assertTrue(packet_path.read_text().startswith("---\ntype: review-packet\n"))
+            self.assertEqual(preview.invalid_count, 0)
+            self.assertEqual(preview.pending_count, 1)
+            self.assertNotIn("# Sprockets-Cogs Review Operations Packet", packet_path.read_text())
+
+    def test_main_writes_importable_review_packet_to_configured_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            packet_path = root / "output" / "review-packet.md"
+            review_dir.mkdir()
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                review_specialist.main(
+                    [
+                        "--review-dir",
+                        str(review_dir),
+                        "--packet-path",
+                        str(packet_path),
+                        "--write-review-packet",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Review specialist packet write", output)
+            self.assertTrue(packet_path.exists())
+            self.assertTrue(packet_path.read_text().startswith("---\ntype: review-packet\n"))
 
     def test_decision_apply_preview_groups_guarded_effects_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -384,6 +535,149 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("Review specialist guarded apply preview", output)
             self.assertIn("- would approve: 1", output)
             self.assertIn("- vault writes: no", output)
+
+    def test_packet_apply_requires_explicit_confirmation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "pending.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "cogs/daily",
+                    "item_text": "Confirm Jane packet apply",
+                    "date": "2026-05-22",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+            packet = root / "packet.md"
+            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+
+            with self.assertRaisesRegex(ValueError, "explicit confirmation"):
+                specialist.apply_approved_packet(packet)
+
+            self.assertTrue((review_dir / "pending.md").exists())
+
+    def test_packet_apply_approved_packet_archives_reviews_and_writes_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            archive_dir = root / "archive"
+            audit_path = root / "output" / "review-apply-audit.jsonl"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "approved.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "cogs/daily",
+                    "item_text": "Approved from Jane packet",
+                    "date": "2026-05-22",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(
+                    review_dir=review_dir,
+                    archive_dir=archive_dir,
+                    audit_path=audit_path,
+                )
+            )
+            packet = root / "packet.md"
+            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+
+            with patch.object(review_specialist.review, "write_node") as write_node:
+                result = specialist.apply_approved_packet(packet, confirm=True)
+
+            self.assertEqual(result.approved_files, ("approved.md",))
+            write_node.assert_called_once()
+            self.assertEqual(write_node.call_args.args[0].confidence.value, "high")
+            self.assertFalse((review_dir / "approved.md").exists())
+            self.assertTrue((archive_dir / "approved.md").exists())
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            self.assertEqual(audit["decision"], "approved")
+            self.assertEqual(audit["approved_files"], ["approved.md"])
+            self.assertEqual(frontmatter.load(str(packet)).get("status"), "applied")
+
+            with self.assertRaisesRegex(ValueError, "approved"):
+                specialist.apply_approved_packet(packet, confirm=True)
+
+    def test_packet_apply_preview_rejects_existing_sprockets_collision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            task_dir = root / "tasks"
+            archive_dir = root / "archive"
+            review_dir.mkdir()
+            task_dir.mkdir()
+            (task_dir / "duplicate-task.md").write_text("already here")
+            _write_review_file(
+                review_dir / "task.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Duplicate task",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir, archive_dir=archive_dir)
+            )
+            packet = root / "packet.md"
+            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+
+            with patch.dict(review_specialist.agentic_loop.SPROCKETS_FOLDERS, {"sprockets/task": task_dir}, clear=True):
+                preview = specialist.packet_apply_preview(packet)
+
+            self.assertEqual(preview.approve_count, 0)
+            self.assertEqual(preview.rejected_count, 1)
+            self.assertIn("collide", preview.actions[0].issue)
+            self.assertTrue((review_dir / "task.md").exists())
+
+    def test_main_prints_confirmed_packet_apply_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "approved.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "cogs/daily",
+                    "item_text": "CLI Jane apply",
+                    "date": "2026-05-22",
+                    "confidence": "low",
+                },
+            )
+            packet = root / "packet.md"
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+            buf = io.StringIO()
+
+            with patch.object(review_specialist.review, "write_node"), redirect_stdout(buf):
+                review_specialist.main(
+                    [
+                        "--review-dir",
+                        str(review_dir),
+                        "--archive-dir",
+                        str(root / "archive"),
+                        "--audit-path",
+                        str(root / "audit.jsonl"),
+                        "--packet-apply",
+                        str(packet),
+                        "--confirm",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Review specialist approved packet apply", output)
+            self.assertIn("- packet status: applied", output)
+            self.assertIn("- vault writes: yes", output)
 
 
 def _write_review_file(path: Path, reason: str, raw: dict) -> None:
