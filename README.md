@@ -135,6 +135,30 @@ scripts/retrieval-eval --retriever memory-embedding-gated-vault --case-set real-
 scripts/retrieval-preview --status
 ```
 
+## Operational Backups
+
+The live SC runtime directory is operational data, not vault content. It holds
+processed input history, reports, traces, and small runtime state such as
+`entity_state.json`.
+
+Use Uniblab's SC backup helper for point-in-time snapshots:
+
+```bash
+scripts/sc-backup --preview
+scripts/sc-backup --create
+scripts/sc-backup --status
+scripts/sc-backup --verify
+scripts/sc-backup --restore-preview --restore-to /tmp/sc-restore-preview
+```
+
+Snapshots are plain timestamped directories under `~/sprockets-cogs/backups/`
+by default. They include `archive/`, `output/`, and runtime entity state,
+exclude `processing/`, and include `input/` only when explicitly requested.
+
+This protects the SC runtime directory only. Vault backup should remain a
+separate point-in-time backup policy; sync tools replicate current state, and
+GitHub protects committed code rather than local vault/runtime data.
+
 ## Status
 
 See `STATUS.md` for the current maturity level and known limitations.

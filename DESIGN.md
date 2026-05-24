@@ -169,6 +169,26 @@ This is especially important because Sprockets-Cogs writes to a personal vault.
 The system should be able to explain why it linked a task to a project, or why it
 declined to do so.
 
+## Operational Backup Boundary
+
+The SC runtime directory is operational state, not knowledge-base content. It is
+kept outside Obsidian because it contains queues, processed input history,
+operator reports, traces, and runtime memory files rather than durable notes.
+
+That state still needs protection. Uniblab owns a boring point-in-time backup
+surface for SC:
+
+- preview the backup scope;
+- create a plain timestamped directory snapshot;
+- report backup status;
+- verify a snapshot against its manifest;
+- preview restore into an inspection directory.
+
+The backup helper deliberately excludes service-owned `processing/` state and
+does not mutate live `sc/` or the vault during restore preview. Vault backup is
+a separate concern because the vault has different content, size, attachment,
+sync, and Obsidian-settings questions.
+
 ## Why Markdown
 
 Markdown keeps the vault human-readable and editor-native. Obsidian is the main

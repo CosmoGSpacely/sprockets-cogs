@@ -99,8 +99,9 @@ deployment should report:
 - review queue: 0;
 - current weekly, monthly, and annual Cogs planning notes exist;
 - nightly timer active/waiting;
-- backup gap visible: the vault and SC runtime directory need point-in-time backup
-  beyond Syncthing.
+- SC backup status visible through `scripts/sc-backup --status`;
+- latest SC snapshot verifies with `scripts/sc-backup --verify`;
+- vault backup still treated as separate point-in-time backup work beyond sync.
 
 ## Promotion Rule
 

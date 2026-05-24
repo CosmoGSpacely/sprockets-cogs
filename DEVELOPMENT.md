@@ -87,6 +87,32 @@ Runtime paths can be overridden for tests/dry-runs with environment variables:
 `SPROCKETS_COGS_OUTPUT_DIR`, `SPROCKETS_COGS_VAULT_DIR`, and
 `SPROCKETS_COGS_ENTITY_STATE_PATH`.
 
+SC backup commands:
+
+```bash
+scripts/sc-backup --preview
+scripts/sc-backup --create
+scripts/sc-backup --status
+scripts/sc-backup --verify
+scripts/sc-backup --restore-preview --restore-to /tmp/sc-restore-preview
+```
+
+Backups are plain timestamped directory snapshots under
+`~/sprockets-cogs/backups/` by default. That path is ignored by git. The helper
+backs up SC runtime data only: `archive/`, `output/`, `entity_state.json`, and
+future `state/`. It excludes service-owned `processing/`, and includes `input/`
+only when explicitly requested for stuck-intake debugging.
+
+Restore remains preview-first. `--restore-preview` requires an inspection
+directory and does not write. A future real restore command should restore into
+a chosen directory first and should not overwrite live `sc/` by default.
+
+SC backup is not vault backup. The vault needs its own point-in-time backup
+policy because it may include user knowledge content, attachments, Obsidian
+settings, and plugin state. Syncthing or other sync tools replicate current
+state; they are not a substitute for point-in-time backup. GitHub protects
+committed repos, not local vault or runtime data.
+
 OpenAI fallback is disabled unless `OPENAI_API_KEY` is set. Override the fallback
 model with `OPENAI_FALLBACK_MODEL`; default is `gpt-4o-mini`.
 
