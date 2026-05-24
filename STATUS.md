@@ -54,6 +54,10 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   `--preview-recovery nightly` show pause/recovery commands.
 - `sprockets-cogs-nightly.timer` is installed and enabled as a user timer. The
   next run can be inspected with `scripts/job-status`.
+- `scripts/sc-backup --preview` reports the read-only SC operational backup
+  scope. It includes `archive/`, `output/`, and runtime entity state by default,
+  excludes `processing/`, and includes `input/` only when explicitly requested
+  for stuck-intake debugging.
 - Phase 4's message bus is a handoff contract and rehearsal surface only. It is
   not a live dispatch engine.
 - `DEVELOPMENT.md` now maps public entry points, module responsibilities,
