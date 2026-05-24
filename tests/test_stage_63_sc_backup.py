@@ -1,5 +1,5 @@
 import json
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 import tempfile
@@ -176,6 +176,114 @@ class Stage63ScBackupTests(unittest.TestCase):
         self.assertEqual(payload["writes"], "backup")
         self.assertEqual(payload["copied_file_count"], 1)
         self.assertEqual(payload["backup_path"], str(backup_path))
+
+    def test_verify_snapshot_checks_manifest_contents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            (sc_root / "archive").mkdir(parents=True)
+            (sc_root / "archive" / "done.input").write_text("done", encoding="utf-8")
+            sc_backup.create_backup_snapshot(sc_root, out=backup_path)
+
+            verification = sc_backup.verify_backup_snapshot(backup_path)
+
+        self.assertTrue(verification.ok)
+        self.assertEqual(len(verification.checks), 1)
+        self.assertEqual(verification.checks[0].label, "archive")
+        self.assertEqual(verification.checks[0].actual_file_count, 1)
+
+    def test_verify_snapshot_reports_missing_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            backup_path.mkdir(parents=True)
+
+            verification = sc_backup.verify_backup_snapshot(backup_path)
+
+        self.assertFalse(verification.ok)
+        self.assertTrue(any("missing manifest" in issue for issue in verification.issues))
+
+    def test_restore_preview_is_read_only_and_names_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            restore_to = Path(tmp) / "restore-inspect"
+            (sc_root / "archive").mkdir(parents=True)
+            (sc_root / "archive" / "done.input").write_text("done", encoding="utf-8")
+            sc_backup.create_backup_snapshot(sc_root, out=backup_path)
+
+            preview = sc_backup.build_restore_preview(backup_path, restore_to)
+            output = sc_backup.format_restore_preview(preview)
+
+        self.assertTrue(preview.verification.ok)
+        self.assertEqual(preview.targets[0].target, restore_to / "archive")
+        self.assertFalse((restore_to / "archive").exists())
+        self.assertIn("- writes: no", output)
+        self.assertIn("Would copy", output)
+
+    def test_restore_preview_warns_about_existing_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            restore_to = Path(tmp) / "restore-inspect"
+            (sc_root / "archive").mkdir(parents=True)
+            (sc_root / "archive" / "done.input").write_text("done", encoding="utf-8")
+            (restore_to / "archive").mkdir(parents=True)
+            sc_backup.create_backup_snapshot(sc_root, out=backup_path)
+
+            preview = sc_backup.build_restore_preview(backup_path, restore_to)
+
+        self.assertTrue(any("target exists" in warning for warning in preview.warnings))
+
+    def test_cli_verify_defaults_to_latest_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_root = Path(tmp) / "backups"
+            (sc_root / "archive").mkdir(parents=True)
+            (sc_root / "archive" / "done.input").write_text("done", encoding="utf-8")
+            sc_backup.create_backup_snapshot(sc_root, backup_root=backup_root)
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                sc_backup.main(["--verify", "--backup-root", str(backup_root), "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["writes"], "none")
+        self.assertTrue(payload["ok"])
+
+    def test_cli_restore_preview_requires_restore_to(self):
+        stderr = StringIO()
+
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            sc_backup.main(["--restore-preview", "--backup", "/tmp/backup"])
+
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_cli_restore_preview_json_is_machine_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            restore_to = Path(tmp) / "restore-inspect"
+            (sc_root / "archive").mkdir(parents=True)
+            (sc_root / "archive" / "done.input").write_text("done", encoding="utf-8")
+            sc_backup.create_backup_snapshot(sc_root, out=backup_path)
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                sc_backup.main(
+                    [
+                        "--restore-preview",
+                        "--backup",
+                        str(backup_path),
+                        "--restore-to",
+                        str(restore_to),
+                        "--json",
+                    ]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["writes"], "none")
+        self.assertTrue(payload["backup_ok"])
+        self.assertEqual(payload["targets"][0]["target"], str(restore_to / "archive"))
 
 
 if __name__ == "__main__":

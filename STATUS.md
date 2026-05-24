@@ -61,6 +61,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   under `~/sprockets-cogs/backups/` by default. It includes `archive/`,
   `output/`, and runtime entity state by default, excludes `processing/`, and
   includes `input/` only when explicitly requested for stuck-intake debugging.
+- `scripts/sc-backup --verify` checks a snapshot against its manifest, and
+  `scripts/sc-backup --restore-preview --restore-to ...` shows where a restore
+  would copy files without writing.
 - Phase 4's message bus is a handoff contract and rehearsal surface only. It is
   not a live dispatch engine.
 - `DEVELOPMENT.md` now maps public entry points, module responsibilities,

@@ -108,6 +108,58 @@ class ScBackupStatus:
         return datetime.fromtimestamp(self.latest_snapshot.stat().st_mtime).isoformat(timespec="seconds")
 
 
+@dataclass(frozen=True)
+class BackupContentCheck:
+    label: str
+    source: Path
+    destination: Path
+    exists: bool
+    expected_file_count: int
+    actual_file_count: int
+    expected_byte_count: int
+    actual_byte_count: int
+
+
+@dataclass(frozen=True)
+class ScBackupVerification:
+    backup_path: Path
+    manifest_path: Path
+    manifest: dict[str, object] | None
+    checks: tuple[BackupContentCheck, ...]
+    issues: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.issues
+
+
+@dataclass(frozen=True)
+class RestoreTargetPreview:
+    label: str
+    source: Path
+    target: Path
+    source_exists: bool
+    target_exists: bool
+    file_count: int
+    byte_count: int
+
+
+@dataclass(frozen=True)
+class ScRestorePreview:
+    backup_path: Path
+    restore_to: Path
+    verification: ScBackupVerification
+    targets: tuple[RestoreTargetPreview, ...]
+
+    @property
+    def warnings(self) -> tuple[str, ...]:
+        warnings = list(self.verification.issues)
+        for target in self.targets:
+            if target.target_exists:
+                warnings.append(f"target exists and would not be overwritten by default: {target.target}")
+        return tuple(warnings)
+
+
 def _path_stats(path: Path) -> tuple[int, int, float | None]:
     if not path.exists():
         return (0, 0, None)
@@ -263,6 +315,122 @@ def _manifest(preview: ScBackupPreview, backup_path: Path) -> dict[str, object]:
             for item in preview.included_paths
         ],
     }
+
+
+def _read_manifest(backup_path: Path) -> tuple[dict[str, object] | None, tuple[str, ...]]:
+    manifest_path = backup_path / "manifest.json"
+    if not manifest_path.exists():
+        return None, (f"missing manifest: {manifest_path}",)
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return None, (f"invalid manifest JSON: {exc}",)
+    if not isinstance(payload, dict):
+        return None, ("manifest must be a JSON object",)
+    issues: list[str] = []
+    if payload.get("format") != BACKUP_FORMAT:
+        issues.append(f"unsupported backup format: {payload.get('format')!r}")
+    if not isinstance(payload.get("paths"), list):
+        issues.append("manifest paths must be a list")
+    return payload, tuple(issues)
+
+
+def verify_backup_snapshot(backup_path: Path) -> ScBackupVerification:
+    """Inspect a backup snapshot and compare contents with its manifest."""
+
+    backup_path = backup_path.expanduser()
+    manifest_path = backup_path / "manifest.json"
+    issues: list[str] = []
+    checks: list[BackupContentCheck] = []
+    if not backup_path.exists():
+        return ScBackupVerification(
+            backup_path=backup_path,
+            manifest_path=manifest_path,
+            manifest=None,
+            checks=(),
+            issues=(f"backup path does not exist: {backup_path}",),
+        )
+    if not backup_path.is_dir():
+        return ScBackupVerification(
+            backup_path=backup_path,
+            manifest_path=manifest_path,
+            manifest=None,
+            checks=(),
+            issues=(f"backup path is not a directory snapshot: {backup_path}",),
+        )
+
+    manifest, manifest_issues = _read_manifest(backup_path)
+    issues.extend(manifest_issues)
+    if manifest is None:
+        return ScBackupVerification(
+            backup_path=backup_path,
+            manifest_path=manifest_path,
+            manifest=None,
+            checks=(),
+            issues=tuple(issues),
+        )
+
+    paths = manifest.get("paths", [])
+    if isinstance(paths, list):
+        for raw_path in paths:
+            if not isinstance(raw_path, dict):
+                issues.append("manifest path entries must be objects")
+                continue
+            label = str(raw_path.get("label", "(unknown)"))
+            destination = Path(str(raw_path.get("destination", "")))
+            if not str(destination):
+                issues.append(f"{label}: missing destination")
+                continue
+            source = backup_path / destination
+            actual_file_count, actual_byte_count, _latest_mtime = _path_stats(source)
+            expected_file_count = int(raw_path.get("file_count", 0))
+            expected_byte_count = int(raw_path.get("byte_count", 0))
+            check = BackupContentCheck(
+                label=label,
+                source=source,
+                destination=destination,
+                exists=source.exists(),
+                expected_file_count=expected_file_count,
+                actual_file_count=actual_file_count,
+                expected_byte_count=expected_byte_count,
+                actual_byte_count=actual_byte_count,
+            )
+            checks.append(check)
+            if not check.exists:
+                issues.append(f"{label}: missing backup content at {source}")
+            if actual_file_count != expected_file_count:
+                issues.append(f"{label}: expected {expected_file_count} file(s), found {actual_file_count}")
+            if actual_byte_count != expected_byte_count:
+                issues.append(f"{label}: expected {_format_bytes(expected_byte_count)}, found {_format_bytes(actual_byte_count)}")
+
+    return ScBackupVerification(
+        backup_path=backup_path,
+        manifest_path=manifest_path,
+        manifest=manifest,
+        checks=tuple(checks),
+        issues=tuple(issues),
+    )
+
+
+def build_restore_preview(backup_path: Path, restore_to: Path) -> ScRestorePreview:
+    """Preview restoring a backup into a chosen inspection directory."""
+
+    backup_path = backup_path.expanduser()
+    restore_to = restore_to.expanduser()
+    verification = verify_backup_snapshot(backup_path)
+    targets = tuple(
+        RestoreTargetPreview(
+            label=check.label,
+            source=check.source,
+            target=restore_to / check.destination,
+            source_exists=check.exists,
+            target_exists=(restore_to / check.destination).exists(),
+            file_count=check.actual_file_count,
+            byte_count=check.actual_byte_count,
+        )
+        for check in verification.checks
+    )
+    return ScRestorePreview(backup_path=backup_path, restore_to=restore_to, verification=verification, targets=targets)
 
 
 def create_backup_snapshot(
@@ -453,12 +621,134 @@ def status_to_json(status: ScBackupStatus) -> str:
     )
 
 
+def format_backup_verification(verification: ScBackupVerification) -> str:
+    """Format read-only backup verification output."""
+
+    lines = [
+        "SC backup verify",
+        "- writes: no",
+        f"- backup path: {verification.backup_path}",
+        f"- manifest: {verification.manifest_path}",
+        f"- ok: {'yes' if verification.ok else 'no'}",
+        f"- checked paths: {len(verification.checks)}",
+        "",
+        "Contents",
+    ]
+    if verification.checks:
+        for check in verification.checks:
+            lines.append(
+                f"- {check.label}: {check.source} "
+                f"({check.actual_file_count}/{check.expected_file_count} file(s), "
+                f"{_format_bytes(check.actual_byte_count)}/{_format_bytes(check.expected_byte_count)})"
+            )
+    else:
+        lines.append("- (none)")
+    if verification.issues:
+        lines.extend(["", "Issues"])
+        lines.extend(f"- {issue}" for issue in verification.issues)
+    return "\n".join(lines)
+
+
+def verification_to_json(verification: ScBackupVerification) -> str:
+    """Return a stable JSON representation of backup verification."""
+
+    return json.dumps(
+        {
+            "writes": "none",
+            "backup_path": str(verification.backup_path),
+            "manifest_path": str(verification.manifest_path),
+            "ok": verification.ok,
+            "issues": list(verification.issues),
+            "checks": [
+                {
+                    "label": check.label,
+                    "source": str(check.source),
+                    "destination": str(check.destination),
+                    "exists": check.exists,
+                    "expected_file_count": check.expected_file_count,
+                    "actual_file_count": check.actual_file_count,
+                    "expected_byte_count": check.expected_byte_count,
+                    "actual_byte_count": check.actual_byte_count,
+                }
+                for check in verification.checks
+            ],
+        },
+        indent=2,
+        sort_keys=True,
+    )
+
+
+def format_restore_preview(preview: ScRestorePreview) -> str:
+    """Format read-only restore preview output."""
+
+    lines = [
+        "SC backup restore preview",
+        "- writes: no",
+        f"- backup path: {preview.backup_path}",
+        f"- restore to: {preview.restore_to}",
+        f"- backup ok: {'yes' if preview.verification.ok else 'no'}",
+        "",
+        "Would copy",
+    ]
+    if preview.targets:
+        for target in preview.targets:
+            lines.append(
+                f"- {target.label}: {target.source} -> {target.target} "
+                f"({target.file_count} file(s), {_format_bytes(target.byte_count)})"
+            )
+    else:
+        lines.append("- (none)")
+    if preview.warnings:
+        lines.extend(["", "Warnings"])
+        lines.extend(f"- {warning}" for warning in preview.warnings)
+    return "\n".join(lines)
+
+
+def restore_preview_to_json(preview: ScRestorePreview) -> str:
+    """Return a stable JSON representation of restore preview."""
+
+    return json.dumps(
+        {
+            "writes": "none",
+            "backup_path": str(preview.backup_path),
+            "restore_to": str(preview.restore_to),
+            "backup_ok": preview.verification.ok,
+            "warnings": list(preview.warnings),
+            "targets": [
+                {
+                    "label": target.label,
+                    "source": str(target.source),
+                    "target": str(target.target),
+                    "source_exists": target.source_exists,
+                    "target_exists": target.target_exists,
+                    "file_count": target.file_count,
+                    "byte_count": target.byte_count,
+                }
+                for target in preview.targets
+            ],
+        },
+        indent=2,
+        sort_keys=True,
+    )
+
+
+def _latest_or_requested_backup(parser: argparse.ArgumentParser, backup: Path | None, backup_root: Path) -> Path:
+    if backup is not None:
+        return backup
+    status = build_backup_status(backup_root)
+    if status.latest_snapshot is None:
+        parser.error(f"no backup path supplied and no snapshots found under {backup_root}")
+    return status.latest_snapshot
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Preview, create, or inspect SC operational backups.")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--preview", action="store_true", help="Preview backup scope without writing. This is the default.")
     mode.add_argument("--create", action="store_true", help="Create a plain timestamped directory snapshot.")
     mode.add_argument("--status", action="store_true", help="Show read-only backup status.")
+    mode.add_argument("--verify", action="store_true", help="Verify a backup snapshot without writing.")
+    mode.add_argument("--restore-preview", action="store_true", help="Preview restore into an inspection directory without writing.")
     parser.add_argument(
         "--sc-root",
         type=Path,
@@ -477,6 +767,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Explicit backup directory to create. Refuses to overwrite existing paths.",
     )
     parser.add_argument(
+        "--backup",
+        type=Path,
+        help="Backup snapshot directory to verify or preview restore from. Defaults to latest snapshot.",
+    )
+    parser.add_argument(
+        "--restore-to",
+        type=Path,
+        help="Inspection directory for restore preview. Required with --restore-preview.",
+    )
+    parser.add_argument(
         "--include-input",
         action="store_true",
         help="Include pending input/ files for stuck-intake debugging.",
@@ -487,6 +787,20 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.status:
         status = build_backup_status(args.backup_root)
         print(status_to_json(status) if args.json else format_backup_status(status))
+        return
+
+    if args.verify:
+        backup_path = _latest_or_requested_backup(parser, args.backup, args.backup_root)
+        verification = verify_backup_snapshot(backup_path)
+        print(verification_to_json(verification) if args.json else format_backup_verification(verification))
+        return
+
+    if args.restore_preview:
+        if args.restore_to is None:
+            parser.error("--restore-preview requires --restore-to")
+        backup_path = _latest_or_requested_backup(parser, args.backup, args.backup_root)
+        preview = build_restore_preview(backup_path, args.restore_to)
+        print(restore_preview_to_json(preview) if args.json else format_restore_preview(preview))
         return
 
     if args.create:
