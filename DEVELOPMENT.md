@@ -54,7 +54,7 @@ Development rules:
 - `memory_specialist.py` — RUDI memory/retrieval specialist facade
 - `review_specialist.py` — Jane review specialist preview/import/apply safety facade
 - `system_status.py` and `job_status.py` — Uniblab operational status helpers
-- `sc_backup.py` — Uniblab SC runtime backup inventory/preview helper
+- `sc_backup.py` — Uniblab SC runtime backup preview/status/create helper
 - `input_adapter.py` — normalized external-input envelope and `.input` rendering/writing helpers
 - `input_adapter_preview.py` — read-only/guarded preview CLI for adapter-produced `.input` files
 - `telegram_adapter.py` — Telegram update normalization and allowlist checks before `.input` creation
@@ -127,7 +127,7 @@ run while exploring.
 | `scripts/markitdown-batch` | `markitdown_batch.py` | Rosie / Uniblab-visible adapter layer | Inventory a folder of documents and explicitly apply a bounded batch as `.input` files. | Mixed: plan is read-only; `--apply --input-dir` writes bounded `.input` files. |
 | `scripts/job-status` | `job_status.py` | Uniblab | Read-only timer/job status. | No. |
 | `scripts/job-supervisor` | `job_supervisor.py` | Uniblab | Preview install/disable/recovery commands for maintenance jobs. | No. |
-| `scripts/sc-backup` | `sc_backup.py` | Uniblab | Preview SC operational backup scope before any archive/restore work. | No. |
+| `scripts/sc-backup` | `sc_backup.py` | Uniblab | Preview, inspect status for, or explicitly create SC operational backup snapshots. | Mixed: preview/status are read-only; `--create` writes one backup directory. |
 | `scripts/smoke` | `smoke_test.py` | Uniblab | Deterministic temp-vault smoke test. | Temp files only. |
 | `scripts/capture-preview` | `capture_preview.py` | Rosie | Preview extraction/classification without live writes. | No. |
 | `scripts/orchestrator-route` | `orchestrator_contract.py` | RUDI | Preview route decisions and handoff contracts. | No. |
@@ -161,10 +161,10 @@ starting point for help text, exit behavior, and error-message cleanup.
 
 | Posture | Commands | Rule of thumb |
 |---|---|---|
-| Read-only reports | `scripts/status`, `scripts/job-status`, `scripts/sc-backup --preview`, `scripts/hierarchy`, `scripts/retrieval-traces`, `scripts/telegram-update-probe --status`, `scripts/sprockets-specialist --inventory`, `scripts/cogs-specialist --inventory`, `scripts/memory-specialist --inventory`, `scripts/review-specialist --inventory` | Safe to run during exploration. Empty reports should usually exit successfully and explain that there is nothing to show. |
+| Read-only reports | `scripts/status`, `scripts/job-status`, `scripts/sc-backup --preview`, `scripts/sc-backup --status`, `scripts/hierarchy`, `scripts/retrieval-traces`, `scripts/telegram-update-probe --status`, `scripts/sprockets-specialist --inventory`, `scripts/cogs-specialist --inventory`, `scripts/memory-specialist --inventory`, `scripts/review-specialist --inventory` | Safe to run during exploration. Empty reports should usually exit successfully and explain that there is nothing to show. |
 | Read-only previews | `scripts/capture-preview`, `scripts/input-adapter-preview`, `scripts/telegram-adapter-preview`, `scripts/telegram-response` without `--send`, `scripts/markitdown-preview`, `scripts/markitdown-batch`, `scripts/retrieval-preview`, `scripts/orchestrator-route`, `scripts/orchestrated-rehearsal`, `scripts/cogs-specialist --carry-preview`, `scripts/cogs-specialist --planning-preview`, `scripts/sprockets-specialist --propose`, `scripts/review-specialist --apply-preview` | Should say "preview" or "without writing" in help text and output. |
 | Benchmarks and probes | `scripts/check`, `scripts/smoke`, `scripts/retrieval-eval`, `scripts/fallback-eval`, `scripts/memory-tool-probe`, `scripts/memory-specialist --benchmark`, `scripts/memory-specialist --cache-coverage` | May use temp files, model calls, API calls, or embedding cache, but should not write the live vault. |
-| Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/agent-message-bus --append`, `scripts/telegram-update-probe --write-update-json ...`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus paths. Help text should name the target path when practical. |
+| Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/agent-message-bus --append`, `scripts/sc-backup --create`, `scripts/telegram-update-probe --write-update-json ...`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus/backup paths. Help text should name the target path when practical. |
 | Guarded vault writers | `scripts/carry --apply`, `scripts/nightly`, `scripts/cogs-planning --create`, `scripts/cogs-planning --ensure-current`, `scripts/review` interactive apply/discard flows | Should have a dry-run, preview, report, or source-check path before writes. Validation failures should exit nonzero. |
 | Guarded input writers | `scripts/input-adapter-preview --write --input-dir ...`, `scripts/telegram-adapter-preview --write --input-dir ...`, `scripts/markitdown-preview --write --input-dir ...`, `scripts/markitdown-batch --apply --input-dir ...` | Writes only `.input` files into an explicitly selected input directory; refuses existing final files. |
 | Guarded source replies | `scripts/telegram-response --send ...` | Contacts Telegram only after response-route guards pass. Review-required/operator-report/local-reflection outputs stay local. |

@@ -21,11 +21,15 @@ that proves useful.
 - `scripts/status`
 - `scripts/job-status`
 - `scripts/job-supervisor`
+- `scripts/sc-backup --preview`
+- `scripts/sc-backup --status`
+- `scripts/sc-backup --create`
 
 ## Boundaries
 
 - Uniblab reports and previews operational actions before changing runtime
   state.
+- SC backup creation writes only to an explicit or default backup directory; it
+  never processes `.input` files or mutates the vault.
 - Model warmup and residency policy should be explicit before it becomes
   automated.
-

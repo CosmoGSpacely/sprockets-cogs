@@ -75,6 +75,108 @@ class Stage63ScBackupTests(unittest.TestCase):
         self.assertEqual(payload["included_file_count"], 1)
         self.assertTrue(any(item["label"] == "archive" for item in payload["paths"]))
 
+    def test_create_snapshot_copies_durable_paths_and_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            (sc_root / "archive").mkdir(parents=True)
+            (sc_root / "output").mkdir()
+            (sc_root / "processing").mkdir()
+            (sc_root / "input").mkdir()
+            (sc_root / "archive" / "done.input").write_text("done", encoding="utf-8")
+            (sc_root / "output" / "review-packet.md").write_text("packet", encoding="utf-8")
+            (sc_root / "entity_state.json").write_text("{}", encoding="utf-8")
+            (sc_root / "processing" / "active.input").write_text("active", encoding="utf-8")
+            (sc_root / "input" / "pending.input").write_text("pending", encoding="utf-8")
+
+            result = sc_backup.create_backup_snapshot(sc_root, out=backup_path)
+
+            self.assertTrue((result.backup_path / "archive" / "done.input").exists())
+            self.assertTrue((result.backup_path / "output" / "review-packet.md").exists())
+            self.assertTrue((result.backup_path / "entity_state.json").exists())
+            self.assertTrue((result.backup_path / "manifest.json").exists())
+            self.assertFalse((result.backup_path / "processing" / "active.input").exists())
+            self.assertFalse((result.backup_path / "input" / "pending.input").exists())
+            manifest = json.loads((result.backup_path / "manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["format"], sc_backup.BACKUP_FORMAT)
+        self.assertFalse(manifest["include_input"])
+        self.assertEqual(manifest["included_file_count"], 3)
+
+    def test_create_snapshot_can_include_input_when_explicit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            (sc_root / "input").mkdir(parents=True)
+            (sc_root / "input" / "pending.input").write_text("pending", encoding="utf-8")
+
+            result = sc_backup.create_backup_snapshot(sc_root, out=backup_path, include_input=True)
+
+            self.assertTrue((result.backup_path / "input" / "pending.input").exists())
+
+    def test_create_snapshot_refuses_existing_out_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            (sc_root / "archive").mkdir(parents=True)
+            backup_path.mkdir(parents=True)
+
+            with self.assertRaises(FileExistsError):
+                sc_backup.create_backup_snapshot(sc_root, out=backup_path)
+
+    def test_create_snapshot_refuses_empty_missing_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "missing-sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+
+            with self.assertRaises(ValueError):
+                sc_backup.create_backup_snapshot(sc_root, out=backup_path)
+
+            self.assertFalse(backup_path.exists())
+
+    def test_status_reports_latest_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backup_root = Path(tmp) / "backups"
+            first = backup_root / "sc-20260524-101010"
+            second = backup_root / "sc-20260524-111010"
+            first.mkdir(parents=True)
+            second.mkdir()
+
+            status = sc_backup.build_backup_status(backup_root)
+
+        self.assertTrue(status.exists)
+        self.assertEqual(status.snapshot_count, 2)
+        self.assertEqual(status.latest_snapshot, second)
+
+    def test_cli_status_is_read_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backup_root = Path(tmp) / "backups"
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                sc_backup.main(["--status", "--backup-root", str(backup_root), "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["writes"], "none")
+        self.assertFalse(payload["exists"])
+
+    def test_cli_create_writes_snapshot_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc_root = Path(tmp) / "sc"
+            backup_path = Path(tmp) / "backups" / "sc-test"
+            (sc_root / "archive").mkdir(parents=True)
+            (sc_root / "archive" / "done.input").write_text("done", encoding="utf-8")
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                sc_backup.main(["--create", "--sc-root", str(sc_root), "--out", str(backup_path), "--json"])
+
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(payload["writes"], "backup")
+        self.assertEqual(payload["copied_file_count"], 1)
+        self.assertEqual(payload["backup_path"], str(backup_path))
+
 
 if __name__ == "__main__":
     unittest.main()
