@@ -119,6 +119,7 @@ class ReviewPacketApplyResult:
     audit_path: Path
     approved_files: tuple[str, ...]
     audit_record: dict[str, Any]
+    discarded_files: tuple[str, ...] = ()
 
 
 class ReviewSpecialist:
@@ -213,24 +214,29 @@ class ReviewSpecialist:
         if preview.rejected_count:
             issues = "; ".join(action.issue for action in preview.actions if action.issue)
             raise ValueError(f"packet apply rejected: {issues}")
-        if preview.approve_count == 0:
-            raise ValueError("packet apply found no approved review items")
-        if preview.discard_count or preview.skip_count or preview.pending_count:
-            raise ValueError("packet apply only accepts approved packet actions")
+        if preview.approve_count + preview.discard_count == 0:
+            raise ValueError("packet apply found no approve/discard actions")
 
         approved_files: list[str] = []
+        discarded_files: list[str] = []
         for action in preview.actions:
+            if action.effect in {"pending", "skip"}:
+                continue
             review_path = self.config.review_dir / action.file
-            raw = _approval_raw(review_path)
-            node = validate_node({**raw, "confidence": "high"})
-            review.write_node(node)
+            if action.effect == "approve":
+                raw = _approval_raw(review_path)
+                node = validate_node(raw)
+                review.write_node(node)
+                approved_files.append(action.file)
+            elif action.effect == "discard":
+                discarded_files.append(action.file)
             _archive_review_file(review_path, self.config.archive_dir)
-            approved_files.append(action.file)
 
         audit_record = append_review_apply_audit(
             packet_path=packet_path,
             review_dir=self.config.review_dir,
             approved_files=tuple(approved_files),
+            discarded_files=tuple(discarded_files),
             audit_path=self.config.audit_path,
         )
         packet["status"] = "applied"
@@ -244,6 +250,7 @@ class ReviewSpecialist:
             audit_path=self.config.audit_path,
             approved_files=tuple(approved_files),
             audit_record=audit_record,
+            discarded_files=tuple(discarded_files),
         )
 
     def decision_apply_preview(self, packet_path: Path) -> ReviewDecisionApplyPreview:
@@ -477,6 +484,7 @@ def append_review_apply_audit(
     review_dir: Path,
     approved_files: tuple[str, ...],
     audit_path: Path,
+    discarded_files: tuple[str, ...] = (),
     created_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Append one JSONL record for a successful Jane packet apply."""
@@ -493,6 +501,7 @@ def append_review_apply_audit(
         "review_dir": str(review_dir),
         "decision": "approved",
         "approved_files": list(approved_files),
+        "discarded_files": list(discarded_files),
     }
     audit_path.parent.mkdir(parents=True, exist_ok=True)
     with audit_path.open("a", encoding="utf-8") as handle:
@@ -632,6 +641,25 @@ def packet_decision_rows(packet_path: Path, review_dir: Path = review.REVIEW_DIR
         return (_packet_error("packet item_count does not match the current review queue"),)
     if post.get("queue_fingerprint") != review.review_queue_fingerprint(review_dir):
         return (_packet_error("packet queue_fingerprint does not match current review files"),)
+
+    decision_rows = parse_review_decision_template(post.content)
+    if decision_rows:
+        known_files = set(review_files)
+        seen_files: set[str] = set()
+        checked: list[ReviewDecisionRow] = []
+        for row in decision_rows:
+            if not row.valid:
+                checked.append(row)
+            elif row.file not in known_files:
+                checked.append(_replace_row(row, valid=False, issue="file is not in packet review_files"))
+            elif row.file in seen_files:
+                checked.append(_replace_row(row, valid=False, issue="duplicate decision row for review file"))
+            else:
+                seen_files.add(row.file)
+                checked.append(row)
+        missing = [file_name for file_name in review_files if file_name not in seen_files]
+        checked.extend(ReviewDecisionRow(file=file_name, decision="pending") for file_name in missing)
+        return tuple(checked)
 
     decision = PACKET_STATUS_DECISIONS[status]
     return tuple(
@@ -787,7 +815,9 @@ def format_packet_apply_result(result: ReviewPacketApplyResult) -> str:
         "Review specialist approved packet apply",
         f"- review dir: {result.review_dir}",
         f"- packet: {result.packet_path}",
-        f"- archived review items: {len(result.approved_files)}",
+        f"- archived review items: {len(result.approved_files) + len(result.discarded_files)}",
+        f"- approved: {len(result.approved_files)}",
+        f"- discarded: {len(result.discarded_files)}",
         f"- review archive: {result.archive_dir}",
         f"- audit JSONL: {result.audit_path}",
         "- packet status: applied",
@@ -795,6 +825,7 @@ def format_packet_apply_result(result: ReviewPacketApplyResult) -> str:
         "- review queue writes: yes",
     ]
     lines.extend(f"- approved: {file_name}" for file_name in result.approved_files)
+    lines.extend(f"- discarded: {file_name}" for file_name in result.discarded_files)
     return "\n".join(lines)
 
 

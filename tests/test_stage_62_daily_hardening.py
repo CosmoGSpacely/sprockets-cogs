@@ -94,7 +94,11 @@ class Stage62DailyHardeningTests(unittest.TestCase):
                 review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
             )
             packet = root / "packet.md"
-            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+            packet.write_text(
+                specialist.packet_preview()
+                .replace("status: pending", "status: approved")
+                .replace("| bad-date.md |  |", "| bad-date.md | approve |")
+            )
 
             preview = specialist.packet_apply_preview(packet)
 

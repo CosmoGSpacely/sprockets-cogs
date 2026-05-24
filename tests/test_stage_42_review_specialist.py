@@ -59,6 +59,37 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("Review specialist packet", packet)
             self.assertNotIn(str(review_dir), packet)
 
+    def test_packet_preview_marks_possible_duplicate_alternatives(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            _write_review_file(
+                review_dir / "task.md",
+                reason="openai_fallback_candidate: confidence: low",
+                raw={
+                    "node_type": "sprockets/task",
+                    "title": "Relocate turtle",
+                    "confidence": "low",
+                },
+            )
+            _write_review_file(
+                review_dir / "daily.md",
+                reason="openai_fallback_candidate: confidence: low",
+                raw={
+                    "node_type": "cogs/daily",
+                    "item_text": "Relocate turtle",
+                    "date": "2026-05-24",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+
+            packet = specialist.packet_preview()
+
+            self.assertIn("possible duplicate group 1", packet)
+            self.assertIn("daily.md, task.md", packet)
+
     def test_format_review_inventory_marks_read_only(self):
         preview = review_specialist.ReviewInventoryPreview(
             review_dir=Path("/vault/review"),
@@ -216,7 +247,7 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
                 review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
             )
             packet = root / "packet.md"
-            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+            packet.write_text(_packet_with_decision(specialist, "pending.md", "approve"))
 
             preview = specialist.packet_decision_import_preview(packet)
 
@@ -272,7 +303,7 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
                 review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
             )
             packet = root / "packet.md"
-            packet.write_text(specialist.packet_preview().replace("status: pending", "status: deferred"))
+            packet.write_text(_packet_with_decision(specialist, "pending.md", "skip"))
             buf = io.StringIO()
 
             with redirect_stdout(buf):
@@ -398,6 +429,7 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
 
             self.assertEqual(result.packet_path, packet_path)
             self.assertTrue(packet_path.read_text().startswith("---\ntype: review-packet\n"))
+            self.assertIn("| pending.md |  |  |", packet_path.read_text())
             self.assertEqual(preview.invalid_count, 0)
             self.assertEqual(preview.pending_count, 1)
             self.assertNotIn("# Sprockets-Cogs Review Operations Packet", packet_path.read_text())
@@ -555,7 +587,7 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
                 review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
             )
             packet = root / "packet.md"
-            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+            packet.write_text(_packet_with_decision(specialist, "pending.md", "approve"))
 
             with self.assertRaisesRegex(ValueError, "explicit confirmation"):
                 specialist.apply_approved_packet(packet)
@@ -587,7 +619,7 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
                 )
             )
             packet = root / "packet.md"
-            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+            packet.write_text(_packet_with_decision(specialist, "approved.md", "approve"))
 
             with patch.object(review_specialist.review, "write_node") as write_node:
                 result = specialist.apply_approved_packet(packet, confirm=True)
@@ -604,6 +636,79 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "approved"):
                 specialist.apply_approved_packet(packet, confirm=True)
+
+    def test_packet_apply_handles_per_item_approve_discard_and_skip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            archive_dir = root / "archive"
+            audit_path = root / "output" / "review-apply-audit.jsonl"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "approve.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "cogs/daily",
+                    "item_text": "Approve from packet table",
+                    "date": "2026-05-22",
+                    "confidence": "low",
+                },
+            )
+            _write_review_file(
+                review_dir / "discard.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/note",
+                    "title": "Discard from packet table",
+                    "confidence": "low",
+                },
+            )
+            _write_review_file(
+                review_dir / "skip.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/note",
+                    "title": "Skip from packet table",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(
+                    review_dir=review_dir,
+                    archive_dir=archive_dir,
+                    audit_path=audit_path,
+                )
+            )
+            packet = root / "packet.md"
+            packet.write_text(
+                _packet_with_decisions(
+                    specialist,
+                    {
+                        "approve.md": "approve",
+                        "discard.md": "discard",
+                        "skip.md": "skip",
+                    },
+                )
+            )
+
+            preview = specialist.packet_apply_preview(packet)
+            with patch.object(review_specialist.review, "write_node") as write_node:
+                result = specialist.apply_approved_packet(packet, confirm=True)
+
+            self.assertEqual(preview.approve_count, 1)
+            self.assertEqual(preview.discard_count, 1)
+            self.assertEqual(preview.skip_count, 1)
+            self.assertEqual(result.approved_files, ("approve.md",))
+            self.assertEqual(result.discarded_files, ("discard.md",))
+            write_node.assert_called_once()
+            self.assertFalse((review_dir / "approve.md").exists())
+            self.assertFalse((review_dir / "discard.md").exists())
+            self.assertTrue((review_dir / "skip.md").exists())
+            self.assertTrue((archive_dir / "approve.md").exists())
+            self.assertTrue((archive_dir / "discard.md").exists())
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            self.assertEqual(audit["approved_files"], ["approve.md"])
+            self.assertEqual(audit["discarded_files"], ["discard.md"])
 
     def test_packet_apply_preview_rejects_existing_sprockets_collision(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -627,7 +732,7 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
                 review_specialist.ReviewSpecialistConfig(review_dir=review_dir, archive_dir=archive_dir)
             )
             packet = root / "packet.md"
-            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+            packet.write_text(_packet_with_decision(specialist, "task.md", "approve"))
 
             with patch.dict(review_specialist.agentic_loop.SPROCKETS_FOLDERS, {"sprockets/task": task_dir}, clear=True):
                 preview = specialist.packet_apply_preview(packet)
@@ -656,7 +761,7 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             specialist = review_specialist.ReviewSpecialist(
                 review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
             )
-            packet.write_text(specialist.packet_preview().replace("status: pending", "status: approved"))
+            packet.write_text(_packet_with_decision(specialist, "approved.md", "approve"))
             buf = io.StringIO()
 
             with patch.object(review_specialist.review, "write_node"), redirect_stdout(buf):
@@ -686,3 +791,21 @@ def _write_review_file(path: Path, reason: str, raw: dict) -> None:
         f"**Reason:** {reason}\n\n"
         f"```json\n{json.dumps(raw, indent=2)}\n```\n"
     )
+
+
+def _packet_with_decision(
+    specialist: review_specialist.ReviewSpecialist,
+    file_name: str,
+    decision: str,
+) -> str:
+    return _packet_with_decisions(specialist, {file_name: decision})
+
+
+def _packet_with_decisions(
+    specialist: review_specialist.ReviewSpecialist,
+    decisions: dict[str, str],
+) -> str:
+    packet = specialist.packet_preview().replace("status: pending", "status: approved")
+    for file_name, decision in decisions.items():
+        packet = packet.replace(f"| {file_name} |  |", f"| {file_name} | {decision} |")
+    return packet

@@ -82,7 +82,43 @@ def summarize_review_file(path: Path) -> dict:
 
 
 def list_pending(review_dir: Path = REVIEW_DIR) -> list[dict]:
-    return [summarize_review_file(path) for path in _review_files(review_dir)]
+    items = [summarize_review_file(path) for path in _review_files(review_dir)]
+    duplicate_hints = _duplicate_hints(items)
+    return [
+        {**item, "duplicate_hint": duplicate_hints.get(item["file"], "")}
+        for item in items
+    ]
+
+
+def _review_text_key(item: dict) -> str:
+    values = [
+        str(item.get("item_text") or "").strip(),
+        str(item.get("title") or "").strip(),
+    ]
+    text = next((value for value in values if value and value != "?"), "").lower()
+    return " ".join(text.split())
+
+
+def _duplicate_hints(items: list[dict]) -> dict[str, str]:
+    groups: dict[str, list[str]] = {}
+    for item in items:
+        if not item.get("parseable"):
+            continue
+        key = _review_text_key(item)
+        if not key:
+            continue
+        groups.setdefault(key, []).append(item["file"])
+
+    hints: dict[str, str] = {}
+    group_number = 1
+    for files in groups.values():
+        if len(files) < 2:
+            continue
+        label = f"possible duplicate group {group_number}: {', '.join(files)}"
+        for file_name in files:
+            hints[file_name] = label
+        group_number += 1
+    return hints
 
 
 def review_report(review_dir: Path = REVIEW_DIR) -> dict:
@@ -188,6 +224,7 @@ def _packet_item_section(item: dict) -> list[str]:
         f"- Date: {_shorten(item['date'], 48)}",
         f"- Confidence: {_shorten(item['confidence'], 48)}",
         f"- Review reason: {_shorten(item['reason'], 180)}",
+        f"- Duplicate hint: {_shorten(item.get('duplicate_hint') or '(none)', 180)}",
         "",
     ]
     return lines
@@ -199,9 +236,10 @@ def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
     lines = _packet_frontmatter(review_dir, report, items) + [
         "# Sprockets-Cogs Review Packet",
         "",
-        "> Preview only. Generated from the canonical review queue. Edit",
-        "> frontmatter `status` only when using Jane's packet decision import",
-        "> preview; the packet does not apply changes by itself.",
+        "> Preview only until Jane's guarded apply command is run. Generated",
+        "> from the canonical review queue. Fill the Decision table",
+        "> with `approve`, `discard`, or `skip`; leave blank for pending. Then",
+        "> run Jane's packet import/apply preview before confirmed apply.",
         "",
         "## Summary",
         "",
@@ -237,6 +275,29 @@ def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
         )
     lines.append("")
     lines.extend([
+        "## Decision",
+        "",
+        "| File | Decision | Notes |",
+        "|---|---|---|",
+    ])
+    for item in items:
+        note = item.get("duplicate_hint", "")
+        lines.append(
+            "| "
+            + " | ".join([
+                _markdown_cell(item["file"], 64),
+                "",
+                _markdown_cell(note, 120),
+            ])
+            + " |"
+        )
+    lines.extend([
+        "",
+        "Decision values: `approve`, `discard`, `skip`, or blank for pending.",
+        "Always run packet import/apply preview before confirmed apply.",
+        "",
+    ])
+    lines.extend([
         "## Proposed Changes",
         "",
     ])
@@ -245,8 +306,10 @@ def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
     lines.extend([
         "## Review Commands",
         "",
+        "- `scripts/review-specialist --packet-import-preview /home/cosmo/sc/output/review-packet.md`",
+        "- `scripts/review-specialist --packet-apply-preview /home/cosmo/sc/output/review-packet.md`",
+        "- `scripts/review-specialist --packet-apply /home/cosmo/sc/output/review-packet.md --confirm`",
         "- `scripts/review --list` for per-item terminal details.",
-        "- `scripts/review` for approve/discard/skip.",
         "",
     ])
     return "\n".join(lines)
