@@ -58,11 +58,13 @@ class Stage32SystemStatusTests(unittest.TestCase):
             specialists=SPECIALISTS,
             directories=system_status.DirectoryStatus(
                 pending_inputs=1,
+                ignored_input_files=1,
                 processing_files=0,
                 archived_inputs=12,
                 output_files=1,
                 memory_trace_exists=True,
                 oldest_pending_input="capture.input",
+                oldest_ignored_input="notes.txt",
             ),
             models=system_status.ModelAvailabilityStatus(
                 ollama_available=True,
@@ -153,7 +155,10 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("- RUDI: Reasoning, orchestration, and memory/retrieval", output)
             self.assertIn("- message bus: contract/rehearsal only, not live dispatch", output)
             self.assertIn("- pending .input files: 1", output)
+            self.assertIn("- ignored non-.input files: 1", output)
             self.assertIn("- oldest pending input: capture.input", output)
+            self.assertIn("- oldest ignored input: notes.txt", output)
+            self.assertIn("- intake note: Rosie only processes files ending in .input", output)
             self.assertIn("- memory trace file exists: yes", output)
             self.assertIn("- embedding model: test-embed", output)
             self.assertIn("Models", output)
@@ -305,11 +310,13 @@ class Stage32SystemStatusTests(unittest.TestCase):
             status = system_status.build_directory_status(runtime)
 
         self.assertEqual(status.pending_inputs, 2)
+        self.assertEqual(status.ignored_input_files, 1)
         self.assertEqual(status.processing_files, 1)
         self.assertEqual(status.archived_inputs, 1)
         self.assertEqual(status.output_files, 1)
         self.assertTrue(status.memory_trace_exists)
         self.assertIn(status.oldest_pending_input, {"a.input", "b.input"})
+        self.assertEqual(status.oldest_ignored_input, "ignore.txt")
 
     def test_build_planning_status_reports_current_note_presence(self):
         with tempfile.TemporaryDirectory() as tmp:

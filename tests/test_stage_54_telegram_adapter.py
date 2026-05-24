@@ -245,7 +245,9 @@ class Stage54TelegramAdapterTests(unittest.TestCase):
 
             output = stdout.getvalue()
             self.assertIn("token configured: yes", output)
-            self.assertIn("polling enabled: yes", output)
+            self.assertIn("polling env requested: yes", output)
+            self.assertIn("live polling service: no", output)
+            self.assertIn("manual fetch -> adapter preview/write -> Rosie .input", output)
             self.assertIn("allowed user ids configured: 1", output)
             self.assertNotIn("secret-token", output)
 

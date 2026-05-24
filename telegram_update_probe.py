@@ -73,13 +73,16 @@ def build_parser() -> argparse.ArgumentParser:
 def format_status(env: dict[str, str], env_file: Path) -> str:
     users = parse_id_list(env.get(TELEGRAM_ALLOWED_USERS_ENV, ""))
     chats = parse_id_list(env.get(TELEGRAM_ALLOWED_CHATS_ENV, ""))
+    polling_requested = env.get(TELEGRAM_POLLING_ENV, "").strip() == "1"
     return "\n".join([
         "Telegram update probe",
         "- writes: no",
         "- contacts Telegram: no",
         f"- env file: {env_file}",
         f"- token configured: {'yes' if env.get(TELEGRAM_TOKEN_ENV, '').strip() else 'no'}",
-        f"- polling enabled: {'yes' if env.get(TELEGRAM_POLLING_ENV, '').strip() == '1' else 'no'}",
+        f"- polling env requested: {'yes' if polling_requested else 'no'}",
+        "- live polling service: no",
+        "- current mode: manual fetch -> adapter preview/write -> Rosie .input",
         f"- allowed user ids configured: {len(users)}",
         f"- allowed chat ids configured: {len(chats)}",
     ])

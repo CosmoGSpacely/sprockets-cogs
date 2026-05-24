@@ -69,11 +69,13 @@ class ServiceStatus:
 @dataclass(frozen=True)
 class DirectoryStatus:
     pending_inputs: int
+    ignored_input_files: int
     processing_files: int
     archived_inputs: int
     output_files: int
     memory_trace_exists: bool
     oldest_pending_input: str | None = None
+    oldest_ignored_input: str | None = None
 
 
 @dataclass(frozen=True)
@@ -259,15 +261,34 @@ def _oldest_file_name(path: Path, pattern: str = "*") -> str | None:
     return min(files, key=lambda candidate: candidate.stat().st_mtime).name
 
 
+def _ignored_input_files(path: Path) -> list[Path]:
+    if not path.exists():
+        return []
+    return [
+        candidate
+        for candidate in path.iterdir()
+        if candidate.is_file() and candidate.suffix != ".input"
+    ]
+
+
+def _oldest_ignored_input(path: Path) -> str | None:
+    files = _ignored_input_files(path)
+    if not files:
+        return None
+    return min(files, key=lambda candidate: candidate.stat().st_mtime).name
+
+
 def build_directory_status(runtime: RuntimeStatus) -> DirectoryStatus:
     memory_trace_path = runtime.output_dir / agentic_loop.MEMORY_TRACE_FILENAME
     return DirectoryStatus(
         pending_inputs=_count_files(runtime.input_dir, "*.input"),
+        ignored_input_files=len(_ignored_input_files(runtime.input_dir)),
         processing_files=_count_files(runtime.processing_dir),
         archived_inputs=_count_files(runtime.archive_dir, "*.input"),
         output_files=_count_files(runtime.output_dir),
         memory_trace_exists=memory_trace_path.exists(),
         oldest_pending_input=_oldest_file_name(runtime.input_dir, "*.input"),
+        oldest_ignored_input=_oldest_ignored_input(runtime.input_dir),
     )
 
 
@@ -408,6 +429,7 @@ def _format_directory_status(status: DirectoryStatus) -> list[str]:
     lines = [
         "Runtime queues",
         f"- pending .input files: {status.pending_inputs}",
+        f"- ignored non-.input files: {status.ignored_input_files}",
         f"- processing files: {status.processing_files}",
         f"- archived .input files: {status.archived_inputs}",
         f"- output files: {status.output_files}",
@@ -415,6 +437,9 @@ def _format_directory_status(status: DirectoryStatus) -> list[str]:
     ]
     if status.oldest_pending_input:
         lines.append(f"- oldest pending input: {status.oldest_pending_input}")
+    if status.oldest_ignored_input:
+        lines.append(f"- oldest ignored input: {status.oldest_ignored_input}")
+        lines.append("- intake note: Rosie only processes files ending in .input")
     return lines
 
 

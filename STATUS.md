@@ -65,7 +65,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   Rosie `.input` file and only writes when the update is allowlisted and
   `--write --input-dir` are explicit.
 - `scripts/telegram-update-probe` reports Telegram token/allowlist readiness
-  without printing the token and can fetch updates for local preview.
+  without printing the token, states that Telegram is still manual
+  fetch/preview/write rather than a live polling service, and can fetch updates
+  for local preview.
 - `scripts/telegram-response` previews conservative Telegram responses and can
   manually send only with explicit `--send`; Rosie does not automatically reply
   to bot messages.
@@ -74,6 +76,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   input directory.
 - `scripts/markitdown-batch` inventories a folder of documents and can
   explicitly apply a bounded, idempotent batch as `.input` files.
+- `scripts/status` reports ignored non-`.input` files in `sc/input/` so a
+  dropped `.txt` or other unsupported file is visible instead of silently
+  looking stuck.
 
 ## Known Limitations
 
