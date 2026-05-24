@@ -16,11 +16,13 @@ import re
 import shutil
 import sys
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 import frontmatter
 
 from models import validate_node
+from node_normalization import normalize_raw_node, review_reason_requires_strict_cogs_date
 from agentic_loop import ARCHIVE_DIR, REVIEW_DIR, write_node
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -43,6 +45,23 @@ def _extract_json(content: str) -> dict | None:
 def _extract_reason(content: str) -> str:
     reason_match = re.search(r"\*\*Reason:\*\* (.+)", content)
     return reason_match.group(1).strip() if reason_match else "(unknown)"
+
+
+def _review_source_date(post: frontmatter.Post) -> str | None:
+    created = post.get("created")
+    if isinstance(created, date):
+        return created.isoformat()
+    return created if isinstance(created, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", created) else None
+
+
+def normalize_review_raw(raw: dict, *, reason: str, source_date: str | None = None) -> dict:
+    """Normalize raw review JSON before approval validation."""
+
+    return normalize_raw_node(
+        raw,
+        default_cogs_date=source_date,
+        reject_non_default_cogs_date=review_reason_requires_strict_cogs_date(reason),
+    )
 
 
 def summarize_review_file(path: Path) -> dict:
@@ -300,8 +319,9 @@ def review_all() -> None:
 
     for path in files:
         summary = summarize_review_file(path)
+        post = frontmatter.load(str(path))
         reason = summary["reason"]
-        raw = _extract_json(frontmatter.load(str(path)).content)
+        raw = _extract_json(post.content)
         if not raw:
             print(f"[UNPARSEABLE] {path.name} — could not extract JSON, skipping.\n")
             skipped += 1
@@ -330,6 +350,11 @@ def review_all() -> None:
         elif choice == "a":
             raw["confidence"] = "high"   # human approval overrides model confidence
             try:
+                raw = normalize_review_raw(
+                    raw,
+                    reason=reason,
+                    source_date=_review_source_date(post),
+                )
                 node = validate_node(raw)
                 write_node(node)
                 _archive(path, approved=True)

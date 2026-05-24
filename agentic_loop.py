@@ -21,6 +21,7 @@ from extractor_classifier import ExtractClassifier, ExtractClassifierConfig
 import memory_guards
 from memory_trace_log import append_memory_parent_trace
 from models import Confidence, NodeBase, validate_node
+from node_normalization import normalize_raw_node
 from openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
@@ -296,7 +297,12 @@ def _format_validation_error(node_type: str, exc: Exception) -> str:
 InvalidTriple = tuple[int, dict, str]
 
 
-def validate_output(nodes: list[dict]) -> tuple[list[NodeBase], list[InvalidTriple]]:
+def validate_output(
+    nodes: list[dict],
+    *,
+    default_cogs_date: str | None = None,
+    reject_non_default_cogs_date: bool = False,
+) -> tuple[list[NodeBase], list[InvalidTriple]]:
     """
     Validate each node against its Pydantic model.
     Returns (valid_nodes, invalid_triples) where each triple is (index, raw_dict, reason).
@@ -307,9 +313,14 @@ def validate_output(nodes: list[dict]) -> tuple[list[NodeBase], list[InvalidTrip
 
     for i, raw in enumerate(nodes):
         try:
-            node = validate_node(raw)
+            normalized = normalize_raw_node(
+                raw,
+                default_cogs_date=default_cogs_date,
+                reject_non_default_cogs_date=reject_non_default_cogs_date,
+            )
+            node = validate_node(normalized)
             if node.confidence == Confidence.LOW:
-                invalid.append((i, raw, "confidence: low"))
+                invalid.append((i, normalized, "confidence: low"))
             else:
                 valid.append(node)
         except (ValueError, ValidationError) as e:
@@ -656,6 +667,7 @@ def route_openai_fallback_to_review(
     raw_nodes: list[dict],
     context: str,
     reason: str,
+    default_cogs_date: str | None = None,
 ) -> bool:
     """Route OpenAI-rescued candidates to review/, never directly to the vault."""
     if not raw_nodes or not openai_fallback_enabled():
@@ -669,7 +681,11 @@ def route_openai_fallback_to_review(
         return False
 
     candidates = ensure_cogs_companions(candidates)
-    valid, invalid = validate_output(candidates)
+    valid, invalid = validate_output(
+        candidates,
+        default_cogs_date=default_cogs_date or datetime.now().strftime("%Y-%m-%d"),
+        reject_non_default_cogs_date=True,
+    )
     for node in valid:
         write_to_review(
             node.model_dump(mode="json"),
@@ -693,6 +709,7 @@ def process_input(file_path: Path) -> None:
         post       = frontmatter.load(str(processing_path))
         content    = post.content
         session_id = post.get("session_id", processing_path.stem)
+        source_date = datetime.now().strftime("%Y-%m-%d")
 
         context    = build_context_for_input(content)
         raw_nodes  = extract_nodes(content)
@@ -707,7 +724,7 @@ def process_input(file_path: Path) -> None:
         classified = apply_memory_parent_title(classified, memory_parent)
         classified = ensure_cogs_companions(classified)
 
-        valid_nodes, invalid_triples = validate_output(classified)
+        valid_nodes, invalid_triples = validate_output(classified, default_cogs_date=source_date)
 
         retry_triples = [(idx, raw, reason) for idx, raw, reason in invalid_triples
                          if "confidence: low" not in reason]
@@ -716,7 +733,12 @@ def process_input(file_path: Path) -> None:
             if "confidence: low" not in reason:
                 continue
             fallback_raw = [raw_nodes[idx]] if idx < len(raw_nodes) else []
-            if fallback_raw and not route_openai_fallback_to_review(fallback_raw, context, reason):
+            if fallback_raw and not route_openai_fallback_to_review(
+                fallback_raw,
+                context,
+                reason,
+                source_date,
+            ):
                 write_to_review(raw, reason)
 
         if retry_triples:
@@ -725,9 +747,9 @@ def process_input(file_path: Path) -> None:
             error_context = "\n".join(f"- {reason}" for _, _, reason in retry_triples)
             log.info("Retrying classify for %d invalid node(s)", len(retry_triples))
             reclassified        = classify_nodes(retry_raw, context, error_context, use_examples=True)[:len(retry_triples)]
-            valid_retry, failed = validate_output(reclassified)
+            valid_retry, failed = validate_output(reclassified, default_cogs_date=source_date)
             valid_nodes.extend(valid_retry)
-            if failed and route_openai_fallback_to_review(retry_raw, context, error_context):
+            if failed and route_openai_fallback_to_review(retry_raw, context, error_context, source_date):
                 log.info("Retry failures routed through OpenAI fallback candidates")
             else:
                 for _, raw, reason in failed:

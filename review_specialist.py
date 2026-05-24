@@ -415,14 +415,21 @@ def _action_from_row(
 
 def _approval_preview_issue(path: Path) -> str:
     try:
-        raw = review._extract_json(path.read_text(encoding="utf-8"))
+        post = frontmatter.load(str(path))
+        raw = review._extract_json(post.content)
     except OSError as exc:
         return f"cannot read review file: {exc}"
     if not raw:
         return "review item is unparseable"
     raw = dict(raw)
     raw["confidence"] = "high"
+    reason = review._extract_reason(post.content)
     try:
+        raw = review.normalize_review_raw(
+            raw,
+            reason=reason,
+            source_date=review._review_source_date(post),
+        )
         validate_node(raw)
     except Exception as exc:
         return f"approval would fail validation: {exc}"
@@ -430,15 +437,22 @@ def _approval_preview_issue(path: Path) -> str:
 
 
 def _approval_raw(path: Path) -> dict[str, Any]:
-    raw = review._extract_json(path.read_text(encoding="utf-8"))
+    post = frontmatter.load(str(path))
+    raw = review._extract_json(post.content)
     if not raw:
         raise ValueError(f"review item is unparseable: {path.name}")
-    return dict(raw)
+    normalized = dict(raw)
+    normalized["confidence"] = "high"
+    return review.normalize_review_raw(
+        normalized,
+        reason=review._extract_reason(post.content),
+        source_date=review._review_source_date(post),
+    )
 
 
 def _approval_collision_issue(path: Path) -> str:
     raw = _approval_raw(path)
-    node = validate_node({**raw, "confidence": "high"})
+    node = validate_node(raw)
     folder = agentic_loop.SPROCKETS_FOLDERS.get(node.node_type)
     if folder is None:
         return ""
