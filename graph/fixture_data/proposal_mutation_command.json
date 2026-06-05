@@ -10,6 +10,7 @@
     "mutation_command": {
       "id": "mutation-create-tom-contact-and-bridge",
       "operation": "create_sprocket_and_bridge",
+      "target_layer": "product_graph",
       "review_class": "review_first",
       "payload": {
         "sprocket": {
