@@ -1,0 +1,65 @@
+{
+  "fixture_id": "valid_context_bridges",
+  "validity": "valid",
+  "description": "One Cog with a primary task bridge and additional resolved context bridges.",
+  "graph": {
+    "sprockets": [
+      {
+        "id": "sprocket-task-acme-meeting",
+        "kind": "task",
+        "text": "Get a meeting with Acme"
+      },
+      {
+        "id": "sprocket-place-diner",
+        "kind": "place",
+        "text": "Diner"
+      },
+      {
+        "id": "sprocket-contact-tom",
+        "kind": "contact",
+        "text": "Tom"
+      },
+      {
+        "id": "sprocket-org-acme",
+        "kind": "organization",
+        "text": "Acme"
+      }
+    ],
+    "cogs": [
+      {
+        "id": "cog-diner-meet-tom-about-acme",
+        "kind": "appointment",
+        "text": "DINER: meet Tom about Acme"
+      }
+    ],
+    "hierarchy_edges": [],
+    "bridge_edges": [
+      {
+        "cog_id": "cog-diner-meet-tom-about-acme",
+        "sprocket_id": "sprocket-task-acme-meeting",
+        "role": "primary"
+      },
+      {
+        "cog_id": "cog-diner-meet-tom-about-acme",
+        "sprocket_id": "sprocket-place-diner",
+        "role": "setting"
+      },
+      {
+        "cog_id": "cog-diner-meet-tom-about-acme",
+        "sprocket_id": "sprocket-contact-tom",
+        "role": "participant"
+      },
+      {
+        "cog_id": "cog-diner-meet-tom-about-acme",
+        "sprocket_id": "sprocket-org-acme",
+        "role": "subject"
+      }
+    ]
+  },
+  "expected": {
+    "validator_result": "pass",
+    "notes": [
+      "Bridge roles are roles on one bridge family, not separate edge families."
+    ]
+  }
+}

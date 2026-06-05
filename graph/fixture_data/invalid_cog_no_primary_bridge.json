@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invalid_cog_no_primary_bridge",
+  "validity": "invalid",
+  "description": "A Cog with no primary bridge must fail graph-level validation.",
+  "graph": {
+    "sprockets": [
+      {
+        "id": "sprocket-general",
+        "kind": "area",
+        "text": "General"
+      }
+    ],
+    "cogs": [
+      {
+        "id": "cog-fill-gas-cans",
+        "kind": "action",
+        "text": "Fill gas cans"
+      }
+    ],
+    "hierarchy_edges": [],
+    "bridge_edges": []
+  },
+  "expected": {
+    "validator_result": "fail",
+    "errors": [
+      "cog_missing_primary_bridge"
+    ]
+  }
+}

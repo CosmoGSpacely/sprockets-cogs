@@ -1,0 +1,40 @@
+{
+  "fixture_id": "invalid_context_bridge_role",
+  "validity": "invalid",
+  "description": "An unknown bridge role must fail model loading before graph validation.",
+  "graph": {
+    "sprockets": [
+      {
+        "id": "sprocket-general",
+        "kind": "area",
+        "text": "General"
+      }
+    ],
+    "cogs": [
+      {
+        "id": "cog-call-tom",
+        "kind": "action",
+        "text": "Call Tom"
+      }
+    ],
+    "hierarchy_edges": [],
+    "bridge_edges": [
+      {
+        "cog_id": "cog-call-tom",
+        "sprocket_id": "sprocket-general",
+        "role": "primary"
+      },
+      {
+        "cog_id": "cog-call-tom",
+        "sprocket_id": "sprocket-general",
+        "role": "reminder"
+      }
+    ]
+  },
+  "expected": {
+    "validator_result": "model_load_fail",
+    "errors": [
+      "invalid_bridge_role"
+    ]
+  }
+}

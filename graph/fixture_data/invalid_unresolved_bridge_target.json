@@ -1,0 +1,41 @@
+{
+  "fixture_id": "invalid_unresolved_bridge_target",
+  "validity": "invalid",
+  "description": "An accepted bridge to a missing Sprocket target must fail validation.",
+  "graph": {
+    "sprockets": [
+      {
+        "id": "sprocket-general",
+        "kind": "area",
+        "text": "General"
+      }
+    ],
+    "cogs": [
+      {
+        "id": "cog-call-tom",
+        "kind": "action",
+        "text": "Call Tom"
+      }
+    ],
+    "hierarchy_edges": [],
+    "bridge_edges": [
+      {
+        "cog_id": "cog-call-tom",
+        "sprocket_id": "sprocket-general",
+        "role": "primary"
+      },
+      {
+        "cog_id": "cog-call-tom",
+        "sprocket_id": "sprocket-contact-tom",
+        "role": "participant"
+      }
+    ]
+  },
+  "expected": {
+    "validator_result": "fail",
+    "errors": [
+      "bridge_unresolved_sprocket_target"
+    ],
+    "safe_handling": "Create or link Tom as a contact in the proposal layer before accepting this context bridge."
+  }
+}

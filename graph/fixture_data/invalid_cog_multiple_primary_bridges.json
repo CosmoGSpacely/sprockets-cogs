@@ -1,0 +1,45 @@
+{
+  "fixture_id": "invalid_cog_multiple_primary_bridges",
+  "validity": "invalid",
+  "description": "A Cog with two primary bridges must fail graph-level validation.",
+  "graph": {
+    "sprockets": [
+      {
+        "id": "sprocket-general",
+        "kind": "area",
+        "text": "General"
+      },
+      {
+        "id": "sprocket-task-yard",
+        "kind": "task",
+        "text": "Yard work"
+      }
+    ],
+    "cogs": [
+      {
+        "id": "cog-fill-gas-cans",
+        "kind": "action",
+        "text": "Fill gas cans"
+      }
+    ],
+    "hierarchy_edges": [],
+    "bridge_edges": [
+      {
+        "cog_id": "cog-fill-gas-cans",
+        "sprocket_id": "sprocket-general",
+        "role": "primary"
+      },
+      {
+        "cog_id": "cog-fill-gas-cans",
+        "sprocket_id": "sprocket-task-yard",
+        "role": "primary"
+      }
+    ]
+  },
+  "expected": {
+    "validator_result": "fail",
+    "errors": [
+      "cog_multiple_primary_bridges"
+    ]
+  }
+}

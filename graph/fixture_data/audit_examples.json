@@ -1,0 +1,33 @@
+{
+  "fixture_id": "audit_examples",
+  "validity": "example",
+  "description": "Automatic and reviewed audit examples for the four-layer model.",
+  "audit": [
+    {
+      "id": "audit-auto-create-standalone-cog",
+      "kind": "audit_decision",
+      "mutation_id": "mutation-create-cog-breathe",
+      "decision": "applied_automatic",
+      "decider": "substrate",
+      "reason": "Standalone action Cog safely bridged to General.",
+      "timestamp": "2026-06-05T07:15:00-04:00"
+    },
+    {
+      "id": "audit-reviewed-create-tom-contact",
+      "kind": "audit_decision",
+      "proposal_id": "proposal-create-tom-contact",
+      "mutation_id": "mutation-create-tom-contact-and-bridge",
+      "decision": "accepted",
+      "decider": "user",
+      "edits": [],
+      "reason": "Tom is the intended contact target.",
+      "timestamp": "2026-06-05T07:16:00-04:00"
+    }
+  ],
+  "expected": {
+    "validator_result": "audit_layer_example",
+    "notes": [
+      "Audit records are not product graph vertices."
+    ]
+  }
+}

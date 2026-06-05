@@ -1,0 +1,34 @@
+{
+  "fixture_id": "proposal_mutation_command",
+  "validity": "example",
+  "description": "A proposal-layer packet wraps one mutation command without adding candidate graph facts.",
+  "proposal": {
+    "id": "proposal-create-tom-contact",
+    "kind": "review_proposal",
+    "reason": "The Cog text mentions Tom, but no accepted Tom contact target exists.",
+    "display_text": "Create contact Sprocket 'Tom' and add participant bridge to Cog 'Call Tom'.",
+    "mutation_command": {
+      "id": "mutation-create-tom-contact-and-bridge",
+      "operation": "create_sprocket_and_bridge",
+      "review_class": "review_first",
+      "payload": {
+        "sprocket": {
+          "id": "sprocket-contact-tom",
+          "kind": "contact",
+          "text": "Tom"
+        },
+        "bridge": {
+          "cog_id": "cog-call-tom",
+          "sprocket_id": "sprocket-contact-tom",
+          "role": "participant"
+        }
+      }
+    }
+  },
+  "expected": {
+    "validator_result": "proposal_layer_example",
+    "notes": [
+      "Candidate Sprocket and bridge are not product graph facts until accepted."
+    ]
+  }
+}

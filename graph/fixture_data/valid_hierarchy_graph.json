@@ -1,0 +1,51 @@
+{
+  "fixture_id": "valid_hierarchy_graph",
+  "validity": "valid",
+  "description": "Canonical Sprocket hierarchy without any Cogs.",
+  "graph": {
+    "sprockets": [
+      {
+        "id": "sprocket-area-farm",
+        "kind": "area",
+        "text": "Farm"
+      },
+      {
+        "id": "sprocket-goal-tractor-ready",
+        "kind": "goal",
+        "text": "Keep tractor ready"
+      },
+      {
+        "id": "sprocket-project-front-tires",
+        "kind": "project",
+        "text": "Front tires"
+      },
+      {
+        "id": "sprocket-task-remount-front-tires",
+        "kind": "task",
+        "text": "Remount front tractor tires"
+      }
+    ],
+    "cogs": [],
+    "hierarchy_edges": [
+      {
+        "parent_id": "sprocket-area-farm",
+        "child_id": "sprocket-goal-tractor-ready"
+      },
+      {
+        "parent_id": "sprocket-goal-tractor-ready",
+        "child_id": "sprocket-project-front-tires"
+      },
+      {
+        "parent_id": "sprocket-project-front-tires",
+        "child_id": "sprocket-task-remount-front-tires"
+      }
+    ],
+    "bridge_edges": []
+  },
+  "expected": {
+    "validator_result": "pass",
+    "notes": [
+      "Hierarchy edges connect Sprockets only."
+    ]
+  }
+}

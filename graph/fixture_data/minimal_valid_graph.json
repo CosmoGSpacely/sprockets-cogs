@@ -1,0 +1,35 @@
+{
+  "fixture_id": "minimal_valid_graph",
+  "validity": "valid",
+  "description": "Smallest accepted product graph: General area, one action Cog, one primary bridge.",
+  "graph": {
+    "sprockets": [
+      {
+        "id": "sprocket-general",
+        "kind": "area",
+        "text": "General"
+      }
+    ],
+    "cogs": [
+      {
+        "id": "cog-breathe",
+        "kind": "action",
+        "text": "Breathe"
+      }
+    ],
+    "hierarchy_edges": [],
+    "bridge_edges": [
+      {
+        "cog_id": "cog-breathe",
+        "sprocket_id": "sprocket-general",
+        "role": "primary"
+      }
+    ]
+  },
+  "expected": {
+    "validator_result": "pass",
+    "notes": [
+      "A standalone Cog uses General as a real accepted primary bridge target."
+    ]
+  }
+}
