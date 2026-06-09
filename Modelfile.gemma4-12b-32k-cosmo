@@ -1,0 +1,5 @@
+FROM gemma4:12b
+
+PARAMETER num_ctx        32768
+PARAMETER temperature    0.1
+PARAMETER num_predict    4096
