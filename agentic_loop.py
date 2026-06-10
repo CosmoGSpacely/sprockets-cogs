@@ -18,6 +18,16 @@ from watchdog.observers import Observer
 import classifier_context
 from entity_state import get_entities_by_tier, upsert_entity
 from extractor_classifier import ExtractClassifier, ExtractClassifierConfig
+from graph.mutations import MutationCommand
+from graph.proposals import ReviewProposal
+from intents.models import (
+    AuthorityAssessment,
+    Confidence as IntentConfidence,
+    IntentClass,
+    IntentClassification,
+    RequiredGuard,
+    SuggestedRoute,
+)
 import memory_guards
 from memory_trace_log import append_memory_parent_trace
 from models import Confidence, NodeBase, validate_node
@@ -50,6 +60,7 @@ OUTPUT_DIR     = Path(os.environ.get("SPROCKETS_COGS_OUTPUT_DIR", str(SC_ROOT / 
 VAULT_DIR      = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(DEFAULT_VAULT_DIR)))
 MEMORY_TRACE_PATH_ENV = "SPROCKETS_COGS_MEMORY_TRACE_PATH"
 MEMORY_TRACE_FILENAME = "memory-parent-traces.jsonl"
+STRUCTURAL_GUARD_ENV = "SPROCKETS_COGS_STRUCTURAL_GUARD"
 
 DAILY_DIR      = VAULT_DIR / "Cogs" / "daily"
 REVIEW_DIR     = VAULT_DIR / "review"
@@ -71,6 +82,26 @@ log = logging.getLogger(__name__)
 # ── Node body template (Jinja2) ────────────────────────────────────────────────
 # Body is empty for Phase 1. Stage 8 adds reflection; later stages add richer content.
 _NODE_BODY = Template("")
+
+_STRUCTURAL_LABEL_PATTERN = re.compile(
+    r"\b(area|goal|project|task|subproject|sprocket|cog|bridge|parent|hierarchy)\s*:",
+    re.IGNORECASE,
+)
+_STRUCTURAL_COMMAND_PATTERN = re.compile(
+    r"\b(create|make|add|move|link|merge|split|rename|schedule|reparent)\b"
+    r".*\b(area|goal|project|task|contact|entity|reference|sprocket|cog|bridge|parent|hierarchy)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_STRUCTURAL_NODE_TYPES = {
+    "graph/proposal",
+    "review/proposal",
+    "structural/proposal",
+}
+_STRUCTURAL_INTENT_VALUES = {
+    "structural_proposal",
+    "planning_update",
+    "review_decision",
+}
 
 
 # ── File I/O helpers ───────────────────────────────────────────────────────────
@@ -243,6 +274,147 @@ def write_to_review(raw: dict, reason: str) -> None:
         f"```json\n{json.dumps(raw, indent=2)}\n```\n"
     )
     log.warning("Routed to review/: %s — %s", path.name, reason)
+
+
+def structural_guard_enabled() -> bool:
+    """Return whether deterministic structural proposal routing is active."""
+
+    value = os.environ.get(STRUCTURAL_GUARD_ENV, "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _node_text(node: dict) -> str:
+    return " ".join(
+        str(node.get(field, ""))
+        for field in (
+            "raw",
+            "title",
+            "item_text",
+            "parent_hint",
+            "operation",
+            "intent_class",
+            "action",
+        )
+    )
+
+
+def _structural_guard_reasons(
+    source_text: str,
+    raw_nodes: list[dict],
+    classified: list[dict],
+) -> tuple[str, ...]:
+    """Return deterministic reasons that require structural review."""
+
+    reasons: list[str] = []
+    combined_text = " ".join(
+        [source_text]
+        + [_node_text(node) for node in raw_nodes]
+        + [_node_text(node) for node in classified]
+    )
+    if _STRUCTURAL_LABEL_PATTERN.search(combined_text):
+        reasons.append("structural label syntax")
+    if _STRUCTURAL_COMMAND_PATTERN.search(combined_text):
+        reasons.append("graph mutation command language")
+
+    for node in classified:
+        node_type = str(node.get("node_type", "")).strip().lower()
+        intent_class = str(node.get("intent_class", "")).strip().lower()
+        operation = str(node.get("operation", "")).strip().lower()
+        if node_type in _STRUCTURAL_NODE_TYPES:
+            reasons.append(f"structural node_type: {node_type}")
+        if intent_class in _STRUCTURAL_INTENT_VALUES:
+            reasons.append(f"structural intent_class: {intent_class}")
+        if operation in {"move", "link", "merge", "split", "rename", "reparent"}:
+            reasons.append(f"non-allowlisted mutation operation: {operation}")
+
+    return tuple(dict.fromkeys(reasons))
+
+
+def _structural_review_proposal(
+    source_text: str,
+    raw_nodes: list[dict],
+    classified: list[dict],
+    reasons: tuple[str, ...],
+    session_id: str,
+) -> ReviewProposal:
+    """Build a review-first proposal packet for guarded structural input."""
+
+    proposal_id = f"structural-guard-{uuid_lib.uuid4().hex[:8]}"
+    intent = IntentClassification(
+        intent_class=IntentClass.STRUCTURAL_PROPOSAL,
+        confidence=IntentConfidence.HIGH,
+        authority=AuthorityAssessment(
+            detected_authority_risks=reasons,
+            required_guard=RequiredGuard.DETERMINISTIC_PACKET_REQUIRED,
+            packet_required_suggestion=True,
+        ),
+        evidence=reasons,
+        uncertainty=("requires human review before graph mutation",),
+        suggested_route=(
+            SuggestedRoute.ROSIE,
+            SuggestedRoute.RUDI,
+            SuggestedRoute.JANE,
+            SuggestedRoute.VALIDATORS,
+            SuggestedRoute.AUDIT,
+        ),
+    )
+    command = MutationCommand(
+        id=f"{proposal_id}-mutation",
+        operation="create_sprocket_and_bridge",
+        target_layer="product_graph",
+        review_class="review_first",
+        payload={
+            "source_text": source_text,
+            "raw_nodes": raw_nodes,
+            "classified_nodes": classified,
+            "intent": intent.to_dict(),
+            "guard": RequiredGuard.DETERMINISTIC_PACKET_REQUIRED.value,
+        },
+        expected_current_state={
+            "live_guard": STRUCTURAL_GUARD_ENV,
+            "direct_write_allowed": False,
+        },
+    )
+    return ReviewProposal(
+        id=proposal_id,
+        reason="deterministic structural guard requires review packet",
+        display_text=source_text.strip()[:500] or "Structural proposal",
+        mutation_command=command,
+        source={
+            "session_id": session_id,
+            "guard_reasons": list(reasons),
+        },
+    )
+
+
+def route_structural_guard_to_review(
+    source_text: str,
+    raw_nodes: list[dict],
+    classified: list[dict],
+    session_id: str,
+) -> tuple[list[dict], bool]:
+    """
+    Route structural proposal language to review before ordinary validation.
+
+    This is a deterministic substrate guard. It does not ask the model whether a
+    review packet is required; it detects high-risk structural language and
+    prevents direct writes.
+    """
+
+    if not structural_guard_enabled():
+        return classified, False
+
+    reasons = _structural_guard_reasons(source_text, raw_nodes, classified)
+    if not reasons:
+        return classified, False
+
+    proposal = _structural_review_proposal(source_text, raw_nodes, classified, reasons, session_id)
+    write_to_review(
+        proposal.model_dump(mode="json", exclude_none=True),
+        f"structural_guard_packet_required: {', '.join(reasons)}",
+    )
+    log.warning("Structural guard routed input to review: %s", ", ".join(reasons))
+    return [], True
 
 
 def send_response(session_id: str, text: str) -> None:
@@ -714,6 +886,16 @@ def process_input(file_path: Path) -> None:
         context    = build_context_for_input(content)
         raw_nodes  = extract_nodes(content)
         classified = classify_nodes(raw_nodes, context)
+        classified, structural_guard_routed = route_structural_guard_to_review(
+            content,
+            raw_nodes,
+            classified,
+            session_id,
+        )
+        if structural_guard_routed:
+            append_reflection(session_id, [])
+            archive_input(processing_path)
+            return
         classified = apply_explicit_hierarchy_hints(raw_nodes, classified)
         classified = ensure_hierarchy_tasks(raw_nodes, classified)
         memory_trace = memory_parent_trace(content)
