@@ -18,6 +18,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - memory tool-call readiness probe;
 - real-input local model A/B harness;
 - selected-model read-only capability probe;
+- read-only memory demo surface with retrieval evidence and traces;
+- all-specialist route audit command for one structural proposal input class;
 - planning-note maintenance helpers for current weekly/monthly/annual notes;
 - scheduled nightly carry supervision;
 - Phase 4 specialist previews for Rosie, RUDI, Cogs, Sprockets, Jane, and
@@ -36,6 +38,13 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - RUDI owns reasoning/orchestration previews and semantic memory retrieval for
   compact post-classification guards.
 - Prompt-appended memory context remains disabled.
+- `scripts/memory-demo "query"` runs `specialists.rudi.memory_demo`, a
+  read-only retrieval demo against current vault materials; it prints retrieved
+  evidence plus trace/guard details and does not write to the vault or change
+  prompt context.
+- `scripts/specialist-route` runs `specialists.routing`, a structural proposal
+  route through Rosie, RUDI, Sprockets, Cogs, Jane, and Uniblab boundaries; it
+  emits an audit envelope and writes nothing.
 - Nightly Cogs carry is scheduled by a user-level systemd timer.
 - `scripts/cogs-planning` previews planning names, planning inventory, monthly
   seven-day calendar grids plus vertical 5WOW tables, weekly/monthly/annual
@@ -112,7 +121,10 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - Native read-only tool selection passed for the Stage 99 local model probes;
   JSON-contract tool selection still missed required arguments and should not be
   treated as production-ready write authority.
-- Memory packets and graph-expanded retrieval remain benchmark/preview features.
+- Memory packets, graph-expanded retrieval, and embedding-backed retrieval remain
+  benchmark/preview features unless explicitly selected. The default
+  `scripts/memory-demo` path uses lexical vault retrieval so the demo does not
+  depend on live Ollama availability.
 - More complete packaging, onboarding, and non-local deployment polish remain
   future work.
 - The Telegram adapter has no live polling loop yet; current bot work provides

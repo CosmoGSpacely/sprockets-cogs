@@ -47,12 +47,16 @@ SPECIALISTS: tuple[SpecialistDefinition, ...] = (
             "production_retrieval.py",
             "memory_packets.py",
             "memory_trace_log.py",
+            "specialists/rudi/memory_demo.py",
+            "specialists/routing.py",
         ),
         commands=(
             "scripts/orchestrator-route",
             "scripts/orchestrated-rehearsal",
             "scripts/agent-message-bus",
             "scripts/memory-specialist",
+            "scripts/memory-demo",
+            "scripts/specialist-route",
             "scripts/retrieval-preview",
             "scripts/retrieval-traces",
             "scripts/memory-packets",
@@ -136,4 +140,3 @@ def get_specialist(specialist_id: str) -> SpecialistDefinition:
         if specialist.specialist_id == specialist_id:
             return specialist
     raise KeyError(f"unknown specialist: {specialist_id}")
-

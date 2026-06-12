@@ -30,10 +30,12 @@ dispatcher.
 - `retrieval_*`
 - `memory_packets.py`
 - `memory_trace_log.py`
+- `specialists/rudi/memory_demo.py`
 - `scripts/orchestrator-route`
 - `scripts/orchestrated-rehearsal`
 - `scripts/agent-message-bus`
 - `scripts/memory-specialist`
+- `scripts/memory-demo`
 - `scripts/retrieval-preview`
 - `scripts/retrieval-traces`
 - `scripts/memory-packets`
@@ -43,4 +45,3 @@ dispatcher.
 - Prompt-appended memory context remains off.
 - The message bus is a contract and rehearsal surface, not live dispatch.
 - Graph and packet retrieval remain preview or benchmark first.
-

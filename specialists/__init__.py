@@ -1,7 +1,7 @@
-"""Visible Phase 4 specialist map.
+"""Visible specialist map and package-owned promotion surfaces.
 
-The implementation modules still live at the repository root. This package is a
-small, importable index for docs, tests, and future status surfaces.
+Legacy implementation modules still exist at repository root, but new promoted
+specialist behavior should live inside this package whenever practical.
 """
 
 from specialists.catalog import SPECIALISTS, SpecialistDefinition, get_specialist, iter_specialists
@@ -12,4 +12,3 @@ __all__ = [
     "get_specialist",
     "iter_specialists",
 ]
-
