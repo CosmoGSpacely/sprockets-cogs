@@ -16,6 +16,14 @@ current production modules.
 `scripts/specialist-route`. It exists here, rather than at repository root, so
 all-specialist routing remains tied to the specialist boundary it exercises.
 
+`specialists.adapters` contains source-adapter promotion surfaces. Adapters feed
+Rosie by writing `.input` files; they do not write to the vault or approve
+review packets.
+
+`specialists.cogswell` is an optional package-owned subsystem, not one of the
+six live specialist identities. It proves the deterministic collection
+database/graph bridge without putting database import into Rosie's intake loop.
+
 ## Current Map
 
 | Specialist | Role | Runtime form |
@@ -26,6 +34,13 @@ all-specialist routing remains tied to the specialist boundary it exercises.
 | [Sprockets](sprockets/) | Hierarchy, graph, durable structure | Commands and review-first previews |
 | [Jane](jane/) | Human-in-the-loop review | Commands and guarded apply previews |
 | [Uniblab](uniblab/) | Operations, health, status | Commands, possible scheduled health checks |
+
+Adjacent package-owned subsystem:
+
+- [Source adapters](adapters/) normalize Telegram, Discord, Open WebUI, and
+  future source inputs into `.input` files for Rosie.
+- [Cogswell](cogswell/) imports structured collection CSV data into SQLite,
+  renders graph-visible Markdown resources, and preserves human notes.
 
 ## Importable Catalog
 

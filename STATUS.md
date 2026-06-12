@@ -45,6 +45,19 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - `scripts/specialist-route` runs `specialists.routing`, a structural proposal
   route through Rosie, RUDI, Sprockets, Cogs, Jane, and Uniblab boundaries; it
   emits an audit envelope and writes nothing.
+- `scripts/collections-init`, `scripts/collections-import`,
+  `scripts/collections-query`, `scripts/collections-sync`, and
+  `scripts/collections-bridge` run the optional Cogswell database/graph bridge.
+  SQLite owns deterministic catalog facts; rendered Markdown preserves human
+  notes and exposes graph-visible collection resources.
+- `scripts/telegram-poll` runs a foreground Telegram polling pass that respects
+  allowlist and writes allowed messages into the `.input` queue for Rosie.
+- `scripts/discord-input-proof` and `scripts/open-webui-input-proof` prove
+  additional source adapters through the same `.input` contract without giving
+  sources vault write authority.
+- `scripts/source-ack` previews source acknowledgements without treating them as
+  review approvals, and `scripts/adapter-status` reports pending/ignored/rejected
+  adapter intake.
 - Nightly Cogs carry is scheduled by a user-level systemd timer.
 - `scripts/cogs-planning` previews planning names, planning inventory, monthly
   seven-day calendar grids plus vertical 5WOW tables, weekly/monthly/annual
