@@ -16,6 +16,8 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - guarded production retrieval;
 - retrieval traces and reports;
 - memory tool-call readiness probe;
+- real-input local model A/B harness;
+- selected-model read-only capability probe;
 - planning-note maintenance helpers for current weekly/monthly/annual notes;
 - scheduled nightly carry supervision;
 - Phase 4 specialist previews for Rosie, RUDI, Cogs, Sprockets, Jane, and
@@ -27,6 +29,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 
 - The service runs Rosie, the file-based `agentic_loop.py` watcher.
 - Local classification uses the configured Ollama model.
+- Stage 99 real-input A/B favored `gemma4:12b-32k-cosmo` over
+  `qwen3.5:9b-32k-cosmo` for capture quality on representative current inputs;
+  runtime config may still override the model through `SPROCKETS_COGS_MODEL`.
 - OpenAI fallback is review-first when configured.
 - RUDI owns reasoning/orchestration previews and semantic memory retrieval for
   compact post-classification guards.
@@ -104,7 +109,9 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   notes put the seven-day `Calendar` grid before the vertical weekday `5WOW`
   table.
 - Higher-level hierarchy nodes are human-authored or review-approved.
-- Native local tool calling is not production-ready for the current model tag.
+- Native read-only tool selection passed for the Stage 99 local model probes;
+  JSON-contract tool selection still missed required arguments and should not be
+  treated as production-ready write authority.
 - Memory packets and graph-expanded retrieval remain benchmark/preview features.
 - More complete packaging, onboarding, and non-local deployment polish remain
   future work.
@@ -126,5 +133,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest local gate passed 536 tests, smoke test, fallback contract, and
-review count 0.
+The latest local gate passed 606 tests, smoke test, fallback contract, and
+review count inspection.

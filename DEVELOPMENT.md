@@ -29,6 +29,9 @@ Safe exploration commands:
 scripts/status
 scripts/review --count
 scripts/capture-preview "Need to follow up with Alex tomorrow"
+scripts/model-ab
+scripts/model-capability-probe --model gemma4:12b-32k-cosmo --mode native
+scripts/stage-closeout --stage 99 --title "Stage closed"
 scripts/retrieval-preview --status
 scripts/orchestrated-rehearsal --source cli --request-id docs-tour "check service status"
 ```
@@ -165,6 +168,9 @@ run while exploring.
 | `scripts/memory-specialist` | `memory_specialist.py` | RUDI | Inventory/cache/benchmark preview facade for memory work. | May read/write embedding cache; no vault writes. |
 | `scripts/memory-packets` | `memory_packets_cli.py` | RUDI | Preview deterministic memory packets. | No. |
 | `scripts/memory-tool-probe` | `memory_tool_probe.py` | RUDI | Probe local model tool-call readiness. | No. |
+| `scripts/model-ab` | `model_ab.py` | Rosie / Uniblab | Compare local capture models on representative real inputs. | No. |
+| `scripts/model-capability-probe` | `model_capability_probe.py` | RUDI / Uniblab | Stamp selected-model read-only tool-selection capability. | No. |
+| `scripts/stage-closeout` | `stage_closeout.py` | Uniblab / builder support | Render or explicitly append standardized stage closeout evidence blocks. | Mixed: preview is read-only; `--append --stage-file` writes the selected file. |
 | `scripts/fallback-eval` | `fallback_eval.py` | RUDI / Jane | Evaluate OpenAI fallback behavior. | No vault writes; may call OpenAI if configured. |
 | `scripts/cogs-specialist` | `cogs_specialist.py` | Cogs | Read-only Cogs inventory/preview facade. | No. |
 | `scripts/cogs-planning` | `cogs_planning.py` | Cogs | Planning note inventory, naming, and guarded creation. | Mixed: inventory/names are read-only; ensure/create writes planning notes. |
@@ -189,8 +195,8 @@ starting point for help text, exit behavior, and error-message cleanup.
 |---|---|---|
 | Read-only reports | `scripts/status`, `scripts/job-status`, `scripts/sc-backup --preview`, `scripts/sc-backup --status`, `scripts/sc-backup --verify`, `scripts/hierarchy`, `scripts/retrieval-traces`, `scripts/telegram-update-probe --status`, `scripts/sprockets-specialist --inventory`, `scripts/cogs-specialist --inventory`, `scripts/memory-specialist --inventory`, `scripts/review-specialist --inventory` | Safe to run during exploration. Empty reports should usually exit successfully and explain that there is nothing to show. |
 | Read-only previews | `scripts/capture-preview`, `scripts/input-adapter-preview`, `scripts/telegram-adapter-preview`, `scripts/telegram-response` without `--send`, `scripts/sc-backup --restore-preview`, `scripts/markitdown-preview`, `scripts/markitdown-batch`, `scripts/retrieval-preview`, `scripts/orchestrator-route`, `scripts/orchestrated-rehearsal`, `scripts/cogs-specialist --carry-preview`, `scripts/cogs-specialist --planning-preview`, `scripts/sprockets-specialist --propose`, `scripts/review-specialist --apply-preview` | Should say "preview" or "without writing" in help text and output. |
-| Benchmarks and probes | `scripts/check`, `scripts/smoke`, `scripts/retrieval-eval`, `scripts/fallback-eval`, `scripts/memory-tool-probe`, `scripts/memory-specialist --benchmark`, `scripts/memory-specialist --cache-coverage` | May use temp files, model calls, API calls, or embedding cache, but should not write the live vault. |
-| Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/agent-message-bus --append`, `scripts/sc-backup --create`, `scripts/telegram-update-probe --write-update-json ...`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus/backup paths. Help text should name the target path when practical. |
+| Benchmarks and probes | `scripts/check`, `scripts/smoke`, `scripts/model-ab`, `scripts/model-capability-probe`, `scripts/retrieval-eval`, `scripts/fallback-eval`, `scripts/memory-tool-probe`, `scripts/memory-specialist --benchmark`, `scripts/memory-specialist --cache-coverage` | May use temp files, model calls, API calls, or embedding cache, but should not write the live vault. |
+| Operational-output writers | `scripts/review-specialist --write-packet`, `scripts/stage-closeout --append --stage-file ...`, `scripts/agent-message-bus --append`, `scripts/sc-backup --create`, `scripts/telegram-update-probe --write-update-json ...`, memory trace JSONL written by the service | Write outside the vault under SC output/message-bus/backup paths. Help text should name the target path when practical. |
 | Guarded vault writers | `scripts/carry --apply`, `scripts/nightly`, `scripts/cogs-planning --create`, `scripts/cogs-planning --ensure-current`, `scripts/review` interactive apply/discard flows | Should have a dry-run, preview, report, or source-check path before writes. Validation failures should exit nonzero. |
 | Guarded input writers | `scripts/input-adapter-preview --write --input-dir ...`, `scripts/telegram-adapter-preview --write --input-dir ...`, `scripts/markitdown-preview --write --input-dir ...`, `scripts/markitdown-batch --apply --input-dir ...` | Writes only `.input` files into an explicitly selected input directory; refuses existing final files. |
 | Guarded source replies | `scripts/telegram-response --send ...` | Contacts Telegram only after response-route guards pass. Review-required/operator-report/local-reflection outputs stay local. |
