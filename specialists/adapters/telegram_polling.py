@@ -53,6 +53,7 @@ def poll_telegram_once(
     offset: int | None = None,
     limit: int = 10,
     timeout: int = 0,
+    duplicate_dirs: Sequence[Path] = (),
     opener=fetch_telegram_updates,
 ) -> TelegramPollResult:
     """Fetch Telegram updates once and write allowlisted messages as `.input`."""
@@ -83,10 +84,14 @@ def poll_telegram_once(
             continue
         allowed += 1
         envelope = telegram_envelope(message)
+        filename = input_filename(envelope)
+        if any((directory / filename).exists() for directory in duplicate_dirs):
+            ignored.append(f"update {message.update_id}: duplicate {filename}")
+            continue
         try:
             written.append(write_input_file(envelope, input_dir))
         except FileExistsError:
-            ignored.append(f"update {message.update_id}: duplicate {input_filename(envelope)}")
+            ignored.append(f"update {message.update_id}: duplicate {filename}")
 
     return TelegramPollResult(
         fetched=len(updates),

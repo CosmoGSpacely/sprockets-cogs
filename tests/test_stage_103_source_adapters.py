@@ -65,6 +65,36 @@ class Stage103SourceAdapterTests(unittest.TestCase):
         self.assertEqual(len(result.written), 0)
         self.assertEqual(result.ignored, ("update 1001: not allowlisted",))
 
+    def test_telegram_poll_once_skips_duplicate_in_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "input"
+            archive_dir = root / "archive"
+            archive_dir.mkdir()
+            (archive_dir / "telegram-telegram88842.input").write_text(
+                "already processed",
+                encoding="utf-8",
+            )
+
+            result = telegram_polling.poll_telegram_once(
+                token="secret-token",
+                input_dir=input_dir,
+                allowed_user_ids=frozenset({777}),
+                allowed_chat_ids=frozenset(),
+                duplicate_dirs=(archive_dir,),
+                opener=lambda *_args, **_kwargs: {
+                    "ok": True,
+                    "result": [telegram_update()],
+                },
+            )
+
+        self.assertEqual(len(result.written), 0)
+        self.assertEqual(
+            result.ignored,
+            ("update 1001: duplicate telegram-telegram88842.input",),
+        )
+        self.assertEqual(result.next_offset, 1002)
+
     def test_discord_and_open_webui_proofs_write_source_envelopes(self):
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = Path(tmp) / "input"

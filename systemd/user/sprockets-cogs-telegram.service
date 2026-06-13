@@ -1,0 +1,13 @@
+[Unit]
+Description=Sprockets-Cogs Pilot 3 Telegram Orbit watcher
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/sprockets-cogs
+ExecStart=%h/sprockets-cogs/scripts/pilot3-telegram-watch
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

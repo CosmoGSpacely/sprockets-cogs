@@ -181,6 +181,44 @@ class Stage55TelegramResponseTests(unittest.TestCase):
             self.assertFalse(send_mock.called)
             self.assertIn("agent: Processed 1 node.", daily_note.read_text(encoding="utf-8"))
 
+    def test_agentic_loop_processed_ack_sends_to_telegram_source(self):
+        context = response_routing.ResponseContext(
+            source="telegram",
+            session_id="telegram-chat-888",
+            metadata={"telegram_chat_id": "888"},
+        )
+
+        with (
+            patch("telegram_response.merged_env_with_file", return_value={
+                "SPROCKETS_COGS_TELEGRAM_BOT_TOKEN": "secret-token",
+            }),
+            patch("telegram_response.send_telegram_response", return_value={
+                "ok": True,
+                "result": {"message_id": 999},
+            }) as send_mock,
+        ):
+            agentic_loop.send_processed_ack("telegram-chat-888", [], context)
+
+        self.assertEqual(send_mock.call_count, 1)
+        envelope = send_mock.call_args.args[0]
+        self.assertEqual(envelope.text, "Processed 0 items.")
+        self.assertEqual(envelope.response_type, response_routing.ResponseType.PROCESSED)
+
+    def test_agentic_loop_processed_ack_skips_telegram_when_token_missing(self):
+        context = response_routing.ResponseContext(
+            source="telegram",
+            session_id="telegram-chat-888",
+            metadata={"telegram_chat_id": "888"},
+        )
+
+        with (
+            patch("telegram_response.merged_env_with_file", return_value={}),
+            patch("telegram_response.send_telegram_response") as send_mock,
+        ):
+            agentic_loop.send_processed_ack("telegram-chat-888", [], context)
+
+        self.assertFalse(send_mock.called)
+
 
 if __name__ == "__main__":
     unittest.main()

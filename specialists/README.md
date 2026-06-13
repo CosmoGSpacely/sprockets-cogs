@@ -16,9 +16,13 @@ current production modules.
 `scripts/specialist-route`. It exists here, rather than at repository root, so
 all-specialist routing remains tied to the specialist boundary it exercises.
 
-`specialists.adapters` contains source-adapter promotion surfaces. Adapters feed
-Rosie by writing `.input` files; they do not write to the vault or approve
-review packets.
+`specialists.adapters` contains Orbit's source-adapter promotion surfaces.
+Adapters feed Rosie by writing `.input` files; they do not write to the vault or
+approve review packets.
+
+`specialists.orbit` is the stable named facade for the Orbit boundary. Orbit is
+not a seventh decision-making specialist; it is the source-normalization layer in
+front of Rosie.
 
 `specialists.cogswell` is an optional package-owned subsystem, not one of the
 six live specialist identities. It proves the deterministic collection
@@ -38,7 +42,9 @@ database/graph bridge without putting database import into Rosie's intake loop.
 Adjacent package-owned subsystem:
 
 - [Source adapters](adapters/) normalize Telegram, Discord, Open WebUI, and
-  future source inputs into `.input` files for Rosie.
+  rich image/document source inputs into `.input` files for Rosie.
+- [Orbit](orbit/) names the source-normalization boundary that owns those
+  adapters.
 - [Cogswell](cogswell/) imports structured collection CSV data into SQLite,
   renders graph-visible Markdown resources, and preserves human notes.
 

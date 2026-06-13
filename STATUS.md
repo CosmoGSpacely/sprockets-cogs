@@ -55,6 +55,22 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
 - `scripts/discord-input-proof` and `scripts/open-webui-input-proof` prove
   additional source adapters through the same `.input` contract without giving
   sources vault write authority.
+- `scripts/rich-input-proof` preserves one image/document resource, classifies
+  extracted text vs. resource-review routing, and writes a guarded `.input`
+  record without silently creating Cogs, appointments, bridge edges, or
+  obligations.
+- `scripts/pilot3-status` reports the Telegram/Orbit readiness posture for the
+  live Pilot 3 loop: token/allowlist presence, review queue count, latest
+  Telegram archive, and adapter intake status.
+- `scripts/pilot3-telegram-once` runs one foreground Telegram poll through
+  Orbit, writes allowlisted messages into `.input`, persists Telegram offset
+  state, skips deterministic duplicates already in `input/`, `processing/`, or
+  `archive/`, and can wait briefly for Rosie to archive the resulting file.
+- `scripts/pilot3-telegram-once --watch` runs the Pilot 3 foreground Telegram
+  loop continuously for operator-supervised use; it is not a daemon/service.
+- `scripts/pilot3-telegram-watch` is the convenience wrapper for the foreground
+  Telegram watch loop, and `systemd/user/sprockets-cogs-telegram.service` is an
+  optional user-service template for deliberate always-on installation.
 - `scripts/source-ack` previews source acknowledgements without treating them as
   review approvals, and `scripts/adapter-status` reports pending/ignored/rejected
   adapter intake.
@@ -106,8 +122,10 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   fetch/preview/write rather than a live polling service, and can fetch updates
   for local preview.
 - `scripts/telegram-response` previews conservative Telegram responses and can
-  manually send only with explicit `--send`; Rosie does not automatically reply
-  to bot messages.
+  manually send only with explicit `--send`.
+- The live loop now sends a compact Telegram `processed` acknowledgement for
+  Telegram-origin inputs after successful processing. Local daily reflection is
+  still written, and review-required/operator-report responses remain local.
 - `scripts/markitdown-preview` previews text/Markdown document ingestion as a
   `.input` file and can explicitly write one converted document to a chosen
   input directory.
@@ -140,10 +158,14 @@ specialist-boundary work, and Phase 5 codebase-maturity work:
   depend on live Ollama availability.
 - More complete packaging, onboarding, and non-local deployment polish remain
   future work.
-- The Telegram adapter has no live polling loop yet; current bot work provides
-  token-safe update probing, local update normalization, allowlist checks,
-  preview/write rehearsal, and manual response preview/send.
-- Automatic bot replies are not wired into the live service.
+- The Telegram adapter now has foreground one-shot and watch commands for Pilot
+  3, plus an uninstalled user-service template for deliberate always-on intake.
+  Current bot work provides token-safe update probing, allowlist checks,
+  persistent offset state, duplicate suppression, `.input` writing, Pilot 3
+  readiness/run reports, and a guarded processed acknowledgement after Rosie
+  completes a Telegram-origin input.
+- Automatic bot replies are limited to short processed acknowledgements; review
+  decisions and operator reports remain local.
 - Rich PDF/Office document ingestion requires the optional `markitdown`
   dependency; current document adapter tests and previews cover text/Markdown
   files without that dependency.
@@ -158,5 +180,5 @@ The main local gate is:
 scripts/check
 ```
 
-The latest local gate passed 606 tests, smoke test, fallback contract, and
+The latest local gate passed 635 tests, smoke test, fallback contract, and
 review count inspection.

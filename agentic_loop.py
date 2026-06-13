@@ -36,8 +36,15 @@ from openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
 )
+from response_routing import (
+    ResponseContext,
+    ResponseEnvelope,
+    ResponseType,
+    response_context_from_frontmatter,
+)
 from slug_utils import slugify
 from sprockets_specialist import SprocketsSpecialist, SprocketsSpecialistConfig
+import telegram_response
 from vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,
     build_graph,
@@ -417,7 +424,13 @@ def route_structural_guard_to_review(
     return [], True
 
 
-def send_response(session_id: str, text: str) -> None:
+def send_response(
+    session_id: str,
+    text: str,
+    *,
+    response_context: ResponseContext | None = None,
+    response_type: ResponseType = ResponseType.PROCESSED,
+) -> None:
     """
     Phase 1: appends reflection line to today's Cogs daily note.
     Later: routes back to originating channel via source adapter.
@@ -427,6 +440,52 @@ def send_response(session_id: str, text: str) -> None:
     with note_path.open("a") as f:
         f.write(f"\n> [{timestamp}] agent: {text}\n")
     log.info("Reflection appended to %s", note_path.name)
+
+    if response_context is None:
+        return
+
+    send_source_response(
+        response_context=response_context,
+        text=text,
+        response_type=response_type,
+    )
+
+
+def send_source_response(
+    *,
+    response_context: ResponseContext,
+    text: str,
+    response_type: ResponseType = ResponseType.PROCESSED,
+) -> None:
+    """Send a conservative source response without adding another local note."""
+
+    envelope = ResponseEnvelope(
+        context=response_context,
+        response_type=response_type,
+        text=text,
+    )
+    route = telegram_response.route_response(envelope)
+    if route.sink != "telegram" or not route.would_send:
+        log.info("Source response stayed local: %s", route.reason)
+        return
+
+    env = telegram_response.merged_env_with_file()
+    token = env.get(telegram_response.TELEGRAM_TOKEN_ENV, "").strip()
+    if not token:
+        log.warning("Telegram response skipped: token is not configured")
+        return
+
+    try:
+        payload = telegram_response.send_telegram_response(envelope, token=token)
+    except Exception as exc:
+        log.warning("Telegram response failed: %s", exc)
+        return
+
+    message_id = ""
+    result = payload.get("result", {})
+    if isinstance(result, dict):
+        message_id = str(result.get("message_id") or "")
+    log.info("Telegram response sent: message_id=%s", message_id or "unknown")
 
 
 # ── Pipeline steps ─────────────────────────────────────────────────────────────
@@ -528,11 +587,24 @@ def resolve_parents(nodes: list[NodeBase]) -> list[NodeBase]:
     return nodes
 
 
-def append_reflection(session_id: str, nodes: list[NodeBase]) -> None:
+def append_reflection(
+    session_id: str,
+    nodes: list[NodeBase],
+    *,
+    response_context: ResponseContext | None = None,
+) -> None:
     summary = f"Processed {len(nodes)} node(s) from session {session_id}"
     if nodes:
         summary += f": {', '.join(n.node_type for n in nodes)}"
-    send_response(session_id, summary)
+    send_response(session_id, summary, response_context=response_context)
+
+
+def send_processed_ack(session_id: str, nodes: list[NodeBase], response_context: ResponseContext) -> None:
+    """Send a compact source acknowledgement after a successful live pass."""
+
+    count = len(nodes)
+    text = f"Processed {count} item{'s' if count != 1 else ''}."
+    send_source_response(response_context=response_context, text=text)
 
 
 def archive_input(processing_path: Path) -> None:
@@ -881,6 +953,10 @@ def process_input(file_path: Path) -> None:
         post       = frontmatter.load(str(processing_path))
         content    = post.content
         session_id = post.get("session_id", processing_path.stem)
+        response_context = response_context_from_frontmatter(
+            post.metadata,
+            fallback_session_id=session_id,
+        )
         source_date = datetime.now().strftime("%Y-%m-%d")
 
         context    = build_context_for_input(content)
@@ -949,6 +1025,7 @@ def process_input(file_path: Path) -> None:
             write_node(node)
 
         append_reflection(session_id, resolved)
+        send_processed_ack(session_id, resolved, response_context)
         archive_input(processing_path)
 
     except Exception:

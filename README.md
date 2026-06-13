@@ -23,6 +23,12 @@ conservative at runtime:
 - **Jane** owns human-in-the-loop review boundaries.
 - **Uniblab** owns operational status, timers, model checks, and readiness.
 
+Adjacent named boundaries:
+
+- **Orbit** owns source normalization before Rosie. It turns Telegram, Discord,
+  Open WebUI, and rich image/document inputs into guarded `.input` files.
+- **Cogswell** owns the database/collection bridge.
+
 The message bus exists as a handoff contract and rehearsal surface. It is not
 yet a live dispatch engine.
 

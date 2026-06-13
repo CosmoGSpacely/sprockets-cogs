@@ -149,8 +149,11 @@ run while exploring.
 | `scripts/check` | `unittest`, `smoke_test.py`, `scripts/review --count` | Uniblab | Full local verification gate. | Uses temp vault for smoke; does not write production vault. |
 | `scripts/status` | `system_status.py` | Uniblab | Read-only operational status, specialist map, review and job posture. | No. |
 | `scripts/input-adapter-preview` | `input_adapter_preview.py` | Rosie | Preview or explicitly write adapter-produced `.input` files. | Mixed: preview is read-only; `--write --input-dir` writes one `.input` file. |
-| `scripts/telegram-adapter-preview` | `telegram_adapter_preview.py` | Rosie | Preview or explicitly write a Telegram update as a `.input` file. | Mixed: preview is read-only; `--write --input-dir` writes one allowlisted `.input` file. |
-| `scripts/telegram-update-probe` | `telegram_update_probe.py` | Rosie | Inspect Telegram token/allowlist readiness and optionally fetch updates without printing the token. | Mixed: status/fetch are read-only; `--write-update-json` writes one local JSON file for preview. |
+| `scripts/telegram-adapter-preview` | `telegram_adapter_preview.py` | Orbit | Preview or explicitly write a Telegram update as a `.input` file. | Mixed: preview is read-only; `--write --input-dir` writes one allowlisted `.input` file. |
+| `scripts/telegram-update-probe` | `telegram_update_probe.py` | Orbit | Inspect Telegram token/allowlist readiness and optionally fetch updates without printing the token. | Mixed: status/fetch are read-only; `--write-update-json` writes one local JSON file for preview. |
+| `scripts/pilot3-telegram-once` | `specialists/orbit/pilot3.py` | Orbit | Poll Telegram once or run a foreground watch loop, persist offset state, suppress duplicate inputs, and write allowlisted `.input` files. | Yes: writes `.input` files and offset state; never writes vault/review directly. |
+| `scripts/pilot3-telegram-watch` | `specialists/orbit/pilot3.py` | Orbit | Convenience wrapper for the foreground Pilot 3 Telegram watch loop. | Yes: writes `.input` files and offset state; never writes vault/review directly. |
+| `sprockets-cogs-telegram.service` | `systemd/user/sprockets-cogs-telegram.service` → `scripts/pilot3-telegram-watch` | Orbit | Optional user-service template for always-on Telegram intake. | Starts a source intake service when explicitly installed/enabled. |
 | `scripts/telegram-response` | `telegram_response.py` | Rosie / output adapter | Preview or explicitly send a conservative Telegram acknowledgement/status response. | Mixed: preview is read-only; `--send` contacts Telegram after route guards pass. |
 | `scripts/markitdown-preview` | `markitdown_adapter.py` | Rosie / adapter layer | Preview or explicitly write converted document Markdown as a `.input` file. | Mixed: preview is read-only; `--write --input-dir` writes one `.input` file. |
 | `scripts/markitdown-batch` | `markitdown_batch.py` | Rosie / Uniblab-visible adapter layer | Inventory a folder of documents and explicitly apply a bounded batch as `.input` files. | Mixed: plan is read-only; `--apply --input-dir` writes bounded `.input` files. |
@@ -224,13 +227,13 @@ CLI implementation guidance:
 - Keep read-only command output explicit about zero-result success. A clean
   "No items found" is better than silence.
 
-## Input adapter contract
+## Orbit input adapter contract
 
-Phase 6 introduces a shared adapter boundary for non-file inputs. Bots,
-MarkItDown, future voice input, and other source adapters should all normalize
-external content into `.input` files for Rosie. They should not call the
-classifier directly, write vault files directly, or bypass the existing
-processing/archive/review behavior.
+Orbit is the named source-normalization boundary for non-file inputs. Bots,
+MarkItDown, rich images/documents, future voice input, and other source adapters
+should all normalize external content into `.input` files for Rosie. They should
+not call the classifier directly, write vault files directly, or bypass the
+existing processing/archive/review behavior.
 
 Current contract:
 
@@ -258,6 +261,12 @@ Safety rules:
 - response routing is source-aware, conservative, and does not change adapter
   input writes.
 
+Agentic boundary rule:
+
+```text
+Orbit normalizes sources; Rosie interprets inputs.
+```
+
 Useful examples:
 
 ```bash
@@ -268,10 +277,10 @@ scripts/input-adapter-preview --write --input-dir /tmp/sc/input --source cli --s
 
 ## Telegram input adapter
 
-Stage 54 starts the first bot-style source with Telegram polling as the intended
-runtime model. The committed code does not contain secrets and the preview CLI
-does not call Telegram. It works from a local `getUpdates`-style JSON object so
-the transformation can be tested without network access.
+Telegram is the first bot-style source and the primary Pilot 3 intake surface.
+The committed code does not contain secrets. Preview helpers can work from a
+local `getUpdates`-style JSON object; Pilot 3 helpers can poll Telegram in a
+foreground operator loop.
 
 Private runtime settings live outside the repo:
 
@@ -279,16 +288,18 @@ Private runtime settings live outside the repo:
 - `SPROCKETS_COGS_TELEGRAM_ALLOWED_USER_IDS` — comma-separated allowed user ids;
 - `SPROCKETS_COGS_TELEGRAM_ALLOWED_CHAT_IDS` — comma-separated allowed chat ids;
 - `SPROCKETS_COGS_TELEGRAM_POLLING=1` — records that polling, not webhooks, is
-  the Stage 54 posture.
+  the current posture.
 
 Safety rules:
 
 - no allowlist means no Telegram writes;
 - preview mode can show whether a local update would be accepted;
 - `--write` still requires an explicit `--input-dir`;
+- the Pilot 3 foreground poll persists offset state and suppresses duplicates
+  already present in `input/`, `processing/`, or `archive/`;
 - Telegram adapters write `.input` files only and do not bypass Rosie;
-- automatic bot replies are deferred; manual replies use the response/output
-  routing helper.
+- automatic bot replies are limited to compact processed acknowledgements after
+  Rosie successfully processes a Telegram-origin input.
 
 Useful example:
 
@@ -296,14 +307,16 @@ Useful example:
 scripts/telegram-update-probe --status
 scripts/telegram-update-probe --fetch --limit 5 --write-update-json /tmp/telegram-update.json
 scripts/telegram-adapter-preview --update-json /tmp/telegram-update.json
+scripts/pilot3-telegram-once --watch --wait-seconds 30 --timeout 20
+scripts/pilot3-telegram-watch
 ```
 
 ## Telegram response/output routing
 
-Stage 55 adds source-aware response routing without changing Rosie’s live
-service behavior. The live `send_response()` function still appends a local
-daily Cog reflection. It does not inspect Telegram metadata and does not call
-the Telegram response adapter.
+Source-aware response routing keeps the live reply channel narrow. The live
+`send_response()` function still appends a local daily Cog reflection.
+Telegram-origin inputs also preserve response metadata so Rosie can send a
+compact processed acknowledgement after a successful pass.
 
 The response contract separates response intent from delivery:
 
@@ -329,12 +342,14 @@ scripts/telegram-response --chat-id 783798616 --send "Queued."
 
 Safety rules:
 
-- no automatic replies from `sprockets-cogs.service`;
+- automatic replies from `sprockets-cogs.service` are limited to compact
+  processed acknowledgements for Telegram-origin input;
 - no review-required or operator-only output is sent to Telegram;
 - no raw review packet, retrieval trace, vault path, model debug output, or
   token value should be sent or printed;
 - reply text should be short status text, not model-generated reasoning;
-- automatic bot acknowledgement is a future stage, not part of Stage 55.
+- no Telegram response should become a review decision channel until that is
+  explicitly designed.
 
 ## MarkItDown document adapter
 
