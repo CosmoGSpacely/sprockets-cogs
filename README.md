@@ -2,178 +2,129 @@
 
 ![tests](https://github.com/CosmoGSpacely/sprockets-cogs/actions/workflows/test.yml/badge.svg)
 
-Sprockets-Cogs is a local-first agentic capture loop for turning plain-language
-inputs into an Obsidian-compatible knowledge/work system.
+Sprockets-Cogs is a local-first agentic planning and knowledge system. It turns
+plain inputs into reviewable Sprockets, time-oriented Cogs, and vault surfaces
+without giving a model silent authority over the user's working memory.
 
-It watches an input folder for `.input` files, extracts useful work and knowledge
-items, validates them with typed schemas, and writes Markdown nodes into a vault.
-The project is also a learning lab for practical agentic AI design: local model
-operation, review-first fallbacks, semantic memory, retrieval traces, and careful
-automation around a personal information system.
+The project is also a practical AI systems lab: small local models, typed
+contracts, guarded review, source adapters, semantic memory, and database/graph
+bridges are tested against a real personal workflow instead of toy prompts.
 
-## Phase 4 Specialist Map
+## Current Shape
 
-The current architecture is intentionally multi-agent in shape while remaining
-conservative at runtime:
-
-- **Rosie** is the live intake and classifier service.
-- **RUDI** is the reasoning, orchestration, and memory/retrieval specialist.
-- **Cogs** owns time-based planning, carry, and reconciliation workflows.
-- **Sprockets** owns hierarchy, graph, and durable knowledge/work structure.
-- **Jane** owns human-in-the-loop review boundaries.
-- **Uniblab** owns operational status, timers, model checks, and readiness.
-
-Adjacent named boundaries:
-
-- **Orbit** owns source normalization before Rosie. It turns Telegram, Discord,
-  Open WebUI, and rich image/document inputs into guarded `.input` files.
-- **Cogswell** owns the database/collection bridge.
-
-The message bus exists as a handoff contract and rehearsal surface. It is not
-yet a live dispatch engine.
-
-See [`specialists/`](specialists/) for the visible Phase 4 agent map.
-
-## What It Produces
-
-The loop currently writes two related kinds of Markdown:
-
-- **Sprockets**: longer-lived structured nodes such as tasks, notes, contacts,
-  and entities.
-- **Cogs**: daily bullet-journal style items that capture what needs attention
-  now.
-
-Higher-level hierarchy nodes such as areas, goals, and projects are supported by
-the schema and retrieval layer, but they are intentionally human-authored or
-review-approved. The system does not freely invent the long-lived hierarchy.
-
-## How The Loop Works
-
-At a high level:
+The live path is intentionally simple:
 
 ```text
-.input file arrives
-  -> extract candidate nodes
-  -> classify them into typed Sprockets/Cogs schemas
-  -> validate locally with Pydantic
-  -> resolve safe parent links
-  -> apply guarded memory hints when enabled
-  -> write Markdown files
-  -> archive the input
+source adapter
+  -> guarded .input file
+  -> Rosie extraction and classification
+  -> typed validation and routing
+  -> Sprockets, Cogs, Astro, Cogswell, Jane, RUDI, or Uniblab boundary
+  -> vault/runtime write or review packet
+  -> source acknowledgement when available
 ```
 
-The classifier is local-first. OpenAI fallback is available only as a
-review-first rescue path when configured; fallback candidates are routed to
-review rather than silently written to the vault.
+The main source adapter today is Telegram through Orbit. Local files, document
+previews, Discord proofing, Open WebUI proofing, and rich image/document probes
+share the same `.input` boundary.
 
-## Current Capabilities
+## Named Boundaries
 
-- File-based capture queue for natural-language inputs.
-- Typed validation for Sprockets and Cogs outputs.
-- Duplicate-aware Markdown writes.
-- Daily Cogs creation and append behavior.
-- Manual review queue and review CLI.
-- Local semantic memory using Ollama embeddings.
-- Guarded production retrieval for parent/task linking.
-- Retrieval preview and trace-reporting tools.
-- Preview-first specialist commands for Cogs, Sprockets, RUDI/memory, review,
-  operations, and orchestration rehearsals.
-- Read-only benchmark harness for retrieval quality.
-- Deterministic smoke test and unit test suite.
+- **Orbit** owns source adapters: Telegram, Discord, document conversion, rich
+  resource intake, and future multimodal input.
+- **Rosie** owns ordinary extraction and intent classification.
+- **Sprockets** owns durable graph structure: areas, goals, projects, tasks,
+  contacts, organizations, places, and references.
+- **Cogs** owns time-oriented operational work: appointments, settings, actions,
+  carry, close, and drop behavior.
+- **Astro** owns the vault surface: rendered pages, manual carry affordances,
+  and human-readable traces.
+- **Cogswell** owns database and collection bridges.
+- **Jane** owns review packets and user decisions.
+- **RUDI** owns reasoning, memory, retrieval, and orchestration previews.
+- **Uniblab** owns status, checks, backups, jobs, and operational readiness.
 
-## Important Boundaries
+These are code boundaries, not a pile of always-on daemons. The project earns
+new services only when the substrate is durable enough.
 
-Sprockets-Cogs is not yet a packaged application. It is a working local system
-and portfolio project with active hardening underway.
+## What Works Now
 
-Current boundaries:
+- File-based `.input` capture and archive flow.
+- Telegram one-shot and foreground watch intake with allowlist, offset state,
+  duplicate suppression, and processed acknowledgements.
+- Local model extraction/classification with typed Pydantic validation.
+- Review-first fallback behavior.
+- Sprockets and Cogs schema, mutation, validation, and fixture coverage.
+- Daily Cogs writes and pilot-facing status commands.
+- Read-only memory and retrieval surfaces.
+- Cogswell collection/database bridge probes.
+- Rich input proofing for images/documents as resources.
+- Operational backup helpers for the runtime directory.
+- Unit, smoke, fallback, retrieval, and pilot-oriented checks.
 
-- Prompt-appended memory context is disabled because earlier rehearsals showed
-  prompt contamination risk.
-- Native Ollama tool calls are not wired into production for the current local
-  model endpoint.
-- Weekly/monthly/annual planning notes are maintained by script, not current loop output.
-- Nightly carry is supervised by a user-level systemd timer on the local deployment.
-- Public setup examples and external deployment polish are still in progress.
+## Current Focus
 
-## Repository Map
+The current work is hardening and refactoring, not inventing more architecture.
+The near-term product goal is a pilotable loop:
 
-- `specialists/` - visible Phase 4 specialist homes and importable responsibility catalog.
-- `agentic_loop.py` - Rosie watcher and processing pipeline.
-- `orchestrator_contract.py` and `orchestrated_rehearsal.py` - RUDI routing and read-only orchestration rehearsal.
-- `cogs_specialist.py` and `cogs_planning.py` - Cogs planning and carry-facing specialist surfaces.
-- `sprockets_specialist.py` - Sprockets hierarchy specialist preview.
-- `memory_specialist.py` and `memory_index.py` - RUDI memory/retrieval facades and index contracts.
-- `review_specialist.py` and `review.py` - Jane review packet and queue tools.
-- `system_status.py` and `job_status.py` - Uniblab operational status helpers.
-- `models.py` - Pydantic schemas for generated nodes.
-- `prompts.py` - local-model prompts and structured schemas.
-- `openai_fallback.py` - review-first OpenAI fallback.
-- `production_retrieval.py` - guarded production retrieval adapter.
-- `memory_guards.py` - post-classification parent/task guard behavior.
-- `retrieval_eval.py` - retrieval benchmark CLI facade.
-- `retrieval_*` modules - retrieval cases, strategies, nodes, memory bridges, and reports.
-- `carry.py` and `nightly.py` - Cogs carry/reconciliation tooling.
-- `scripts/` - venv-aware operational wrappers.
-- `tests/` - focused unittest coverage.
+- Telegram input is easy enough to use daily.
+- Relative dates, time spans, and recurrence are handled conservatively.
+- Review packets are useful and not overwhelming.
+- Astro/vault output supports manual carry, not just passive ledger rendering.
+- Cogswell proves that a knowledge graph can curate database-backed collections.
+- Multimodal resources can be captured without unsafe structural mutation.
 
-## Checks
+## Try It
 
-Run the project gate:
+Run the main local gate:
 
 ```bash
 scripts/check
 ```
 
-That runs:
-
-- unit tests;
-- deterministic temp-vault smoke test;
-- fallback contract evaluation;
-- pending review count.
-
-Useful narrower commands:
+Useful operator commands:
 
 ```bash
-scripts/smoke
+scripts/status
+scripts/pilot3-status
+scripts/pilot3-telegram-once
+scripts/pilot3-telegram-watch
 scripts/review --count
-scripts/retrieval-eval --retriever memory-embedding-gated-vault --case-set real-vault
-scripts/retrieval-preview --status
+scripts/sc-backup --status
 ```
 
-## Operational Backups
-
-The live SC runtime directory is operational data, not vault content. It holds
-processed input history, reports, traces, and small runtime state such as
-`entity_state.json`.
-
-Use Uniblab's SC backup helper for point-in-time snapshots:
+Useful preview/probe commands:
 
 ```bash
-scripts/sc-backup --preview
-scripts/sc-backup --create
-scripts/sc-backup --status
-scripts/sc-backup --verify
-scripts/sc-backup --restore-preview --restore-to /tmp/sc-restore-preview
+scripts/specialist-route
+scripts/memory-demo "tractor tire"
+scripts/rich-input-proof --help
+scripts/collections-bridge --help
+scripts/adapter-status
 ```
 
-Snapshots are plain timestamped directories under `~/sprockets-cogs/backups/`
-by default. They include `archive/`, `output/`, and runtime entity state,
-exclude `processing/`, and include `input/` only when explicitly requested.
+## Repository Map
 
-This protects the SC runtime directory only. Vault backup should remain a
-separate point-in-time backup policy; sync tools replicate current state, and
-GitHub protects committed code rather than local vault/runtime data.
+- `agentic_loop.py` - Rosie watcher and processing pipeline.
+- `specialists/` - public specialist package map and boundary facades.
+- `graph/` - product graph models, fixtures, validators, and mutations.
+- `intents/` - input intent models and routing contracts.
+- `models.py` - older runtime schemas still used by the capture loop.
+- `prompts.py` - local model prompts and structured-output schemas.
+- `review.py`, `review_specialist.py` - Jane review queue and packet tools.
+- `memory_*`, `retrieval_*` - RUDI memory and retrieval support.
+- `cogs_*`, `sprockets_*` - Cogs and Sprockets specialist surfaces.
+- `collections_*` - Cogswell database/collection bridge.
+- `telegram_adapter.py`, `rich_input.py`, `source_adapters.py` - Orbit intake.
+- `system_status.py`, `job_status.py`, `backup.py` - Uniblab operations.
+- `scripts/` - venv-aware command wrappers.
+- `tests/` - focused coverage for product behavior and probes.
 
-## Status
+## Public Docs
 
-See `STATUS.md` for the current maturity level and known limitations.
-
-See `DESIGN.md` for the architecture and design decisions behind the current
-agentic loop.
-
-See `EVAL.md` for current verification and retrieval benchmark notes.
-
-See `DEMO.md` for a short text walkthrough of the live workflow.
-
-See `DECISIONS.md` for the main public-facing design decisions.
+- `DESIGN.md` explains the current architecture.
+- `STATUS.md` gives the current maturity and limitations.
+- `DEVELOPMENT.md` maps setup, commands, modules, and contribution posture.
+- `EVAL.md` explains verification and model/retrieval evaluation.
+- `DEMO.md` walks through the pilot loop.
+- `DECISIONS.md` records stable public design decisions.

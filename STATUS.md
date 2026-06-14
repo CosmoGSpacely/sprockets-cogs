@@ -1,184 +1,77 @@
 # Sprockets-Cogs Status
 
-Sprockets-Cogs is a working local prototype and learning project. It is not yet a
-turnkey public application.
+Sprockets-Cogs is a working local prototype under active hardening. It is not
+yet a turnkey public application, but it is no longer just a planning exercise:
+the repo has live source intake, local inference, validation, vault writes,
+review surfaces, memory probes, and database bridge probes.
 
-## Current Maturity
+## Runtime Posture
 
-The project has completed its Phase 2 hardening work, Phase 3 memory groundwork,
-Stage 25 public-readiness MVP, Phase 3.5 productization bridge, Phase 4
-specialist-boundary work, and Phase 5 codebase-maturity work:
+- Rosie watches `.input` files and runs extraction/classification.
+- Orbit can place Telegram messages into the same `.input` contract.
+- Telegram Pilot 3 commands support one-shot polling, foreground watch mode,
+  duplicate suppression, offset state, allowlist checks, and processed replies.
+- The model path is local-first through Ollama. Hosted fallback is review-first.
+- Typed code validates and constrains model output before any write.
+- Sprockets and Cogs graph contracts exist beside the older runtime schemas.
+- Astro/vault output is still being hardened so manual carry is a first-class
+  product surface, not just a rendered log.
+- Cogswell has collection/database bridge probes and needs a more product-shaped
+  database-to-graph workflow.
+- RUDI memory is read-only/guarded; prompt-appended memory remains off.
+- Uniblab scripts cover status, checks, jobs, and operational backup.
 
-- typed Sprockets/Cogs writes;
-- deterministic smoke test and unit tests;
-- review-first fallback behavior;
-- semantic memory benchmark harness;
-- guarded production retrieval;
-- retrieval traces and reports;
-- memory tool-call readiness probe;
-- real-input local model A/B harness;
-- selected-model read-only capability probe;
-- read-only memory demo surface with retrieval evidence and traces;
-- all-specialist route audit command for one structural proposal input class;
-- planning-note maintenance helpers for current weekly/monthly/annual notes;
-- scheduled nightly carry supervision;
-- Phase 4 specialist previews for Rosie, RUDI, Cogs, Sprockets, Jane, and
-  Uniblab;
-- public README, design note, license, CI workflow, sensitive-data audit,
-  developer map, and CLI posture documentation.
+## Current Product Goal
 
-## Current Runtime Posture
+The immediate goal is a credible daily pilot loop:
 
-- The service runs Rosie, the file-based `agentic_loop.py` watcher.
-- Local classification uses the configured Ollama model.
-- Stage 99 real-input A/B favored `gemma4:12b-32k-cosmo` over
-  `qwen3.5:9b-32k-cosmo` for capture quality on representative current inputs;
-  runtime config may still override the model through `SPROCKETS_COGS_MODEL`.
-- OpenAI fallback is review-first when configured.
-- RUDI owns reasoning/orchestration previews and semantic memory retrieval for
-  compact post-classification guards.
-- Prompt-appended memory context remains disabled.
-- `scripts/memory-demo "query"` runs `specialists.rudi.memory_demo`, a
-  read-only retrieval demo against current vault materials; it prints retrieved
-  evidence plus trace/guard details and does not write to the vault or change
-  prompt context.
-- `scripts/specialist-route` runs `specialists.routing`, a structural proposal
-  route through Rosie, RUDI, Sprockets, Cogs, Jane, and Uniblab boundaries; it
-  emits an audit envelope and writes nothing.
-- `scripts/collections-init`, `scripts/collections-import`,
-  `scripts/collections-query`, `scripts/collections-sync`, and
-  `scripts/collections-bridge` run the optional Cogswell database/graph bridge.
-  SQLite owns deterministic catalog facts; rendered Markdown preserves human
-  notes and exposes graph-visible collection resources.
-- `scripts/telegram-poll` runs a foreground Telegram polling pass that respects
-  allowlist and writes allowed messages into the `.input` queue for Rosie.
-- `scripts/discord-input-proof` and `scripts/open-webui-input-proof` prove
-  additional source adapters through the same `.input` contract without giving
-  sources vault write authority.
-- `scripts/rich-input-proof` preserves one image/document resource, classifies
-  extracted text vs. resource-review routing, and writes a guarded `.input`
-  record without silently creating Cogs, appointments, bridge edges, or
-  obligations.
-- `scripts/pilot3-status` reports the Telegram/Orbit readiness posture for the
-  live Pilot 3 loop: token/allowlist presence, review queue count, latest
-  Telegram archive, and adapter intake status.
-- `scripts/pilot3-telegram-once` runs one foreground Telegram poll through
-  Orbit, writes allowlisted messages into `.input`, persists Telegram offset
-  state, skips deterministic duplicates already in `input/`, `processing/`, or
-  `archive/`, and can wait briefly for Rosie to archive the resulting file.
-- `scripts/pilot3-telegram-once --watch` runs the Pilot 3 foreground Telegram
-  loop continuously for operator-supervised use; it is not a daemon/service.
-- `scripts/pilot3-telegram-watch` is the convenience wrapper for the foreground
-  Telegram watch loop, and `systemd/user/sprockets-cogs-telegram.service` is an
-  optional user-service template for deliberate always-on installation.
-- `scripts/source-ack` previews source acknowledgements without treating them as
-  review approvals, and `scripts/adapter-status` reports pending/ignored/rejected
-  adapter intake.
-- Nightly Cogs carry is scheduled by a user-level systemd timer.
-- `scripts/cogs-planning` previews planning names, planning inventory, monthly
-  seven-day calendar grids plus vertical 5WOW tables, weekly/monthly/annual
-  templates, planning-note creation plans, and daily rename plans.
-- `scripts/cogs-planning --create ... --kind ...` can create missing planning
-  notes and refuses to overwrite existing files.
-- `scripts/cogs-planning --ensure-current` creates the current weekly, monthly,
-  and annual planning notes when missing and preserves existing files.
-- `scripts/job-status` reports read-only maintenance job supervision state. It
-  tracks the installed nightly user service/timer and shows the report,
-  dry-run, and log commands. If the user systemd bus is unavailable from a
-  sandboxed process, it now reports that explicitly instead of implying the
-  timer is missing.
-- `scripts/nightly --report` summarizes the nightly carry plan without writing:
-  daily directory, through/destination dates, candidate count, source counts,
-  planned actions, and the exact dry-run/apply commands.
-- User-systemd templates for the nightly timer live in `systemd/user/`.
-- `scripts/job-supervisor --preview-install nightly` shows the exact future
-  install targets and `systemctl --user` commands without writing.
-- `scripts/job-supervisor --preview-disable nightly` and
-  `--preview-recovery nightly` show pause/recovery commands.
-- `sprockets-cogs-nightly.timer` is installed and enabled as a user timer. The
-  next run can be inspected with `scripts/job-status`.
-- `scripts/sc-backup --preview` reports the read-only SC operational backup
-  scope, and `scripts/sc-backup --status` reports the default backup directory
-  posture.
-- `scripts/sc-backup --create` creates a plain timestamped directory snapshot
-  under `~/sprockets-cogs/backups/` by default. It includes `archive/`,
-  `output/`, and runtime entity state by default, excludes `processing/`, and
-  includes `input/` only when explicitly requested for stuck-intake debugging.
-- `scripts/sc-backup --verify` checks a snapshot against its manifest, and
-  `scripts/sc-backup --restore-preview --restore-to ...` shows where a restore
-  would copy files without writing.
-- Phase 4's message bus is a handoff contract and rehearsal surface only. It is
-  not a live dispatch engine.
-- `DEVELOPMENT.md` now maps public entry points, module responsibilities,
-  runtime data flow, CLI posture, tests, safe refactor boundaries, and direct
-  CLI testability patterns.
-- `scripts/input-adapter-preview` previews adapter-produced `.input` files and
-  can explicitly write one `.input` file to a chosen input directory.
-- `scripts/telegram-adapter-preview` previews local Telegram update JSON as a
-  Rosie `.input` file and only writes when the update is allowlisted and
-  `--write --input-dir` are explicit.
-- `scripts/telegram-update-probe` reports Telegram token/allowlist readiness
-  without printing the token, states that Telegram is still manual
-  fetch/preview/write rather than a live polling service, and can fetch updates
-  for local preview.
-- `scripts/telegram-response` previews conservative Telegram responses and can
-  manually send only with explicit `--send`.
-- The live loop now sends a compact Telegram `processed` acknowledgement for
-  Telegram-origin inputs after successful processing. Local daily reflection is
-  still written, and review-required/operator-report responses remain local.
-- `scripts/markitdown-preview` previews text/Markdown document ingestion as a
-  `.input` file and can explicitly write one converted document to a chosen
-  input directory.
-- `scripts/markitdown-batch` inventories a folder of documents and can
-  explicitly apply a bounded, idempotent batch as `.input` files.
-- `scripts/status` reports ignored non-`.input` files in `sc/input/` so a
-  dropped `.txt` or other unsupported file is visible instead of silently
-  looking stuck.
+```text
+Telegram input
+  -> Orbit .input
+  -> Rosie local extraction
+  -> guarded specialist routing
+  -> Cogs/Sprockets/Astro/Cogswell/Jane behavior
+  -> short Telegram acknowledgement
+```
 
-## Known Limitations
+Phase 9 hardening should reduce friction, not add speculative surfaces.
 
-- Public setup and configuration examples are intentionally minimal.
-- Weekly, monthly, annual, and 5WOW planning notes are maintained manually or
-  through `scripts/cogs-planning`; they are not maintained by the live loop.
-- The nightly timer is now installed and enabled. Prompt-appended memory context
-  remains disabled, and planning-note maintenance is still manual/script-driven.
-- Daily-note writes prefer ISO-first daily names. Compatible lookup still
-  accepts legacy daily names if older vault data is imported later.
-- Current planning notes are expected under the configured vault's
-  `Cogs/weekly/`, `Cogs/monthly/`, and `Cogs/annual/` directories. Monthly
-  notes put the seven-day `Calendar` grid before the vertical weekday `5WOW`
-  table.
-- Higher-level hierarchy nodes are human-authored or review-approved.
-- Native read-only tool selection passed for the Stage 99 local model probes;
-  JSON-contract tool selection still missed required arguments and should not be
-  treated as production-ready write authority.
-- Memory packets, graph-expanded retrieval, and embedding-backed retrieval remain
-  benchmark/preview features unless explicitly selected. The default
-  `scripts/memory-demo` path uses lexical vault retrieval so the demo does not
-  depend on live Ollama availability.
-- More complete packaging, onboarding, and non-local deployment polish remain
-  future work.
-- The Telegram adapter now has foreground one-shot and watch commands for Pilot
-  3, plus an uninstalled user-service template for deliberate always-on intake.
-  Current bot work provides token-safe update probing, allowlist checks,
-  persistent offset state, duplicate suppression, `.input` writing, Pilot 3
-  readiness/run reports, and a guarded processed acknowledgement after Rosie
-  completes a Telegram-origin input.
-- Automatic bot replies are limited to short processed acknowledgements; review
-  decisions and operator reports remain local.
-- Rich PDF/Office document ingestion requires the optional `markitdown`
-  dependency; current document adapter tests and previews cover text/Markdown
-  files without that dependency.
-- Batch document ingestion reports rich-format candidates as requiring
-  MarkItDown when the optional dependency is not installed.
+## Solid Enough To Use
+
+- `scripts/check` as the main local gate.
+- `scripts/pilot3-status` for Telegram/Orbit readiness.
+- `scripts/pilot3-telegram-once` and `scripts/pilot3-telegram-watch` for
+  supervised intake.
+- `scripts/review --count` for review queue inspection.
+- `scripts/sc-backup --create|--status|--verify` for runtime snapshots.
+- `scripts/memory-demo` for read-only retrieval evidence.
+- `scripts/collections-*` for Cogswell bridge experiments.
+- `scripts/rich-input-proof` for multimodal/resource intake proofing.
+
+## Known Hardening Work
+
+- Relative dates and natural time spans need stronger conservative handling.
+- Recurrence needs review-first behavior instead of accidental expansion.
+- Telegram needs better operator ergonomics and error reporting.
+- Astro needs explicit manual carry and close/drop/carry affordances.
+- Cogswell needs a stronger database/graph bridge story.
+- Review packets must stay small enough to process in daily use.
+- Specialist code boundaries still need refactor pressure so real behavior does
+  not keep accreting in the old runtime modules.
 
 ## Verification
 
-The main local gate is:
+Run:
 
 ```bash
 scripts/check
 ```
 
-The latest local gate passed 635 tests, smoke test, fallback contract, and
-review count inspection.
+Use narrower commands when iterating:
+
+```bash
+scripts/smoke
+scripts/status
+scripts/pilot3-status
+scripts/review --count
+```

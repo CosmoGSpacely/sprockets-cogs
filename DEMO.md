@@ -1,92 +1,74 @@
 # Demo Walkthrough
 
-This is a text demo of the current local workflow. It is meant to show the shape
-of the system without requiring access to the author's private vault.
+This is a text walkthrough of the current product loop. It avoids private vault
+content and focuses on the shape of the system.
 
-## 1. Submit An Input
+## 1. Send Input
 
-Create a `.input` file in the configured input directory:
+During Pilot 3, the preferred input is Telegram:
 
 ```text
-Need to write retrieval trace notes for Phase 3 - Memory Enhancement.
+Call Tom tomorrow about the tractor tires
 ```
 
-In the local setup, the service watches the configured SC input directory.
+Orbit polls Telegram, checks the allowlist, suppresses duplicates, persists the
+offset, and writes a guarded `.input` file.
+
+For local testing, a developer can also place a `.input` file directly into the
+configured input directory.
 
 ## 2. Rosie Processes It
 
-Rosie, the live intake/classifier service:
+Rosie:
 
-1. moves the file into processing;
-2. extracts candidate items;
-3. classifies them into typed Sprockets/Cogs schemas;
-4. validates with Pydantic;
-5. applies guarded memory parent hints;
-6. writes Markdown;
-7. archives the input.
+1. moves the `.input` into processing;
+2. extracts candidate work;
+3. classifies the intent and item shape;
+4. validates typed output;
+5. routes to Cogs, Sprockets, review, or another boundary;
+6. archives the source input.
 
-For this kind of input, the expected result is:
+The expected safe result is a time-oriented Cog candidate or review packet. If
+"Tom" is ambiguous, the system should prefer review over inventing authority.
 
-- a Cogs daily item for the current work;
-- a Sprockets task;
-- a parent link to the existing `Phase 3 - Memory Enhancement` project, if the
-  memory guard selects it confidently.
+## 3. The Vault Shows Work
 
-## 3. Ask RUDI To Preview Memory Before A Live Write
+Astro owns the vault surface. The user should eventually be able to see the Cog,
+carry it, close it, drop it, or correct it from the human-readable surface.
 
-Use the preview command before trusting a memory-linked live write:
+The vault is not merely a historical ledger. It is the manual workbench.
 
-```bash
-scripts/retrieval-preview --memory-guard "Need to write retrieval trace notes for Phase 3 - Memory Enhancement"
-```
+## 4. Jane Handles Uncertainty
 
-This shows whether the guard would select a hierarchy parent, skip parenting, or
-add no memory-derived task.
-
-RUDI owns this reasoning/retrieval preview role. In production, the retrieved
-memory remains compact and guarded rather than being appended directly into the
-classifier prompt.
-
-## 4. Ask Uniblab To Inspect The System
-
-Run:
-
-```bash
-scripts/status
-```
-
-The status command reports service state, runtime queues, local model
-availability, review count, planning-note presence, nightly timer posture, and
-backup/sync gaps.
-
-## 5. Jane Handles Review Safety
-
-If the model output is malformed, low-confidence, ambiguous, or produced by
-OpenAI fallback, the item is routed to the review queue instead of being written
-silently.
+If a mutation is ambiguous, low-confidence, externally generated, or structural,
+Jane presents a review packet. Jane does not secretly approve work.
 
 Useful commands:
 
 ```bash
 scripts/review --count
 scripts/review --report
-scripts/review --packet-preview
 ```
 
-## 6. Run The Gate
+## 5. RUDI Can Show Evidence
 
-Run:
+RUDI owns retrieval and reasoning previews:
 
 ```bash
+scripts/memory-demo "Tom tractor tires"
+scripts/specialist-route
+```
+
+This helps explain what the system knows without granting memory direct write
+authority.
+
+## 6. Uniblab Checks The Loop
+
+```bash
+scripts/status
+scripts/pilot3-status
 scripts/check
 ```
 
-The current local gate passes 453 tests, a temp-vault smoke test, fallback
-contract checks, and review count 0.
-
-## What This Demonstrates
-
-This demo path demonstrates the project's core design: a local-first
-multi-agent loop where Rosie captures and classifies, RUDI retrieves and
-reasons, Jane guards uncertainty, Uniblab reports operational posture, and
-deterministic code validates, writes, and explains the result.
+The demo is successful when input, routing, review, vault output, and
+acknowledgement are all visible and boring.

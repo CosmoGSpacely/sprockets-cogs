@@ -1,12 +1,12 @@
 # Specialists
 
-Phase 4 makes Sprockets-Cogs visibly multi-agent without splitting the runtime
-into multiple daemons.
+Sprockets-Cogs uses named agentic boundaries without splitting the runtime into
+multiple daemons too early.
 
-Only **Rosie** is currently always on. The other specialists are commands,
+Only **Rosie** is currently always on. The other boundaries are commands,
 scheduled jobs, preview harnesses, or library-backed facades. This folder is the
-public map of those agent boundaries. New specialist-owned implementation lives
-inside this package so promotion work does not add more root-level sediment.
+public map of those boundaries. New specialist-owned implementation should live
+inside this package so product work does not add more root-level sediment.
 
 `specialists.catalog` is the importable version of this map. It is safe to use
 for docs, tests, and future status displays, but it does not move or wrap the
@@ -21,12 +21,12 @@ Adapters feed Rosie by writing `.input` files; they do not write to the vault or
 approve review packets.
 
 `specialists.orbit` is the stable named facade for the Orbit boundary. Orbit is
-not a seventh decision-making specialist; it is the source-normalization layer in
-front of Rosie.
+not a decision-making specialist; it is the source-normalization layer in front
+of Rosie.
 
-`specialists.cogswell` is an optional package-owned subsystem, not one of the
-six live specialist identities. It proves the deterministic collection
-database/graph bridge without putting database import into Rosie's intake loop.
+`specialists.cogswell` is the package-owned database/collection bridge. It
+connects deterministic catalog data to graph-visible resources without putting
+database import into Rosie's intake loop.
 
 ## Current Map
 
@@ -36,10 +36,11 @@ database/graph bridge without putting database import into Rosie's intake loop.
 | [RUDI](rudi/) | Reasoning, orchestration, memory/retrieval | Commands, previews, library provider |
 | [Cogs](cogs/) | Planning, carry, reconciliation | Commands and scheduled jobs |
 | [Sprockets](sprockets/) | Hierarchy, graph, durable structure | Commands and review-first previews |
+| [Astro](../DESIGN.md#vault-surface) | Vault surface and manual carry affordances | Emerging boundary in vault/rendering code |
 | [Jane](jane/) | Human-in-the-loop review | Commands and guarded apply previews |
 | [Uniblab](uniblab/) | Operations, health, status | Commands, possible scheduled health checks |
 
-Adjacent package-owned subsystem:
+Adjacent package-owned boundaries:
 
 - [Source adapters](adapters/) normalize Telegram, Discord, Open WebUI, and
   rich image/document source inputs into `.input` files for Rosie.

@@ -1,115 +1,69 @@
 # Design Decisions
 
-This file summarizes public-facing design decisions. The fuller project diary
-and builder review trail live outside the runtime repo.
+This file records stable public decisions for the runtime repo. Stage journals
+and planning reviews live in the builder repo.
 
 ## Local First, Review First
 
-Routine capture uses a local Ollama model. Hosted fallback is optional and
-review-first: fallback candidates are validated locally and routed to review
-rather than written directly to the vault.
-
-Why: the system writes into a personal knowledge/work vault, so autonomy needs a
-visible safety boundary.
+Routine inference should run locally. Hosted fallback is optional and
+review-first. Fallback output is validated locally and routed to review instead
+of being written directly.
 
 ## The Model Proposes; Code Writes
 
-The language model extracts and classifies candidate nodes. Python code owns the
-safety-critical steps: schema validation, duplicate checks, parent resolution,
-confidence routing, and Markdown writes.
+Models extract, classify, summarize, or compare. Python code validates schemas,
+checks confidence, resolves authority, applies mutations, and writes files.
 
-Why: model output is useful but not authoritative. Deterministic guards make the
-system easier to test and debug.
+## Minimal Graph, Strong Substrate
 
-## Prompt-Appended Memory Is Off
+The product graph stays intentionally small: Sprockets, Cogs, hierarchy edges,
+and bridge edges. Complexity belongs in validators, review packets, rendered
+surfaces, fixtures, and audit logs.
 
-Semantic memory is owned by RUDI, the reasoning/orchestration specialist, but it
-is not pasted into the classifier prompt in production. Earlier rehearsals
-showed that retrieved context could contaminate generated fields.
+## Sprockets And Cogs Do Not Transform
 
-The current production memory path is post-classification:
+A Sprocket can spawn Cogs. A Cog can contribute to completing a Sprocket. They
+do not change type in place.
 
-1. classify and validate the input;
-2. retrieve compact memory candidates;
-3. apply constrained parent/task hints in code;
-4. log selected or skipped decisions.
+## Astro Owns The Vault Surface
 
-Why: this gives useful memory behavior without asking the classifier to mix
-retrieved context into structured output perfectly.
+The vault is more than a rendered ledger. It is where the user sees work, makes
+manual carry decisions, and interacts with open Cogs. Astro owns that behavior.
 
-## Specialist Boundaries Are Visible Before Services Multiply
+## Orbit Owns Source Adapters
 
-Phase 4 uses named specialist boundaries:
+Telegram, Discord, Open WebUI, documents, images, audio, and future intake
+surfaces enter through Orbit. Adapters normalize input and preserve source
+metadata; they do not create structural graph mutations directly.
 
-- Rosie for live intake/classification;
-- RUDI for reasoning, orchestration, and memory/retrieval;
-- Cogs for planning and carry;
-- Sprockets for graph/hierarchy;
-- Jane for review;
-- Uniblab for operations.
+## Rosie Does Not Route To Jane Directly
 
-Only Rosie is currently an always-on service. The other specialists are commands,
-scheduled jobs, preview harnesses, or library providers.
+Rosie classifies and proposes. The orchestrator and specialist boundaries decide
+whether a result becomes a write, a review packet, or a rejection.
 
-Why: the project needs clear multi-agent architecture for public and portfolio
-readers, but multiple live services would add retry, ordering, idempotency, and
-failure-handling complexity before those costs are justified.
+## Jane Presents Decisions
 
-## Message Bus Is A Contract, Not Dispatch
+Jane does not secretly resolve packets. Jane presents reviewable decisions and
+records accepted/rejected/modified outcomes.
 
-The local message bus is a schema and rehearsal surface for specialist handoffs.
-It is not a live queue and does not automatically execute recipients.
+## RUDI Memory Is Guarded
 
-Why: handoff contracts are useful now; live dispatch should wait until
-specialist commands are idempotent and review boundaries are explicit.
+Prompt-appended memory remains off. RUDI can retrieve evidence and candidates,
+but deterministic guards decide whether memory affects a mutation.
 
-## Hierarchy Nodes Are Human Authored Or Review Approved
+## Cogswell Bridges Databases To Graphs
 
-Areas, goals, and projects are supported, but the live capture loop does not
-freely invent them.
+Databases own deterministic catalog facts. The graph owns meaning, relationships,
+workflow, and review. Cogswell is a product boundary, not a side experiment.
 
-Why: hierarchy nodes shape the long-lived graph. They should be deliberate
-because downstream retrieval, planning, and review behavior depends on them.
+## LangGraph Split Waits
 
-## Cogs Planning Is A Separate Operational Tool
+A future LangGraph implementation is useful for learning, portfolio value,
+stateful orchestration, and comparison. It should wait until the common
+substrate works live enough that a split will not double the chaos.
 
-Daily Cogs items are written by the loop. Weekly, monthly, annual, and 5WOW
-planning notes are maintained by `scripts/cogs-planning` and supervised through
-status checks.
+## Sync Is Not Backup
 
-Why: planning horizon maintenance is a product workflow, not a reason to make
-the core input loop larger.
-
-## Nightly Carry Is A Scheduled Job
-
-The nightly carry process runs through a user-level systemd timer instead of
-inside the capture service.
-
-Why: scheduled reconciliation has different failure modes and observability
-needs than file-based capture.
-
-## Graph And Packet Retrieval Stay Preview Or Benchmark First
-
-Graph-aware retrieval and memory packets are useful benchmark tools. They are
-not automatically promoted into production retrieval.
-
-Why: richer context can improve recall but also increases explanation and
-contamination risk. Preview and trace quality come before live use.
-
-## Native Tool Calls Are Deferred
-
-Stage 24 found that the current local model endpoint does not support native
-Ollama tool calls, and JSON-contract imitation was not strict enough for
-production tool use.
-
-Why: tool use should be validated as a reliable interface, not inferred from a
-plausible JSON blob.
-
-## Syncthing Is Sync, Not Backup
-
-Syncthing keeps files available across machines, but it is not treated as
-point-in-time backup. GitHub protects committed repo history, not the live vault
-or runtime queue.
-
-Why: a sync mistake can replicate quickly. The vault and runtime directories
-still need a separate backup strategy.
+Sync tools replicate current state. Backups need point-in-time snapshots and
+restore previews. The runtime backup helper protects SC operational data; vault
+backup is a separate policy.

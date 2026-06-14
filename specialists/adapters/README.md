@@ -9,8 +9,8 @@ They do not write to the vault, approve reviews, or bypass Rosie. Their job is
 to create source-aware input files, preview acknowledgements, and expose adapter
 status/rejection pressure.
 
-Orbit is not a seventh decision-making specialist. It is an agentic boundary in
-front of Rosie: external source -> Orbit -> `.input` -> Rosie.
+Orbit is not a decision-making specialist. It is an agentic boundary in front
+of Rosie: external source -> Orbit -> `.input` -> Rosie.
 
 ## Current Implementation
 

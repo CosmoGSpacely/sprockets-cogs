@@ -1,4 +1,4 @@
-"""Importable specialist catalog for the Phase 4 multi-agent map."""
+"""Importable specialist catalog for the Sprockets-Cogs agentic boundary map."""
 
 from __future__ import annotations
 
