@@ -34,6 +34,7 @@ class CogsDailyItem(NodeBase):
     node_type: Literal["cogs/daily"]
     item_text:  str
     date:       str   # YYYY-MM-DD
+    horizon: Literal["day", "week", "month"] = "day"
 
     @field_validator("date")
     @classmethod

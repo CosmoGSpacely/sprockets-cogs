@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cogs_naming import daily_heading, preferred_daily_path
+from cogs_naming import monthly_filename, weekly_filename
 
 
 DEFAULT_VAULT_DIR = Path.home() / "vault"
@@ -57,6 +58,63 @@ def append_cogs_item_text(
             f.write("\n")
         f.write(f"- [ ] {item_text}\n")
     return True
+
+
+def append_weekly_carry_item_text(
+    date_iso: str,
+    item_text: str,
+    cogs_dir: Path = DEFAULT_VAULT_DIR / "Cogs",
+) -> bool:
+    """Append an item to the Carry In block of the week containing date_iso."""
+
+    from cogs_planning import render_weekly_note_template
+
+    path = cogs_dir / "weekly" / weekly_filename(date_iso)
+    return _append_planning_carry_item(path, render_weekly_note_template(date_iso), item_text)
+
+
+def append_monthly_carry_item_text(
+    date_iso: str,
+    item_text: str,
+    cogs_dir: Path = DEFAULT_VAULT_DIR / "Cogs",
+) -> bool:
+    """Append an item to the Carry In block of the month containing date_iso."""
+
+    from cogs_planning import render_monthly_note_template
+
+    path = cogs_dir / "monthly" / monthly_filename(date_iso)
+    return _append_planning_carry_item(path, render_monthly_note_template(date_iso[:7]), item_text)
+
+
+def _append_planning_carry_item(path: Path, template: str, item_text: str) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text(template)
+
+    content = path.read_text()
+    if any(f"{state} {item_text}" in content for state in ["- [ ]", "- [x]", "- [>]", "- [-]"]):
+        return False
+
+    updated = _append_under_heading(content, "## Carry In", f"- [ ] {item_text}")
+    path.write_text(updated)
+    return True
+
+
+def _append_under_heading(content: str, heading: str, line: str) -> str:
+    lines = content.splitlines()
+    try:
+        heading_index = lines.index(heading)
+    except ValueError:
+        base = content.rstrip()
+        return f"{base}\n\n{heading}\n{line}\n"
+
+    insert_at = heading_index + 1
+    while insert_at < len(lines) and lines[insert_at] == "":
+        insert_at += 1
+    lines.insert(insert_at, line)
+    if insert_at + 1 >= len(lines) or lines[insert_at + 1] != "":
+        lines.insert(insert_at + 1, "")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def parse_cogs_blocks(content: str, states: set[str] | None = None) -> list[CogsBlock]:

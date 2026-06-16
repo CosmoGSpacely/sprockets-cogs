@@ -16,6 +16,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 import classifier_context
+from cogs_format import apply_cogs_item_format
 from entity_state import get_entities_by_tier, upsert_entity
 from extractor_classifier import ExtractClassifier, ExtractClassifierConfig
 from graph.mutations import MutationCommand
@@ -45,11 +46,17 @@ from response_routing import (
 from slug_utils import slugify
 from sprockets_specialist import SprocketsSpecialist, SprocketsSpecialistConfig
 import telegram_response
+from time_context import apply_runtime_date_context
 from vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,
     build_graph,
 )
-from vault import append_cogs_item_text, ensure_daily_note
+from vault import (
+    append_cogs_item_text,
+    append_monthly_carry_item_text,
+    append_weekly_carry_item_text,
+    ensure_daily_note,
+)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 DEFAULT_MODEL = "qwen3.5:9b-32k-cosmo"
@@ -139,6 +146,23 @@ def _ensure_daily_note(date_iso: str) -> Path:
 
 def _append_cogs_item(node: NodeBase) -> None:
     """Append a Cogs daily item to the correct daily note."""
+    horizon = getattr(node, "horizon", "day")
+    cogs_dir = DAILY_DIR.parent
+    if horizon == "week":
+        appended = append_weekly_carry_item_text(node.date, node.item_text, cogs_dir)
+        if appended:
+            log.info("Appended to weekly carry for %s: %s", node.date, node.item_text)
+        else:
+            log.info("Weekly carry item already present for %s, skipping: %s", node.date, node.item_text)
+        return
+    if horizon == "month":
+        appended = append_monthly_carry_item_text(node.date, node.item_text, cogs_dir)
+        if appended:
+            log.info("Appended to monthly carry for %s: %s", node.date, node.item_text)
+        else:
+            log.info("Monthly carry item already present for %s, skipping: %s", node.date, node.item_text)
+        return
+
     note_path = ensure_daily_note(node.date, DAILY_DIR)
     appended = append_cogs_item_text(node.date, node.item_text, DAILY_DIR)
     if not appended:
@@ -490,10 +514,12 @@ def send_source_response(
 
 # ── Pipeline steps ─────────────────────────────────────────────────────────────
 
-def extract_nodes(content: str) -> list[dict]:
+def extract_nodes(content: str, now: datetime | None = None) -> list[dict]:
     """Qwen3 call 1: extract raw items from input text."""
     classifier = ExtractClassifier(ExtractClassifierConfig(model=MODEL))
-    return classifier.extract_nodes(content)
+    if now is None:
+        return classifier.extract_nodes(content)
+    return classifier.extract_nodes(content, now=now)
 
 
 def classify_nodes(
@@ -501,14 +527,23 @@ def classify_nodes(
     context: str,
     error_context: str = "",
     use_examples: bool = True,
+    now: datetime | None = None,
 ) -> list[dict]:
     """Qwen3 call 2: assign node_type, fields, and date to each extracted item."""
     classifier = ExtractClassifier(ExtractClassifierConfig(model=MODEL))
+    if now is None:
+        return classifier.classify_nodes(
+            raw_nodes,
+            context,
+            error_context=error_context,
+            use_examples=use_examples,
+        )
     return classifier.classify_nodes(
         raw_nodes,
         context,
         error_context=error_context,
         use_examples=use_examples,
+        now=now,
     )
 
 
@@ -957,11 +992,30 @@ def process_input(file_path: Path) -> None:
             post.metadata,
             fallback_session_id=session_id,
         )
-        source_date = datetime.now().strftime("%Y-%m-%d")
+        source_now = datetime.now()
+        source_date = source_now.strftime("%Y-%m-%d")
 
         context    = build_context_for_input(content)
-        raw_nodes  = extract_nodes(content)
-        classified = classify_nodes(raw_nodes, context)
+        raw_nodes  = extract_nodes(content, now=source_now)
+        classified = classify_nodes(raw_nodes, context, now=source_now)
+        classified, date_decisions = apply_runtime_date_context(raw_nodes, classified, source_date)
+        for decision in date_decisions:
+            log.info(
+                "Runtime date context applied: node=%d phrase=%s date=%s -> %s",
+                decision.index,
+                decision.phrase,
+                decision.original_date or "(missing)",
+                decision.resolved_date,
+            )
+        classified, format_decisions = apply_cogs_item_format(raw_nodes, classified)
+        for decision in format_decisions:
+            log.info(
+                "Cogs item format applied: node=%d reason=%s %r -> %r",
+                decision.index,
+                decision.reason,
+                decision.original_text,
+                decision.formatted_text,
+            )
         classified, structural_guard_routed = route_structural_guard_to_review(
             content,
             raw_nodes,
@@ -1004,7 +1058,25 @@ def process_input(file_path: Path) -> None:
                              if idx < len(raw_nodes)]
             error_context = "\n".join(f"- {reason}" for _, _, reason in retry_triples)
             log.info("Retrying classify for %d invalid node(s)", len(retry_triples))
-            reclassified        = classify_nodes(retry_raw, context, error_context, use_examples=True)[:len(retry_triples)]
+            reclassified        = classify_nodes(retry_raw, context, error_context, use_examples=True, now=source_now)[:len(retry_triples)]
+            reclassified, retry_date_decisions = apply_runtime_date_context(retry_raw, reclassified, source_date)
+            for decision in retry_date_decisions:
+                log.info(
+                    "Runtime date context applied on retry: node=%d phrase=%s date=%s -> %s",
+                    decision.index,
+                    decision.phrase,
+                    decision.original_date or "(missing)",
+                    decision.resolved_date,
+                )
+            reclassified, retry_format_decisions = apply_cogs_item_format(retry_raw, reclassified)
+            for decision in retry_format_decisions:
+                log.info(
+                    "Cogs item format applied on retry: node=%d reason=%s %r -> %r",
+                    decision.index,
+                    decision.reason,
+                    decision.original_text,
+                    decision.formatted_text,
+                )
             valid_retry, failed = validate_output(reclassified, default_cogs_date=source_date)
             valid_nodes.extend(valid_retry)
             if failed and route_openai_fallback_to_review(retry_raw, context, error_context, source_date):
