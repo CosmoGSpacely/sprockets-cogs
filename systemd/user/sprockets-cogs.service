@@ -1,0 +1,16 @@
+[Unit]
+Description=Sprockets-Cogs Agentic Loop
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/cosmo/sprockets-cogs
+EnvironmentFile=-%h/.config/sprockets-cogs/env
+ExecStart=/home/cosmo/sprockets-cogs/.venv/bin/python3 /home/cosmo/sprockets-cogs/agentic_loop.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
