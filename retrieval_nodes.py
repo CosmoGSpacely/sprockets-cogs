@@ -1,70 +1,18 @@
-"""Vault scanning helpers for retrieval benchmark nodes."""
+"""Compatibility alias for `specialists.rudi.retrieval_nodes`.
+
+Specialist-owned implementation lives under `specialists/`; this root
+module exists only for legacy imports and script entrypoints.
+"""
 from __future__ import annotations
 
-from collections.abc import Iterable
-from datetime import datetime
-from pathlib import Path
+import runpy as _runpy
+import sys as _sys
+from importlib import import_module as _import_module
 
-import frontmatter
+_MODULE_NAME = "specialists.rudi.retrieval_nodes"
 
-from retrieval_types import RetrievalNode
-from vault_graph import build_graph, sprockets_dirs
-
-
-def retrieval_node_counts(nodes: Iterable[RetrievalNode]) -> dict[str, int]:
-    """Return node counts by node_type for scan summaries."""
-
-    counts: dict[str, int] = {}
-    for node in nodes:
-        counts[node.node_type] = counts.get(node.node_type, 0) + 1
-    return dict(sorted(counts.items()))
-
-
-def daily_node_id(path: Path) -> str:
-    """Return a stable retrieval node ID for an Obsidian daily note path."""
-
-    try:
-        date = datetime.strptime(path.stem, "%a %d %b %Y").strftime("%Y-%m-%d")
-    except ValueError:
-        date = path.stem
-    return f"daily/{date}"
-
-
-def load_retrieval_nodes(vault_dir: Path) -> list[RetrievalNode]:
-    """Load compact retrieval candidates from Sprockets nodes and daily notes."""
-
-    graph = build_graph(vault_dir)
-    nodes: list[RetrievalNode] = []
-    for folder in sprockets_dirs(vault_dir):
-        if not folder.exists():
-            continue
-        for path in sorted(folder.glob("*.md")):
-            try:
-                post = frontmatter.load(str(path))
-            except Exception:
-                continue
-            slug = path.stem
-            nodes.append(
-                RetrievalNode(
-                    node_id=f"{folder.name}/{slug}",
-                    title=str(post.get("title", slug)),
-                    node_type=str(post.get("node_type", "")),
-                    path=path,
-                    parent_slugs=tuple(graph.successors(slug)) if graph.has_node(slug) else (),
-                    text=post.content.strip(),
-                )
-            )
-
-    daily_dir = vault_dir / "Cogs" / "daily"
-    if daily_dir.exists():
-        for path in sorted(daily_dir.glob("*.md")):
-            nodes.append(
-                RetrievalNode(
-                    node_id=daily_node_id(path),
-                    title=path.stem,
-                    node_type="cogs/daily",
-                    path=path,
-                    text=path.read_text().strip(),
-                )
-            )
-    return nodes
+if __name__ == "__main__":
+    _runpy.run_module(_MODULE_NAME, run_name="__main__")
+else:
+    _module = _import_module(_MODULE_NAME)
+    _sys.modules[__name__] = _module

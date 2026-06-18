@@ -5,12 +5,12 @@ multiple daemons too early.
 
 Only **Rosie** is currently always on. The other boundaries are commands,
 scheduled jobs, preview harnesses, or library-backed facades. This folder is the
-public map of those boundaries. New specialist-owned implementation should live
-inside this package so product work does not add more root-level sediment.
+public map and implementation home for those boundaries. Root modules may remain
+as compatibility aliases, but specialist-owned logic belongs here.
 
 `specialists.catalog` is the importable version of this map. It is safe to use
-for docs, tests, and future status displays, but it does not move or wrap the
-current production modules.
+for docs, tests, and status displays, and it names the package-owned
+implementation files.
 
 `specialists.routing` is the cross-specialist read-only route probe used by
 `scripts/specialist-route`. It exists here, rather than at repository root, so
@@ -28,6 +28,9 @@ of Rosie.
 connects deterministic catalog data to graph-visible resources without putting
 database import into Rosie's intake loop.
 
+`specialists.astro` owns the vault-facing surface: rendered notes, manual carry
+affordances, and human-readable inspection views.
+
 ## Current Map
 
 | Specialist | Role | Runtime form |
@@ -36,7 +39,7 @@ database import into Rosie's intake loop.
 | [RUDI](rudi/) | Reasoning, orchestration, memory/retrieval | Commands, previews, library provider |
 | [Cogs](cogs/) | Planning, carry, reconciliation | Commands and scheduled jobs |
 | [Sprockets](sprockets/) | Hierarchy, graph, durable structure | Commands and review-first previews |
-| [Astro](../DESIGN.md#vault-surface) | Vault surface and manual carry affordances | Emerging boundary in vault/rendering code |
+| [Astro](astro/) | Vault surface and manual carry affordances | Library provider and vault-facing commands |
 | [Jane](jane/) | Human-in-the-loop review | Commands and guarded apply previews |
 | [Uniblab](uniblab/) | Operations, health, status | Commands, possible scheduled health checks |
 

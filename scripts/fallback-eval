@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec .venv/bin/python fallback_eval.py "$@"
+exec .venv/bin/python -m specialists.rudi.fallback_eval "$@"

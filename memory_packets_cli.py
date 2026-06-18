@@ -1,83 +1,18 @@
-"""Read-only CLI for Stage 22 summarized memory packets."""
+"""Compatibility alias for `specialists.rudi.memory_packets_cli`.
+
+Specialist-owned implementation lives under `specialists/`; this root
+module exists only for legacy imports and script entrypoints.
+"""
 from __future__ import annotations
 
-import argparse
-from pathlib import Path
+import runpy as _runpy
+import sys as _sys
+from importlib import import_module as _import_module
 
-from memory_packets import (
-    DEFAULT_PACKET_NODE_TYPES,
-    format_memory_packet,
-    format_memory_packet_inventory,
-    load_memory_packets,
-)
-
-
-DEFAULT_VAULT_DIR = Path.home() / "vault"
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Preview deterministic memory packets without writing.",
-    )
-    parser.add_argument(
-        "--vault",
-        type=Path,
-        default=DEFAULT_VAULT_DIR,
-        help="Vault directory. Defaults to ~/vault.",
-    )
-    parser.add_argument(
-        "--node-type",
-        action="append",
-        choices=DEFAULT_PACKET_NODE_TYPES,
-        help="Limit packets to a node type. Can be repeated.",
-    )
-    parser.add_argument(
-        "--node-id",
-        help="Show one packet by node ID.",
-    )
-    parser.add_argument(
-        "--include-recent-cogs",
-        action="store_true",
-        help="Include one rolling recent Cogs history packet.",
-    )
-    parser.add_argument(
-        "--recent-day-limit",
-        type=int,
-        default=7,
-        help="Maximum daily notes to include in the recent Cogs packet.",
-    )
-    parser.add_argument(
-        "--child-limit",
-        type=int,
-        default=8,
-        help="Maximum child highlights to include per packet.",
-    )
-    parser.add_argument(
-        "--excerpt-chars",
-        type=int,
-        default=280,
-        help="Maximum source excerpt characters per packet.",
-    )
-    args = parser.parse_args()
-
-    node_types = tuple(args.node_type) if args.node_type else DEFAULT_PACKET_NODE_TYPES
-    packets = load_memory_packets(
-        args.vault,
-        node_types=node_types,
-        child_limit=args.child_limit,
-        excerpt_chars=args.excerpt_chars,
-        include_recent_cogs=args.include_recent_cogs,
-        recent_day_limit=args.recent_day_limit,
-    )
-    if args.node_id:
-        packet = next((item for item in packets if item.node_id == args.node_id), None)
-        if packet is None:
-            raise SystemExit(f"memory packet not found: {args.node_id}")
-        print(format_memory_packet(packet))
-        return
-
-    print(format_memory_packet_inventory(packets))
-
+_MODULE_NAME = "specialists.rudi.memory_packets_cli"
 
 if __name__ == "__main__":
-    main()
+    _runpy.run_module(_MODULE_NAME, run_name="__main__")
+else:
+    _module = _import_module(_MODULE_NAME)
+    _sys.modules[__name__] = _module

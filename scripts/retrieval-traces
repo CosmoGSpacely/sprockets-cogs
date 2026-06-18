@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-.venv/bin/python -m retrieval_trace_report "$@"
+.venv/bin/python -m specialists.rudi.retrieval_trace_report "$@"

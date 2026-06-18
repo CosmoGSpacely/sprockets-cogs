@@ -1,20 +1,18 @@
-"""Shared vector math helpers for retrieval and embedding code."""
+"""Compatibility alias for `specialists.rudi.vector_math`.
+
+Specialist-owned implementation lives under `specialists/`; this root
+module exists only for legacy imports and script entrypoints.
+"""
 from __future__ import annotations
 
-from collections.abc import Sequence
-from math import sqrt
+import runpy as _runpy
+import sys as _sys
+from importlib import import_module as _import_module
 
+_MODULE_NAME = "specialists.rudi.vector_math"
 
-def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
-    """Return cosine similarity for same-dimension numeric vectors."""
-
-    if len(left) != len(right):
-        raise ValueError(f"vector dimensions do not match: {len(left)} != {len(right)}")
-
-    left_norm = sqrt(sum(value * value for value in left))
-    right_norm = sqrt(sum(value * value for value in right))
-    if left_norm == 0 or right_norm == 0:
-        return 0.0
-
-    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right))
-    return dot_product / (left_norm * right_norm)
+if __name__ == "__main__":
+    _runpy.run_module(_MODULE_NAME, run_name="__main__")
+else:
+    _module = _import_module(_MODULE_NAME)
+    _sys.modules[__name__] = _module

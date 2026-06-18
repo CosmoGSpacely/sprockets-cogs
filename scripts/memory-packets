@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-.venv/bin/python -m memory_packets_cli "$@"
+.venv/bin/python -m specialists.rudi.memory_packets_cli "$@"

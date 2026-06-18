@@ -6,5 +6,8 @@ a stable name without a disruptive package rename.
 """
 
 from specialists.adapters import rich_inputs, source_surfaces, telegram_polling
+from specialists.catalog import get_specialist
 
-__all__ = ["rich_inputs", "source_surfaces", "telegram_polling"]
+DEFINITION = get_specialist("orbit")
+
+__all__ = ["DEFINITION", "rich_inputs", "source_surfaces", "telegram_polling"]

@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec .venv/bin/python -m obsidian_views "$@"
+exec .venv/bin/python -m specialists.astro.obsidian_views "$@"

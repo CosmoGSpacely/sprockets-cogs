@@ -1,52 +1,18 @@
-"""Shared retrieval benchmark data shapes."""
+"""Compatibility alias for `specialists.rudi.retrieval_types`.
+
+Specialist-owned implementation lives under `specialists/`; this root
+module exists only for legacy imports and script entrypoints.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
+import runpy as _runpy
+import sys as _sys
+from importlib import import_module as _import_module
 
+_MODULE_NAME = "specialists.rudi.retrieval_types"
 
-@dataclass(frozen=True)
-class RetrievalNode:
-    """A compact representation of a vault node available for retrieval."""
-
-    node_id: str
-    title: str
-    node_type: str
-    path: Path
-    parent_slugs: tuple[str, ...] = ()
-    text: str = ""
-
-
-@dataclass(frozen=True)
-class RetrievalCase:
-    """A single retrieval expectation for a future memory implementation."""
-
-    name: str
-    query: str
-    expected_ids: frozenset[str]
-    avoid_ids: frozenset[str] = frozenset()
-    category: str = "general"
-    reason: str = ""
-
-
-@dataclass(frozen=True)
-class SemanticQueryHint:
-    """A grounded query expansion for known user phrasing."""
-
-    label: str
-    expansion_terms: tuple[str, ...]
-
-    @property
-    def expansion_text(self) -> str:
-        return " ".join(self.expansion_terms)
-
-
-@dataclass(frozen=True)
-class GraphRetrievalTrace:
-    """Compact trace for benchmark graph-expanded retrieval results."""
-
-    query: str
-    retriever_name: str
-    result_ids: tuple[str, ...]
-    notes: tuple[str, ...] = ()
-    result_summaries: tuple[str, ...] = ()
+if __name__ == "__main__":
+    _runpy.run_module(_MODULE_NAME, run_name="__main__")
+else:
+    _module = _import_module(_MODULE_NAME)
+    _sys.modules[__name__] = _module

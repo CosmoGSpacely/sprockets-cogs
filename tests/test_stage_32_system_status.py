@@ -151,8 +151,11 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("SPROCKETS_COGS_MEMORY_RETRIEVAL: 1", output)
             self.assertIn("Runtime queues", output)
             self.assertIn("Specialists", output)
-            self.assertIn("- Rosie: Intake and classification; Always-on file watcher service (always-on)", output)
-            self.assertIn("- RUDI: Reasoning, orchestration, and memory/retrieval", output)
+            self.assertIn(
+                "- Rosie: Intake, extraction, and classification; Always-on file watcher service (always-on)",
+                output,
+            )
+            self.assertIn("- RUDI: Reasoning, orchestration, response routing, and retrieval", output)
             self.assertIn("- message bus: contract/rehearsal only, not live dispatch", output)
             self.assertIn("- pending .input files: 1", output)
             self.assertIn("- ignored non-.input files: 1", output)

@@ -8,7 +8,7 @@ class Stage45SpecialistCatalogTests(unittest.TestCase):
     def test_catalog_lists_expected_specialists_in_public_order(self):
         self.assertEqual(
             [specialist.specialist_id for specialist in iter_specialists()],
-            ["rosie", "rudi", "cogs", "sprockets", "jane", "uniblab"],
+            ["orbit", "rosie", "rudi", "cogs", "astro", "sprockets", "jane", "uniblab"],
         )
 
     def test_only_rosie_is_always_on(self):
@@ -19,7 +19,7 @@ class Stage45SpecialistCatalogTests(unittest.TestCase):
     def test_message_bus_is_rudi_contract_not_live_dispatch(self):
         rudi = get_specialist("rudi")
 
-        self.assertIn("agent_message_bus.py", rudi.implementation_files)
+        self.assertIn("specialists/rudi/agent_message_bus.py", rudi.implementation_files)
         self.assertIn("scripts/agent-message-bus", rudi.commands)
         self.assertFalse(rudi.live_dispatch)
 
@@ -32,15 +32,17 @@ class Stage45SpecialistCatalogTests(unittest.TestCase):
                     self.assertTrue((root / path).exists(), path)
 
     def test_subpackage_definitions_match_catalog(self):
+        from specialists.astro import DEFINITION as astro
         from specialists.cogs import DEFINITION as cogs
         from specialists.jane import DEFINITION as jane
+        from specialists.orbit import DEFINITION as orbit
         from specialists.rosie import DEFINITION as rosie
         from specialists.rudi import DEFINITION as rudi
         from specialists.sprockets import DEFINITION as sprockets
         from specialists.uniblab import DEFINITION as uniblab
 
         self.assertEqual(
-            [rosie, rudi, cogs, sprockets, jane, uniblab],
+            [orbit, rosie, rudi, cogs, astro, sprockets, jane, uniblab],
             list(SPECIALISTS),
         )
 
@@ -51,4 +53,3 @@ class Stage45SpecialistCatalogTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,0 +1,52 @@
+"""Shared retrieval benchmark data shapes."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class RetrievalNode:
+    """A compact representation of a vault node available for retrieval."""
+
+    node_id: str
+    title: str
+    node_type: str
+    path: Path
+    parent_slugs: tuple[str, ...] = ()
+    text: str = ""
+
+
+@dataclass(frozen=True)
+class RetrievalCase:
+    """A single retrieval expectation for a future memory implementation."""
+
+    name: str
+    query: str
+    expected_ids: frozenset[str]
+    avoid_ids: frozenset[str] = frozenset()
+    category: str = "general"
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class SemanticQueryHint:
+    """A grounded query expansion for known user phrasing."""
+
+    label: str
+    expansion_terms: tuple[str, ...]
+
+    @property
+    def expansion_text(self) -> str:
+        return " ".join(self.expansion_terms)
+
+
+@dataclass(frozen=True)
+class GraphRetrievalTrace:
+    """Compact trace for benchmark graph-expanded retrieval results."""
+
+    query: str
+    retriever_name: str
+    result_ids: tuple[str, ...]
+    notes: tuple[str, ...] = ()
+    result_summaries: tuple[str, ...] = ()

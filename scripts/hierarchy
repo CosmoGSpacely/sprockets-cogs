@@ -3,4 +3,4 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-.venv/bin/python inspect_hierarchy.py "$@"
+.venv/bin/python -m specialists.astro.inspect_hierarchy "$@"
