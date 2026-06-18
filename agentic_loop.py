@@ -116,6 +116,28 @@ _STRUCTURAL_INTENT_VALUES = {
     "planning_update",
     "review_decision",
 }
+_ENTITY_AUTHORITY_NODE_TYPES = {
+    "sprockets/entity",
+}
+_ADDRESS_PATTERN = re.compile(
+    r"\b\d{1,6}\s+[A-Za-z0-9 .'-]+"
+    r"\b(?:st|street|ave|avenue|rd|road|dr|drive|ln|lane|blvd|boulevard|ct|court|way|pkwy|parkway)\b",
+    re.IGNORECASE,
+)
+_RECURRENCE_PATTERN = re.compile(
+    r"\b("
+    r"every\s+(?:day|weekday|week|month|year|"
+    r"mon(?:day)?s?|tue(?:s|sdays?)?|wed(?:nesday)?s?|thu(?:r|rs|rsday)?s?|"
+    r"fri(?:day)?s?|sat(?:urday)?s?|sun(?:day)?s?)|"
+    r"each\s+(?:day|weekday|week|month|year|"
+    r"mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|"
+    r"fri(?:day)?|sat(?:urday)?|sun(?:day)?)|"
+    r"(?:daily|weekly|monthly|yearly|annually)|"
+    r"(?:mon(?:day)?s|tue(?:s|sdays)|wed(?:nesday)?s|thu(?:r|rs|rsday)?s|"
+    r"fri(?:day)?s|sat(?:urday)?s|sun(?:day)?s)"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 # ── File I/O helpers ───────────────────────────────────────────────────────────
@@ -446,6 +468,89 @@ def route_structural_guard_to_review(
     )
     log.warning("Structural guard routed input to review: %s", ", ".join(reasons))
     return [], True
+
+
+def needs_memory_parent_retrieval(raw_nodes: list[dict], classified: list[dict]) -> bool:
+    """Return whether retrieved memory may be used as a structural parent hint."""
+
+    for node in classified:
+        if node.get("node_type") in {"sprockets/task", "sprockets/note"}:
+            return True
+        if str(node.get("intent_class", "")).strip().lower() in _STRUCTURAL_INTENT_VALUES:
+            return True
+        if str(node.get("operation", "")).strip().lower() in {"link", "reparent", "create_sprocket_and_bridge"}:
+            return True
+    return False
+
+
+def memory_parent_trace_for_classification(
+    input_text: str,
+    raw_nodes: list[dict],
+    classified: list[dict],
+) -> memory_guards.MemoryParentTrace:
+    """Use retrieved memory as parent evidence only for structural captures."""
+
+    if not needs_memory_parent_retrieval(raw_nodes, classified):
+        return memory_guards.MemoryParentTrace(retrieved_count=0)
+    return memory_parent_trace(input_text)
+
+
+def route_ordinary_entity_authority_to_review(
+    raw_nodes: list[dict],
+    classified: list[dict],
+) -> list[dict]:
+    """
+    Route ordinary event-attached durable entity candidates to review.
+
+    Cogs capture can mention places, addresses, or organizations without
+    granting authority to create durable Sprockets vertices from that context.
+    """
+
+    has_cogs = any(node.get("node_type") == "cogs/daily" for node in classified)
+    if not has_cogs:
+        return classified
+
+    raw_text = " ".join(str(raw.get("raw", "")) for raw in raw_nodes)
+    result: list[dict] = []
+    for node in classified:
+        node_type = str(node.get("node_type", ""))
+        node_text = _node_text(node)
+        address_pressure = bool(_ADDRESS_PATTERN.search(f"{raw_text} {node_text}"))
+        if node_type in _ENTITY_AUTHORITY_NODE_TYPES or (
+            node_type == "sprockets/contact" and address_pressure
+        ):
+            write_to_review(
+                node,
+                "ordinary_entity_authority_guard: durable entity/contact creation requires review",
+            )
+            log.warning("Routed ordinary entity authority candidate to review: %s", node_text)
+            continue
+        result.append(node)
+    return result
+
+
+def route_recurrence_to_review(raw_nodes: list[dict], classified: list[dict]) -> list[dict]:
+    """Route recurring Cogs candidates to review until recurrence has a contract."""
+
+    result: list[dict] = []
+    for index, node in enumerate(classified):
+        if node.get("node_type") != "cogs/daily":
+            result.append(node)
+            continue
+        texts = [
+            str(raw_nodes[index].get("raw", "")) if index < len(raw_nodes) else "",
+            _node_text(node),
+        ]
+        match = _RECURRENCE_PATTERN.search(" ".join(texts))
+        if not match:
+            result.append(node)
+            continue
+        write_to_review(
+            node,
+            f"recurrence_guard: recurring Cogs language {match.group(0)!r} requires review",
+        )
+        log.warning("Routed recurring Cogs candidate to review: %s", match.group(0))
+    return result
 
 
 def send_response(
@@ -1026,9 +1131,11 @@ def process_input(file_path: Path) -> None:
             append_reflection(session_id, [])
             archive_input(processing_path)
             return
+        classified = route_ordinary_entity_authority_to_review(raw_nodes, classified)
+        classified = route_recurrence_to_review(raw_nodes, classified)
         classified = apply_explicit_hierarchy_hints(raw_nodes, classified)
         classified = ensure_hierarchy_tasks(raw_nodes, classified)
-        memory_trace = memory_parent_trace(content)
+        memory_trace = memory_parent_trace_for_classification(content, raw_nodes, classified)
         log_memory_parent_trace(memory_trace)
         write_memory_parent_trace(memory_trace)
         memory_parent = memory_trace.parent_title

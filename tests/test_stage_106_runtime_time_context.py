@@ -278,3 +278,199 @@ class Stage106RuntimeTimeContextTests(TestCase):
             self.assertTrue(weekly_note.exists())
             self.assertIn("## Carry In\n\n- [ ] Call Tom\n\n## Weekdays", weekly_note.read_text(encoding="utf-8"))
             self.assertTrue((archive_dir / "telegram-call-next-week.input").exists())
+
+    def test_ordinary_cogs_capture_does_not_call_memory_parent_retrieval(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "input"
+            processing_dir = root / "processing"
+            archive_dir = root / "archive"
+            output_dir = root / "output"
+            daily_dir = root / "vault" / "Cogs" / "daily"
+            for path in [input_dir, processing_dir, archive_dir, output_dir, daily_dir]:
+                path.mkdir(parents=True)
+            input_path = input_dir / "ordinary-cogs.input"
+            input_path.write_text(
+                "---\nsession_id: stage106\nsource: telegram\n---\n\n"
+                "Buy sealant tomorrow\n",
+                encoding="utf-8",
+            )
+            raw_nodes = [{"raw": "Buy sealant tomorrow", "type_hint": "task"}]
+            classified = [
+                {
+                    "node_type": "cogs/daily",
+                    "title": "Buy sealant",
+                    "item_text": "Buy sealant",
+                    "date": "2026-06-18",
+                    "confidence": "high",
+                }
+            ]
+
+            class FakeDateTime:
+                @classmethod
+                def now(cls):
+                    return cls()
+
+                def strftime(self, fmt):
+                    if fmt == "%Y-%m-%d":
+                        return "2026-06-17"
+                    if fmt == "%H:%M":
+                        return "09:00"
+                    if fmt == "%Y%m%d_%H%M%S_%f":
+                        return "20260617_090000_000000"
+                    return "2026-06-17"
+
+            with patch.object(agentic_loop, "INPUT_DIR", input_dir), \
+                 patch.object(agentic_loop, "PROCESSING_DIR", processing_dir), \
+                 patch.object(agentic_loop, "ARCHIVE_DIR", archive_dir), \
+                 patch.object(agentic_loop, "OUTPUT_DIR", output_dir), \
+                 patch.object(agentic_loop, "DAILY_DIR", daily_dir), \
+                 patch.object(agentic_loop, "REVIEW_DIR", root / "vault" / "review"), \
+                 patch.object(agentic_loop, "datetime", FakeDateTime), \
+                 patch.object(agentic_loop, "build_context_for_input", return_value=""), \
+                 patch.object(agentic_loop, "extract_nodes", return_value=raw_nodes), \
+                 patch.object(agentic_loop, "classify_nodes", return_value=classified), \
+                 patch.object(agentic_loop, "memory_parent_trace", side_effect=AssertionError("memory called")), \
+                 patch.object(agentic_loop, "write_memory_parent_trace"), \
+                 patch.object(agentic_loop, "send_processed_ack"):
+                agentic_loop.process_input(input_path)
+
+            note = daily_dir / "2026-06-18 Thu.md"
+            self.assertTrue(note.exists())
+            self.assertIn("Buy sealant", note.read_text(encoding="utf-8"))
+
+    def test_event_attached_entity_routes_to_review_without_blocking_cogs(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "input"
+            processing_dir = root / "processing"
+            archive_dir = root / "archive"
+            output_dir = root / "output"
+            daily_dir = root / "vault" / "Cogs" / "daily"
+            review_dir = root / "vault" / "review"
+            for path in [input_dir, processing_dir, archive_dir, output_dir, daily_dir, review_dir]:
+                path.mkdir(parents=True)
+            input_path = input_dir / "dentist-address.input"
+            input_path.write_text(
+                "---\nsession_id: stage106\nsource: telegram\n---\n\n"
+                "Dentist 8am at 123 Main St tomorrow\n",
+                encoding="utf-8",
+            )
+            raw_nodes = [{"raw": "Dentist 8am at 123 Main St tomorrow", "type_hint": "appointment"}]
+            classified = [
+                {
+                    "node_type": "cogs/daily",
+                    "title": "DENTIST 8am",
+                    "item_text": "DENTIST 8am",
+                    "date": "2026-06-18",
+                    "confidence": "high",
+                },
+                {
+                    "node_type": "sprockets/entity",
+                    "title": "123 Main St",
+                    "confidence": "high",
+                },
+            ]
+
+            class FakeDateTime:
+                @classmethod
+                def now(cls):
+                    return cls()
+
+                def strftime(self, fmt):
+                    if fmt == "%Y-%m-%d":
+                        return "2026-06-17"
+                    if fmt == "%H:%M":
+                        return "09:00"
+                    if fmt == "%Y%m%d_%H%M%S_%f":
+                        return "20260617_090000_000000"
+                    return "2026-06-17"
+
+            with patch.object(agentic_loop, "INPUT_DIR", input_dir), \
+                 patch.object(agentic_loop, "PROCESSING_DIR", processing_dir), \
+                 patch.object(agentic_loop, "ARCHIVE_DIR", archive_dir), \
+                 patch.object(agentic_loop, "OUTPUT_DIR", output_dir), \
+                 patch.object(agentic_loop, "DAILY_DIR", daily_dir), \
+                 patch.object(agentic_loop, "REVIEW_DIR", review_dir), \
+                 patch.object(agentic_loop, "datetime", FakeDateTime), \
+                 patch.object(agentic_loop, "build_context_for_input", return_value=""), \
+                 patch.object(agentic_loop, "extract_nodes", return_value=raw_nodes), \
+                 patch.object(agentic_loop, "classify_nodes", return_value=classified), \
+                 patch.object(agentic_loop, "memory_parent_trace", side_effect=AssertionError("memory called")), \
+                 patch.object(agentic_loop, "write_memory_parent_trace"), \
+                 patch.object(agentic_loop, "send_processed_ack"):
+                agentic_loop.process_input(input_path)
+
+            note = daily_dir / "2026-06-18 Thu.md"
+            self.assertTrue(note.exists())
+            self.assertIn("8a DENTIST", note.read_text(encoding="utf-8"))
+            self.assertFalse((root / "vault" / "Sprockets" / "entities" / "123-main-st.md").exists())
+            review_text = "\n".join(path.read_text(encoding="utf-8") for path in review_dir.glob("*.md"))
+            self.assertIn("ordinary_entity_authority_guard", review_text)
+            self.assertIn("123 Main St", review_text)
+
+    def test_recurring_cogs_language_routes_to_review_without_writing_event(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "input"
+            processing_dir = root / "processing"
+            archive_dir = root / "archive"
+            output_dir = root / "output"
+            daily_dir = root / "vault" / "Cogs" / "daily"
+            review_dir = root / "vault" / "review"
+            for path in [input_dir, processing_dir, archive_dir, output_dir, daily_dir, review_dir]:
+                path.mkdir(parents=True)
+            input_path = input_dir / "recurring-yoga.input"
+            input_path.write_text(
+                "---\nsession_id: stage106\nsource: telegram\n---\n\n"
+                "Yoga every Tuesday 5:30pm\n",
+                encoding="utf-8",
+            )
+            raw_nodes = [{"raw": "Yoga every Tuesday 5:30pm", "type_hint": "appointment"}]
+            classified = [
+                {
+                    "node_type": "cogs/daily",
+                    "title": "YOGA every Tuesday 5:30pm",
+                    "item_text": "YOGA every Tuesday 5:30pm",
+                    "date": "2026-06-23",
+                    "confidence": "high",
+                }
+            ]
+
+            class FakeDateTime:
+                @classmethod
+                def now(cls):
+                    return cls()
+
+                def strftime(self, fmt):
+                    if fmt == "%Y-%m-%d":
+                        return "2026-06-17"
+                    if fmt == "%H:%M":
+                        return "09:00"
+                    if fmt == "%Y%m%d_%H%M%S_%f":
+                        return "20260617_090000_000000"
+                    return "2026-06-17"
+
+            with patch.object(agentic_loop, "INPUT_DIR", input_dir), \
+                 patch.object(agentic_loop, "PROCESSING_DIR", processing_dir), \
+                 patch.object(agentic_loop, "ARCHIVE_DIR", archive_dir), \
+                 patch.object(agentic_loop, "OUTPUT_DIR", output_dir), \
+                 patch.object(agentic_loop, "DAILY_DIR", daily_dir), \
+                 patch.object(agentic_loop, "REVIEW_DIR", review_dir), \
+                 patch.object(agentic_loop, "datetime", FakeDateTime), \
+                 patch.object(agentic_loop, "build_context_for_input", return_value=""), \
+                 patch.object(agentic_loop, "extract_nodes", return_value=raw_nodes), \
+                 patch.object(agentic_loop, "classify_nodes", return_value=classified), \
+                 patch.object(agentic_loop, "memory_parent_trace", side_effect=AssertionError("memory called")), \
+                 patch.object(agentic_loop, "write_memory_parent_trace"), \
+                 patch.object(agentic_loop, "send_processed_ack"):
+                agentic_loop.process_input(input_path)
+
+            guessed_note = daily_dir / "2026-06-23 Tue.md"
+            self.assertFalse(guessed_note.exists())
+            today_note = daily_dir / "2026-06-17 Wed.md"
+            self.assertTrue(today_note.exists())
+            self.assertNotIn("YOGA", today_note.read_text(encoding="utf-8"))
+            review_text = "\n".join(path.read_text(encoding="utf-8") for path in review_dir.glob("*.md"))
+            self.assertIn("recurrence_guard", review_text)
+            self.assertIn("every Tuesday", review_text)
