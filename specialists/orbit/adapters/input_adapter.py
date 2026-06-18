@@ -9,7 +9,7 @@ from typing import Any, Mapping
 
 import frontmatter
 
-from slug_utils import slugify
+from substrate.slug_utils import slugify
 
 
 ADAPTER_CONTRACT_VERSION = "stage-53"

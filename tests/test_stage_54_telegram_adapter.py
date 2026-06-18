@@ -9,10 +9,10 @@ from unittest.mock import patch
 
 import frontmatter
 
-import specialists.adapters.input_adapter as input_adapter
-import specialists.adapters.telegram_adapter as telegram_adapter
-import specialists.adapters.telegram_adapter_preview as telegram_adapter_preview
-import specialists.adapters.telegram_update_probe as telegram_update_probe
+import specialists.orbit.adapters.input_adapter as input_adapter
+import specialists.orbit.adapters.telegram_adapter as telegram_adapter
+import specialists.orbit.adapters.telegram_adapter_preview as telegram_adapter_preview
+import specialists.orbit.adapters.telegram_update_probe as telegram_update_probe
 
 
 def sample_update(text="Capture from Telegram"):

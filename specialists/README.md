@@ -5,8 +5,8 @@ multiple daemons too early.
 
 Only **Rosie** is currently always on. The other boundaries are commands,
 scheduled jobs, preview harnesses, or library-backed facades. This folder is the
-public map and implementation home for those boundaries. Root modules may remain
-as compatibility aliases, but specialist-owned logic belongs here.
+public map and implementation home for those boundaries. Specialist-owned logic
+belongs here; cross-boundary contracts belong in `substrate/`.
 
 `specialists.catalog` is the importable version of this map. It is safe to use
 for docs, tests, and status displays, and it names the package-owned
@@ -16,7 +16,7 @@ implementation files.
 `scripts/specialist-route`. It exists here, rather than at repository root, so
 all-specialist routing remains tied to the specialist boundary it exercises.
 
-`specialists.adapters` contains Orbit's source-adapter promotion surfaces.
+`specialists.orbit.adapters` contains Orbit's source-adapter implementations.
 Adapters feed Rosie by writing `.input` files; they do not write to the vault or
 approve review packets.
 
@@ -35,22 +35,22 @@ affordances, and human-readable inspection views.
 
 | Specialist | Role | Runtime form |
 | --- | --- | --- |
+| [Orbit](orbit/) | Source normalization and adapters | Adapter commands and foreground polling |
 | [Rosie](rosie/) | Intake and classification | Always-on file watcher service |
 | [RUDI](rudi/) | Reasoning, orchestration, memory/retrieval | Commands, previews, library provider |
 | [Cogs](cogs/) | Planning, carry, reconciliation | Commands and scheduled jobs |
 | [Sprockets](sprockets/) | Hierarchy, graph, durable structure | Commands and review-first previews |
 | [Astro](astro/) | Vault surface and manual carry affordances | Library provider and vault-facing commands |
+| [Cogswell](cogswell/) | Database and collection bridge | Commands and SQLite-backed graph resources |
 | [Jane](jane/) | Human-in-the-loop review | Commands and guarded apply previews |
 | [Uniblab](uniblab/) | Operations, health, status | Commands, possible scheduled health checks |
 
-Adjacent package-owned boundaries:
+Supporting package boundaries:
 
-- [Source adapters](adapters/) normalize Telegram, Discord, Open WebUI, and
-  rich image/document source inputs into `.input` files for Rosie.
-- [Orbit](orbit/) names the source-normalization boundary that owns those
-  adapters.
-- [Cogswell](cogswell/) imports structured collection CSV data into SQLite,
-  renders graph-visible Markdown resources, and preserves human notes.
+- [Orbit adapters](orbit/adapters/) normalize Telegram, Discord, Open WebUI,
+  and rich image/document source inputs into `.input` files for Rosie.
+- `substrate/` is not a specialist. It holds shared product contracts and small
+  cross-boundary helpers.
 
 ## Importable Catalog
 

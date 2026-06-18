@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from specialists.adapters.input_adapter import (
+from specialists.orbit.adapters.input_adapter import (
     InputAttachment,
     InputEnvelope,
     input_filename,

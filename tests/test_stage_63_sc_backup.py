@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import sc_backup
+import specialists.uniblab.backup as sc_backup
 
 
 class Stage63ScBackupTests(unittest.TestCase):

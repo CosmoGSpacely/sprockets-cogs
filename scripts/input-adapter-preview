@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec .venv/bin/python -m specialists.adapters.input_adapter_preview "$@"
+exec .venv/bin/python -m specialists.orbit.adapters.input_adapter_preview "$@"

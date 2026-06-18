@@ -16,8 +16,8 @@ from typing import Any, Callable, Mapping, Sequence
 
 import ollama
 
-from specialists.adapters.input_adapter import InputAttachment, InputEnvelope, write_input_file
-from slug_utils import slugify
+from specialists.orbit.adapters.input_adapter import InputAttachment, InputEnvelope, write_input_file
+from substrate.slug_utils import slugify
 
 
 RICH_INPUT_SOURCE = "rich-input"

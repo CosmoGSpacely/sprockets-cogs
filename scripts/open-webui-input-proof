@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec .venv/bin/python -c 'from specialists.adapters.source_surfaces import open_webui_main; open_webui_main()' "$@"
+exec .venv/bin/python -c 'from specialists.orbit.adapters.source_surfaces import open_webui_main; open_webui_main()' "$@"

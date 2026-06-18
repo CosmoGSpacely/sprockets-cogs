@@ -9,7 +9,7 @@ import specialists.rosie.loop as agentic_loop
 import specialists.astro.inspect_hierarchy as inspect_hierarchy
 import networkx as nx
 import specialists.sprockets.vault_graph as vault_graph
-from models import validate_node
+from substrate.models import validate_node
 from tests.helpers import write_sprockets_node
 
 

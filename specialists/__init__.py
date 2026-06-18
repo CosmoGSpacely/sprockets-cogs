@@ -1,7 +1,7 @@
-"""Visible specialist map and package-owned promotion surfaces.
+"""Visible specialist map and package-owned agentic boundaries.
 
-Legacy implementation modules still exist at repository root, but new promoted
-specialist behavior should live inside this package whenever practical.
+Specialist behavior lives in this package. Cross-boundary contracts live in
+``substrate/``; root Python modules are not ownership homes.
 """
 
 from specialists.catalog import SPECIALISTS, SpecialistDefinition, get_specialist, iter_specialists

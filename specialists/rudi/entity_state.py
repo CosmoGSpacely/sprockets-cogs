@@ -15,7 +15,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from slug_utils import slugify
+from substrate.slug_utils import slugify
 
 SC_ROOT = Path(os.environ.get("SPROCKETS_COGS_SC_ROOT", str(Path.home() / "sc")))
 STATE_PATH = Path(

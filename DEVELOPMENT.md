@@ -49,7 +49,7 @@ python -m unittest tests.test_stage106_pilot3_hardening
 ```text
 Orbit/source adapter
   -> .input file
-  -> agentic_loop.py / Rosie
+  -> specialists.rosie.loop / Rosie
   -> extraction and classification
   -> validation, guards, routing
   -> vault/runtime/review writes
@@ -63,18 +63,18 @@ as a fixture.
 
 | Boundary | Code homes | Owns |
 | --- | --- | --- |
-| Orbit | `specialists/adapters/`, `specialists/orbit/` | Source normalization and `.input` creation. |
-| Rosie | `specialists/rosie/`, `models.py`, `intents/` | Extraction, classification, and ordinary capture flow. |
+| Orbit | `specialists/orbit/`, `specialists/orbit/adapters/` | Source normalization and `.input` creation. |
+| Rosie | `specialists/rosie/`, `intents/`, `substrate/` | Extraction, classification, and ordinary capture flow. |
 | Sprockets | `specialists/sprockets/`, `graph/` | Durable graph structure and hierarchy. |
 | Cogs | `specialists/cogs/` | Time-oriented work, carry, close/drop behavior. |
 | Astro | `specialists/astro/` | Human-readable vault surface and manual carry affordances. |
 | Cogswell | `collections_*`, `specialists/cogswell/` | Database and collection graph bridge. |
 | Jane | `specialists/jane/` | Review packets and user decisions. |
 | RUDI | `specialists/rudi/` | Memory, retrieval, reasoning, orchestration preview. |
-| Uniblab | `specialists/uniblab/`, `sc_backup.py` | Status, jobs, backups, readiness. |
+| Uniblab | `specialists/uniblab/` | Status, jobs, backups, readiness. |
 
-Root Python files are substrate/tools only. New specialist behavior belongs
-under `specialists/`, not in root compatibility shims.
+Root Python files are not ownership homes. Shared contracts belong in
+`substrate/`; specialist behavior belongs under `specialists/`.
 
 ## Command Posture
 

@@ -1,7 +1,7 @@
 # Source Adapters / Orbit
 
-Orbit is the named source-normalization boundary. The current implementation
-lives here in `specialists/adapters/`.
+Orbit is the named source-normalization boundary. The implementation lives here
+in `specialists/orbit/adapters/`.
 
 Adapters normalize external sources into the shared `.input` contract.
 
@@ -14,9 +14,9 @@ of Rosie: external source -> Orbit -> `.input` -> Rosie.
 
 ## Current Implementation
 
-- `specialists/adapters/telegram_polling.py`
-- `specialists/adapters/source_surfaces.py`
-- `specialists/adapters/rich_inputs.py`
+- `specialists/orbit/adapters/telegram_polling.py`
+- `specialists/orbit/adapters/source_surfaces.py`
+- `specialists/orbit/adapters/rich_inputs.py`
 - `scripts/telegram-poll`
 - `scripts/discord-input-proof`
 - `scripts/open-webui-input-proof`

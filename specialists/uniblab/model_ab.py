@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from specialists.rosie.extractor_classifier import ExtractClassifier, ExtractClassifierConfig
-from models import validate_node
+from substrate.models import validate_node
 
 
 DEFAULT_MODELS = ("qwen3.5:9b-32k-cosmo", "gemma4:12b-32k-cosmo")

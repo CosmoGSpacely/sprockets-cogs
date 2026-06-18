@@ -21,8 +21,8 @@ from pathlib import Path
 
 import frontmatter
 
-from models import validate_node
-from node_normalization import normalize_raw_node, review_reason_requires_strict_cogs_date
+from substrate.models import validate_node
+from substrate.node_normalization import normalize_raw_node, review_reason_requires_strict_cogs_date
 from specialists.rosie.loop import ARCHIVE_DIR, REVIEW_DIR, write_node
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

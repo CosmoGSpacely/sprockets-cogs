@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-import stage_closeout
+import specialists.uniblab.stage_closeout as stage_closeout
 
 
 class StageCloseoutTests(unittest.TestCase):

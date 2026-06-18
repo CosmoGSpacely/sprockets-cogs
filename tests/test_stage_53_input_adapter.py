@@ -7,8 +7,8 @@ import tempfile
 
 import frontmatter
 
-import specialists.adapters.input_adapter as input_adapter
-import specialists.adapters.input_adapter_preview as input_adapter_preview
+import specialists.orbit.adapters.input_adapter as input_adapter
+import specialists.orbit.adapters.input_adapter_preview as input_adapter_preview
 
 
 class Stage53InputAdapterTests(unittest.TestCase):

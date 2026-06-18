@@ -107,8 +107,9 @@ scripts/adapter-status
 
 - `specialists/` - public specialist package map and boundary facades.
 - `specialists/rosie/loop.py` - Rosie watcher and processing pipeline.
-- `specialists/adapters/` and `specialists/orbit/` - Orbit intake, Telegram,
-  rich-source, and shared `.input` source envelopes.
+- `specialists/orbit/` - Orbit intake, Telegram, rich-source, and shared
+  `.input` source envelopes.
+- `specialists/orbit/adapters/` - source-specific adapter implementations.
 - `specialists/cogs/` - Cogs planning, carry, daily reliability, and time
   helpers.
 - `specialists/astro/` - vault write helpers and human-facing ledger surfaces.
@@ -118,11 +119,10 @@ scripts/adapter-status
   preview.
 - `specialists/uniblab/` - status, jobs, backups, readiness, and model probes.
 - `specialists/cogswell/` - database/collection bridge.
+- `substrate/` - shared product contracts and small cross-boundary helpers.
 - `graph/` - product graph models, fixtures, validators, and mutations.
 - `intents/` - input intent models and routing contracts.
-- Root Python files are substrate or tools only: `models.py`,
-  `node_normalization.py`, `slug_utils.py`, `entity_state.py`, `sc_backup.py`,
-  `smoke_test.py`, `stage_closeout.py`, and `tools.py`.
+- Root Python files are not used for specialist ownership or substrate.
 - `scripts/` - venv-aware command wrappers.
 - `tests/` - focused coverage for product behavior and probes.
 

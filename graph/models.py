@@ -1,7 +1,7 @@
 """Minimal product graph models.
 
 These models describe accepted graph facts. They intentionally do not replace
-the root ``models.py`` classifier-output models used by the live pipeline.
+the ``substrate.models`` classifier-output models used by the live pipeline.
 """
 from __future__ import annotations
 

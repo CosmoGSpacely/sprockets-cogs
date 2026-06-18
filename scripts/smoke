@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec .venv/bin/python smoke_test.py "$@"
+exec .venv/bin/python -m specialists.uniblab.smoke_test "$@"

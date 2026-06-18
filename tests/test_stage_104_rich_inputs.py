@@ -7,7 +7,7 @@ from pathlib import Path
 import frontmatter
 
 from specialists import orbit
-from specialists.adapters import rich_inputs
+from specialists.orbit.adapters import rich_inputs
 
 
 class Stage104RichInputTests(unittest.TestCase):

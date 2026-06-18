@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from specialists.adapters.input_adapter import InputWriteResult, input_filename, write_input_file
-from specialists.adapters.telegram_adapter import (
+from specialists.orbit.adapters.input_adapter import InputWriteResult, input_filename, write_input_file
+from specialists.orbit.adapters.telegram_adapter import (
     DEFAULT_TELEGRAM_ENV_FILE,
     TELEGRAM_ALLOWED_CHATS_ENV,
     TELEGRAM_ALLOWED_USERS_ENV,

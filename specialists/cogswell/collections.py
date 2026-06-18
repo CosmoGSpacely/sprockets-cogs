@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from slug_utils import slugify
+from substrate.slug_utils import slugify
 
 
 DEFAULT_DB_ENV = "SPROCKETS_COGS_COLLECTIONS_DB"

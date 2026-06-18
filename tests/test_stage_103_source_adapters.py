@@ -7,7 +7,7 @@ from pathlib import Path
 
 import frontmatter
 
-from specialists.adapters import source_surfaces, telegram_polling
+from specialists.orbit.adapters import source_surfaces, telegram_polling
 
 
 def telegram_update(update_id=1001, message_id=42, text="Capture from Telegram"):

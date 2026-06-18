@@ -7,10 +7,10 @@ from unittest.mock import Mock, patch
 from urllib.parse import parse_qs
 
 import specialists.rosie.loop as agentic_loop
-import specialists.adapters.input_adapter as input_adapter
+import specialists.orbit.adapters.input_adapter as input_adapter
 import specialists.rudi.response_routing as response_routing
-import specialists.adapters.telegram_response as telegram_response
-from specialists.adapters.telegram_adapter import TelegramMessage, telegram_envelope
+import specialists.orbit.adapters.telegram_response as telegram_response
+from specialists.orbit.adapters.telegram_adapter import TelegramMessage, telegram_envelope
 
 
 class FakeTelegramResponse:
@@ -150,7 +150,7 @@ class Stage55TelegramResponseTests(unittest.TestCase):
         stderr = StringIO()
 
         with (
-            patch("specialists.adapters.telegram_response.build_send_message_request") as build_request,
+            patch("specialists.orbit.adapters.telegram_response.build_send_message_request") as build_request,
             self.assertRaises(SystemExit) as raised,
             redirect_stderr(stderr),
         ):
@@ -174,7 +174,7 @@ class Stage55TelegramResponseTests(unittest.TestCase):
 
             with (
                 patch.object(agentic_loop, "_ensure_daily_note", return_value=daily_note),
-                patch("specialists.adapters.telegram_response.send_telegram_response", Mock()) as send_mock,
+                patch("specialists.orbit.adapters.telegram_response.send_telegram_response", Mock()) as send_mock,
             ):
                 agentic_loop.send_response("telegram-chat-888", "Processed 1 node.")
 
@@ -189,10 +189,10 @@ class Stage55TelegramResponseTests(unittest.TestCase):
         )
 
         with (
-            patch("specialists.adapters.telegram_response.merged_env_with_file", return_value={
+            patch("specialists.orbit.adapters.telegram_response.merged_env_with_file", return_value={
                 "SPROCKETS_COGS_TELEGRAM_BOT_TOKEN": "secret-token",
             }),
-            patch("specialists.adapters.telegram_response.send_telegram_response", return_value={
+            patch("specialists.orbit.adapters.telegram_response.send_telegram_response", return_value={
                 "ok": True,
                 "result": {"message_id": 999},
             }) as send_mock,
@@ -212,8 +212,8 @@ class Stage55TelegramResponseTests(unittest.TestCase):
         )
 
         with (
-            patch("specialists.adapters.telegram_response.merged_env_with_file", return_value={}),
-            patch("specialists.adapters.telegram_response.send_telegram_response") as send_mock,
+            patch("specialists.orbit.adapters.telegram_response.merged_env_with_file", return_value={}),
+            patch("specialists.orbit.adapters.telegram_response.send_telegram_response") as send_mock,
         ):
             agentic_loop.send_processed_ack("telegram-chat-888", [], context)
 

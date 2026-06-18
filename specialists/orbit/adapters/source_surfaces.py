@@ -10,7 +10,7 @@ from typing import Sequence
 
 import frontmatter
 
-from specialists.adapters.input_adapter import InputEnvelope, write_input_file
+from specialists.orbit.adapters.input_adapter import InputEnvelope, write_input_file
 from specialists.rudi.response_routing import (
     ResponseContext,
     ResponseEnvelope,

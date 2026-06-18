@@ -9,7 +9,7 @@ from typing import Mapping, Any
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-from specialists.adapters.input_adapter import InputEnvelope
+from specialists.orbit.adapters.input_adapter import InputEnvelope
 
 
 TELEGRAM_SOURCE = "telegram"

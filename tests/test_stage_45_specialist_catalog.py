@@ -8,7 +8,7 @@ class Stage45SpecialistCatalogTests(unittest.TestCase):
     def test_catalog_lists_expected_specialists_in_public_order(self):
         self.assertEqual(
             [specialist.specialist_id for specialist in iter_specialists()],
-            ["orbit", "rosie", "rudi", "cogs", "astro", "sprockets", "jane", "uniblab"],
+            ["orbit", "rosie", "rudi", "cogs", "astro", "cogswell", "sprockets", "jane", "uniblab"],
         )
 
     def test_only_rosie_is_always_on(self):
@@ -34,6 +34,7 @@ class Stage45SpecialistCatalogTests(unittest.TestCase):
     def test_subpackage_definitions_match_catalog(self):
         from specialists.astro import DEFINITION as astro
         from specialists.cogs import DEFINITION as cogs
+        from specialists.cogswell import DEFINITION as cogswell
         from specialists.jane import DEFINITION as jane
         from specialists.orbit import DEFINITION as orbit
         from specialists.rosie import DEFINITION as rosie
@@ -42,7 +43,7 @@ class Stage45SpecialistCatalogTests(unittest.TestCase):
         from specialists.uniblab import DEFINITION as uniblab
 
         self.assertEqual(
-            [orbit, rosie, rudi, cogs, astro, sprockets, jane, uniblab],
+            [orbit, rosie, rudi, cogs, astro, cogswell, sprockets, jane, uniblab],
             list(SPECIALISTS),
         )
 

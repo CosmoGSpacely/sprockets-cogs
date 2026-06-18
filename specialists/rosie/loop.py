@@ -17,7 +17,7 @@ from watchdog.observers import Observer
 
 import specialists.rosie.classifier_context as classifier_context
 from specialists.cogs.format import apply_cogs_item_format
-from entity_state import get_entities_by_tier, upsert_entity
+from specialists.rudi.entity_state import get_entities_by_tier, upsert_entity
 from specialists.rosie.extractor_classifier import ExtractClassifier, ExtractClassifierConfig
 from graph.mutations import MutationCommand
 from graph.proposals import ReviewProposal
@@ -31,8 +31,8 @@ from intents.models import (
 )
 import specialists.rudi.memory_guards as memory_guards
 from specialists.rudi.memory_trace_log import append_memory_parent_trace
-from models import Confidence, NodeBase, validate_node
-from node_normalization import normalize_raw_node
+from substrate.models import Confidence, NodeBase, validate_node
+from substrate.node_normalization import normalize_raw_node
 from specialists.rudi.openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
@@ -43,9 +43,9 @@ from specialists.rudi.response_routing import (
     ResponseType,
     response_context_from_frontmatter,
 )
-from slug_utils import slugify
+from substrate.slug_utils import slugify
 from specialists.sprockets.specialist import SprocketsSpecialist, SprocketsSpecialistConfig
-import specialists.adapters.telegram_response as telegram_response
+import specialists.orbit.adapters.telegram_response as telegram_response
 from specialists.cogs.time_context import apply_bounded_recurrence_context, apply_runtime_date_context
 from specialists.sprockets.vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,

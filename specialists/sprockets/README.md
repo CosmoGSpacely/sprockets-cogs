@@ -16,7 +16,7 @@ Sprockets is command-driven and review-first for higher-level hierarchy changes.
 - `specialist.py`
 - `vault_graph.py`
 - `inspect_hierarchy.py`
-- `models.py`
+- `substrate/models.py`
 - `scripts/sprockets-specialist`
 - `scripts/hierarchy`
 

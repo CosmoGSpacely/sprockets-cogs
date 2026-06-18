@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from specialists.adapters.telegram_adapter import (
+from specialists.orbit.adapters.telegram_adapter import (
     DEFAULT_TELEGRAM_ENV_FILE,
     TELEGRAM_ALLOWED_CHATS_ENV,
     TELEGRAM_ALLOWED_USERS_ENV,

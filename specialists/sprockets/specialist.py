@@ -13,7 +13,7 @@ from typing import Any, Callable, Sequence
 
 import specialists.astro.inspect_hierarchy as inspect_hierarchy
 import specialists.sprockets.vault_graph as vault_graph
-from slug_utils import slugify
+from substrate.slug_utils import slugify
 
 
 @dataclass(frozen=True)

@@ -14,8 +14,8 @@ Orbit does not interpret meaning, approve reviews, write the vault, create Cogs,
 or mutate the graph. It only preserves source context, applies source guards,
 and writes `.input` files for Rosie.
 
-Current implementation lives in `specialists/adapters/`. This package is the
-stable named facade so the agentic design can say:
+Current implementation lives in `specialists/orbit/adapters/`. Orbit owns
+those adapters so the agentic design can say:
 
 ```text
 Orbit -> normalize source

@@ -4,6 +4,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 .venv/bin/python -m unittest discover -v
-.venv/bin/python smoke_test.py
+.venv/bin/python -m specialists.uniblab.smoke_test
 scripts/fallback-eval
 scripts/review --count

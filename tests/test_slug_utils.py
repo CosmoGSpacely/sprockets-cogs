@@ -4,10 +4,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import specialists.rosie.loop as agentic_loop
-import entity_state
+import specialists.rudi.entity_state as entity_state
 import specialists.sprockets.specialist as sprockets_specialist
-from models import SprocketsContact, SprocketsTask
-from slug_utils import slugify
+from substrate.models import SprocketsContact, SprocketsTask
+from substrate.slug_utils import slugify
 
 
 class SlugUtilsTests(unittest.TestCase):

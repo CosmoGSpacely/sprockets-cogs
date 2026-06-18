@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from entity_state import get_entities_by_tier
+from specialists.rudi.entity_state import get_entities_by_tier
 from specialists.rudi.production_retrieval import format_retrieval_context, memory_context_enabled
 from specialists.sprockets.specialist import SprocketsSpecialist, SprocketsSpecialistConfig
 from specialists.sprockets.vault_graph import build_graph

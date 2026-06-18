@@ -17,7 +17,7 @@ from typing import Any, Sequence
 import specialists.rosie.loop as agentic_loop
 import frontmatter
 import specialists.jane.review as review
-from models import validate_node
+from substrate.models import validate_node
 
 SC_ROOT_ENV = "SPROCKETS_COGS_SC_ROOT"
 DEFAULT_REVIEW_PACKET_PATH = Path(os.environ.get(SC_ROOT_ENV, str(Path.home() / "sc"))) / "output" / "review-packet.md"
