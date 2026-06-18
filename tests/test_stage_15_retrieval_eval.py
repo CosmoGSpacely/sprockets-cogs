@@ -4,10 +4,10 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-import agentic_loop
-import embeddings
-import retrieval_eval
-from retrieval_eval import (
+import specialists.rosie.loop as agentic_loop
+import specialists.rudi.embeddings as embeddings
+import specialists.rudi.retrieval_eval as retrieval_eval
+from specialists.rudi.retrieval_eval import (
     RetrievalCase,
     RetrievalNode,
     SemanticQueryHint,
@@ -647,8 +647,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 path=laptop_path,
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.embed_text") as mock_embed_text:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.embed_text") as mock_embed_text:
                     mock_build_index.return_value = (
                         embeddings.EmbeddedNode(node=production, vector=(1.0, 0.0)),
                         embeddings.EmbeddedNode(node=laptop, vector=(0.0, 1.0)),
@@ -699,8 +699,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 path=laptop_path,
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.embed_text") as mock_embed_text:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.embed_text") as mock_embed_text:
                     mock_build_index.return_value = (
                         embeddings.EmbeddedNode(node=production, vector=(1.0, 0.0)),
                         embeddings.EmbeddedNode(node=laptop, vector=(0.99, 0.01)),
@@ -752,8 +752,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 path=laptop_path,
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.embed_text") as mock_embed_text:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.embed_text") as mock_embed_text:
                     mock_build_index.return_value = (
                         embeddings.EmbeddedNode(node=production, vector=(0.99, 0.01)),
                         embeddings.EmbeddedNode(node=laptop, vector=(1.0, 0.0)),
@@ -798,7 +798,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             daily.parent.mkdir(parents=True, exist_ok=True)
             daily.write_text("- [ ] Review memory packet indexing\n")
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
                 mock_build_index.return_value = ()
 
                 retriever = build_experimental_retriever(
@@ -832,8 +832,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 "title: Add hierarchy context tests for Phase 2 - Hardening\n",
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
                     mock_build_index.return_value = ("embedded-index",)
                     mock_retrieve_by_embedding.return_value = [
                         RetrievalNode(
@@ -977,8 +977,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 path=production_path,
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.embed_text") as mock_embed_text:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.embed_text") as mock_embed_text:
                     mock_build_index.return_value = (
                         embeddings.EmbeddedNode(node=production, vector=(1.0, 0.0)),
                     )
@@ -1037,8 +1037,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 "Deployment readiness notes.",
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
                     mock_build_index.return_value = ("embedded-index",)
                     mock_retrieve_by_embedding.return_value = [
                         RetrievalNode(
@@ -1081,8 +1081,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 "Deployment readiness notes.",
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
                     mock_build_index.return_value = ("embedded-index",)
                     mock_retrieve_by_embedding.return_value = [
                         RetrievalNode(
@@ -1138,8 +1138,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 "title: ExampleCorp\n",
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
                     mock_build_index.return_value = ("embedded-index",)
                     mock_retrieve_by_embedding.return_value = [
                         RetrievalNode(
@@ -1190,8 +1190,8 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 "title: Add hierarchy context tests for Phase 2 - Hardening\n",
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.retrieve_by_embedding") as mock_retrieve_by_embedding:
                     mock_build_index.return_value = ("embedded-index",)
                     mock_retrieve_by_embedding.return_value = [
                         RetrievalNode(

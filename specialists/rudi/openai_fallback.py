@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from prompts import CLASSIFY_SCHEMA, CLASSIFY_SYSTEM
+from specialists.rosie.prompts import CLASSIFY_SCHEMA, CLASSIFY_SYSTEM
 
 log = logging.getLogger(__name__)
 

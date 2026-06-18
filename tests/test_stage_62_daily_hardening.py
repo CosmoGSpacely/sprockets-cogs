@@ -3,9 +3,9 @@ import unittest
 import json
 from pathlib import Path
 
-import agentic_loop
-import review
-import review_specialist
+import specialists.rosie.loop as agentic_loop
+import specialists.jane.review as review
+import specialists.jane.specialist as review_specialist
 
 
 class Stage62DailyHardeningTests(unittest.TestCase):

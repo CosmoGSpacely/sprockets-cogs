@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-import carry
-import cogs_planning
-import nightly
-from vault import DEFAULT_DAILY_DIR
+import specialists.cogs.carry as carry
+import specialists.cogs.planning as cogs_planning
+import specialists.cogs.nightly as nightly
+from specialists.astro.vault import DEFAULT_DAILY_DIR
 
 
 @dataclass(frozen=True)

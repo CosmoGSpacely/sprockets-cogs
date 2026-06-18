@@ -8,11 +8,11 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-import agentic_loop
+import specialists.rosie.loop as agentic_loop
 import entity_state
-import fallback_eval
-import openai_fallback
-import review
+import specialists.rudi.fallback_eval as fallback_eval
+import specialists.rudi.openai_fallback as openai_fallback
+import specialists.jane.review as review
 from models import validate_node
 
 

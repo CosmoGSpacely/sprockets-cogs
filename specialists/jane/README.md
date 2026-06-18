@@ -17,7 +17,7 @@ preview-first.
 
 ## Current Implementation
 
-- `review_specialist.py`
+- `specialist.py`
 - `review.py`
 - `scripts/review-specialist`
 - `scripts/review`
@@ -27,4 +27,3 @@ preview-first.
 - Review remains the safety boundary for malformed outputs, low confidence,
   hosted fallback candidates, and uncertain hierarchy writes.
 - Apply behavior should stay source-checked and previewable.
-

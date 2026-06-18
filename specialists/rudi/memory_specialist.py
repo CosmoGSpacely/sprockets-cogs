@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-import embeddings
-import production_retrieval
-import retrieval_eval
-from retrieval_nodes import load_retrieval_nodes, retrieval_node_counts
-import retrieval_preview as retrieval_preview_module
-import retrieval_trace_report
+import specialists.rudi.embeddings as embeddings
+import specialists.rudi.production_retrieval as production_retrieval
+import specialists.rudi.retrieval_eval as retrieval_eval
+from specialists.rudi.retrieval_nodes import load_retrieval_nodes, retrieval_node_counts
+import specialists.rudi.retrieval_preview as retrieval_preview_module
+import specialists.rudi.retrieval_trace_report as retrieval_trace_report
 
 
 MEMORY_TRACE_PATH_ENV = "SPROCKETS_COGS_MEMORY_TRACE_PATH"

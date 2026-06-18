@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from job_status import KNOWN_JOBS, MaintenanceJob
+from specialists.uniblab.job_status import KNOWN_JOBS, MaintenanceJob
 
 
 DEFAULT_USER_UNIT_DIR = Path.home() / ".config" / "systemd" / "user"

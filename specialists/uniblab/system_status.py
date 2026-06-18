@@ -12,13 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-import agentic_loop
-import cogs_planning
-import embeddings
-import job_status
-import production_retrieval
-import review
-from retrieval_preview import format_status as format_retrieval_status
+import specialists.rosie.loop as agentic_loop
+import specialists.cogs.planning as cogs_planning
+import specialists.rudi.embeddings as embeddings
+import specialists.uniblab.job_status as job_status
+import specialists.rudi.production_retrieval as production_retrieval
+import specialists.jane.review as review
+from specialists.rudi.retrieval_preview import format_status as format_retrieval_status
 from specialists import SpecialistDefinition, iter_specialists
 
 SERVICE_UNIT = "sprockets-cogs.service"

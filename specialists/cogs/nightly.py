@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Sequence
 
-from carry import apply_plan_document, build_plan_document, preview_apply_plan_document, scan_daily_notes
-from vault import DEFAULT_DAILY_DIR
+from specialists.cogs.carry import apply_plan_document, build_plan_document, preview_apply_plan_document, scan_daily_notes
+from specialists.astro.vault import DEFAULT_DAILY_DIR
 
 
 def _today() -> datetime:
@@ -144,7 +144,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.report:
-        from cogs_specialist import CogsSpecialist, CogsSpecialistConfig
+        from specialists.cogs.specialist import CogsSpecialist, CogsSpecialistConfig
 
         specialist = CogsSpecialist(
             CogsSpecialistConfig(

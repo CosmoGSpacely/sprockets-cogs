@@ -22,7 +22,7 @@ def main() -> int:
         os.environ["SPROCKETS_COGS_VAULT_DIR"] = str(vault_dir)
         os.environ["SPROCKETS_COGS_ENTITY_STATE_PATH"] = str(sc_root / "entity_state.json")
 
-        import agentic_loop
+        import specialists.rosie.loop as agentic_loop
 
         agentic_loop.ensure_runtime_dirs()
         input_path = agentic_loop.INPUT_DIR / "smoke.input"

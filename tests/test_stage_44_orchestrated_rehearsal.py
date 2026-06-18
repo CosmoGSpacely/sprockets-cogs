@@ -3,8 +3,8 @@ import json
 import unittest
 from contextlib import redirect_stdout
 
-import orchestrated_rehearsal as rehearsal
-import orchestrator_contract as orchestrator
+import specialists.rudi.orchestrated_rehearsal as rehearsal
+import specialists.rudi.orchestrator_contract as orchestrator
 
 
 class Stage44OrchestratedRehearsalTests(unittest.TestCase):

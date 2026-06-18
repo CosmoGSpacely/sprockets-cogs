@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import phase86_status
+import specialists.uniblab.phase86_status as phase86_status
 
 
 class Stage98Phase86StatusTests(unittest.TestCase):

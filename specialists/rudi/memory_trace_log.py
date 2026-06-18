@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from memory_guards import MemoryParentTrace
+from specialists.rudi.memory_guards import MemoryParentTrace
 
 
 TRACE_SCHEMA_VERSION = 1

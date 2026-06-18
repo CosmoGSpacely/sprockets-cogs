@@ -3,16 +3,16 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
-import embeddings
-from retrieval_eval import build_experimental_retriever
-from retrieval_memory import expand_top_memory_result_graph
-from retrieval_strategies import (
+import specialists.rudi.embeddings as embeddings
+from specialists.rudi.retrieval_eval import build_experimental_retriever
+from specialists.rudi.retrieval_memory import expand_top_memory_result_graph
+from specialists.rudi.retrieval_strategies import (
     expand_retrieval_neighbors,
     expand_retrieval_neighbors_with_reasons,
     graph_reason_priority,
     hybrid_retrieve_with_trace,
 )
-from retrieval_types import RetrievalNode
+from specialists.rudi.retrieval_types import RetrievalNode
 
 
 def write_node(vault: Path, folder: str, slug: str, metadata: str = "", body: str = "") -> Path:
@@ -305,8 +305,8 @@ class Stage20GraphRetrievalTests(unittest.TestCase):
                 parent_slugs=("phase-3-memory-enhancement",),
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.embed_text") as mock_embed_text:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.embed_text") as mock_embed_text:
                     mock_build_index.return_value = (
                         embeddings.EmbeddedNode(node=task, vector=(1.0, 0.0)),
                     )
@@ -358,8 +358,8 @@ class Stage20GraphRetrievalTests(unittest.TestCase):
                 path=note_path,
             )
 
-            with patch("embeddings.build_embedding_index") as mock_build_index:
-                with patch("embeddings.embed_text") as mock_embed_text:
+            with patch("specialists.rudi.embeddings.build_embedding_index") as mock_build_index:
+                with patch("specialists.rudi.embeddings.embed_text") as mock_embed_text:
                     mock_build_index.return_value = (
                         embeddings.EmbeddedNode(node=project, vector=(1.0, 0.0)),
                         embeddings.EmbeddedNode(node=note, vector=(0.99, 0.01)),

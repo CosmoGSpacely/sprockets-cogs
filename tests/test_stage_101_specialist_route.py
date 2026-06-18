@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from specialists import routing as specialist_route
-import phase86_status
+import specialists.uniblab.phase86_status as phase86_status
 
 
 class Stage101SpecialistRouteTests(unittest.TestCase):

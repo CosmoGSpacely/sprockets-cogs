@@ -5,10 +5,10 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import job_status
-import production_retrieval
+import specialists.uniblab.job_status as job_status
+import specialists.rudi.production_retrieval as production_retrieval
 from specialists import SPECIALISTS
-import system_status
+import specialists.uniblab.system_status as system_status
 
 
 class Stage32SystemStatusTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
             vault_dir=root / "vault",
             embed_model="test-embed",
             embed_keep_alive="1h",
-            embed_cache_path=root / "embeddings.json",
+            embed_cache_path=root / "specialists.rudi.embeddings.json",
         )
         retrieval = production_retrieval.ProductionRetrievalStatus(
             enabled=True,
@@ -189,7 +189,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
             status = self.build_sample_system_status(Path(tmp))
             stdout = StringIO()
 
-            with patch("system_status.build_system_status", return_value=status), redirect_stdout(stdout):
+            with patch("specialists.uniblab.system_status.build_system_status", return_value=status), redirect_stdout(stdout):
                 system_status.main(["--show-env"])
 
         output = stdout.getvalue()
@@ -227,7 +227,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
         self.assertTrue(status.configured_model_installed)
         self.assertTrue(status.embedding_model_installed)
 
-    @patch("system_status.subprocess.run")
+    @patch("specialists.uniblab.system_status.subprocess.run")
     def test_build_model_availability_status_reports_installed_models(self, mock_run):
         runtime = system_status.RuntimeStatus(
             model="qwen3.5:9b-32k-cosmo",
@@ -258,7 +258,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
         self.assertTrue(status.embedding_model_installed)
         mock_run.assert_called_once()
 
-    @patch("system_status.subprocess.run")
+    @patch("specialists.uniblab.system_status.subprocess.run")
     def test_build_model_availability_status_reports_unavailable_ollama(self, mock_run):
         runtime = system_status.RuntimeStatus(
             model="test-model",
@@ -296,7 +296,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
                 vault_dir=root / "vault",
                 embed_model="test-embed",
                 embed_keep_alive="1h",
-                embed_cache_path=root / "embeddings.json",
+                embed_cache_path=root / "specialists.rudi.embeddings.json",
             )
             runtime.input_dir.mkdir(parents=True)
             runtime.processing_dir.mkdir(parents=True)
@@ -343,7 +343,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
                 vault_dir=root / "vault",
                 embed_model="test-embed",
                 embed_keep_alive="1h",
-                embed_cache_path=root / "embeddings.json",
+                embed_cache_path=root / "specialists.rudi.embeddings.json",
             )
 
             status = system_status.build_planning_status(runtime, "2026-05-12")
@@ -370,7 +370,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
                 vault_dir=root / "vault",
                 embed_model="test-embed",
                 embed_keep_alive="1h",
-                embed_cache_path=root / "embeddings.json",
+                embed_cache_path=root / "specialists.rudi.embeddings.json",
             )
 
             status = system_status.build_backup_sync_status(runtime)
@@ -381,8 +381,8 @@ class Stage32SystemStatusTests(unittest.TestCase):
         self.assertIn("not a point-in-time backup", status.syncthing_note)
         self.assertIn("vault and SC runtime", status.backup_gap)
 
-    @patch("system_status.read_process_env")
-    @patch("system_status.subprocess.run")
+    @patch("specialists.uniblab.system_status.read_process_env")
+    @patch("specialists.uniblab.system_status.subprocess.run")
     def test_build_service_status_reads_selected_running_process_env(self, mock_run, mock_read_env):
         mock_run.return_value = Mock(
             stdout=(
@@ -412,7 +412,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
         self.assertEqual(status.env["SPROCKETS_COGS_MEMORY_RETRIEVAL"], "1")
         mock_read_env.assert_called_once_with(1234)
 
-    @patch("system_status.subprocess.run")
+    @patch("specialists.uniblab.system_status.subprocess.run")
     def test_build_service_status_reports_unavailable_systemd_bus(self, mock_run):
         mock_run.return_value = Mock(
             stdout="",

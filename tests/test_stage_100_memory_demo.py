@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from specialists.rudi import memory_demo
-from retrieval_eval import RetrievalNode
-from retrieval_preview import RetrievalPreview
+from specialists.rudi.retrieval_eval import RetrievalNode
+from specialists.rudi.retrieval_preview import RetrievalPreview
 
 
 class Stage100MemoryDemoTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class Stage100MemoryDemoTests(unittest.TestCase):
             text="Need valves, sealant, and tire mounting kit.",
         )
 
-        with patch("memory_specialist.MemorySpecialist.retrieval_preview") as mock_preview:
+        with patch("specialists.rudi.memory_specialist.MemorySpecialist.retrieval_preview") as mock_preview:
             mock_preview.return_value = RetrievalPreview(
                 query="buy tire mounting kit",
                 retriever_name="memory-vault",
@@ -51,7 +51,7 @@ class Stage100MemoryDemoTests(unittest.TestCase):
         )
         buf = io.StringIO()
 
-        with patch("memory_specialist.MemorySpecialist.retrieval_preview") as mock_preview:
+        with patch("specialists.rudi.memory_specialist.MemorySpecialist.retrieval_preview") as mock_preview:
             mock_preview.return_value = RetrievalPreview(
                 query="find tractor memory",
                 retriever_name="memory-vault",

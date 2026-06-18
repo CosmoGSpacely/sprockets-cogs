@@ -3,9 +3,9 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-import agentic_loop
-from cogs_format import apply_cogs_item_format, normalize_cogs_time_text
-from time_context import (
+import specialists.rosie.loop as agentic_loop
+from specialists.cogs.format import apply_cogs_item_format, normalize_cogs_time_text
+from specialists.cogs.time_context import (
     apply_runtime_date_context,
     resolve_relative_cogs_horizon,
     resolve_relative_date,

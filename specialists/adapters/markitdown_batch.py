@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from input_adapter import input_filename, write_input_file
-from markitdown_adapter import (
+from specialists.adapters.input_adapter import input_filename, write_input_file
+from specialists.adapters.markitdown_adapter import (
     DEFAULT_MAX_DOCUMENT_BYTES,
     DEFAULT_MAX_MARKDOWN_CHARS,
     TEXT_LIKE_SUFFIXES,

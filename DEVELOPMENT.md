@@ -63,19 +63,18 @@ as a fixture.
 
 | Boundary | Code homes | Owns |
 | --- | --- | --- |
-| Orbit | `source_adapters.py`, `telegram_adapter.py`, `rich_input.py`, `specialists/orbit/` | Source normalization and `.input` creation. |
-| Rosie | `agentic_loop.py`, `capture_preview.py`, `prompts.py`, `models.py`, `intents/` | Extraction, classification, and ordinary capture flow. |
-| Sprockets | `sprockets_specialist.py`, `graph/`, `specialists/sprockets/` | Durable graph structure and hierarchy. |
-| Cogs | `cogs_specialist.py`, `cogs_planning.py`, `carry.py`, `nightly.py`, `specialists/cogs/` | Time-oriented work, carry, close/drop behavior. |
-| Astro | vault write helpers and daily/planning surfaces | Human-readable vault surface and manual carry affordances. |
+| Orbit | `specialists/adapters/`, `specialists/orbit/` | Source normalization and `.input` creation. |
+| Rosie | `specialists/rosie/`, `models.py`, `intents/` | Extraction, classification, and ordinary capture flow. |
+| Sprockets | `specialists/sprockets/`, `graph/` | Durable graph structure and hierarchy. |
+| Cogs | `specialists/cogs/` | Time-oriented work, carry, close/drop behavior. |
+| Astro | `specialists/astro/` | Human-readable vault surface and manual carry affordances. |
 | Cogswell | `collections_*`, `specialists/cogswell/` | Database and collection graph bridge. |
-| Jane | `review.py`, `review_specialist.py`, `specialists/jane/` | Review packets and user decisions. |
-| RUDI | `memory_*`, `retrieval_*`, `orchestrator_*`, `specialists/rudi/` | Memory, retrieval, reasoning, orchestration preview. |
-| Uniblab | `system_status.py`, `job_status.py`, `sc_backup.py`, `specialists/uniblab/` | Status, jobs, backups, readiness. |
+| Jane | `specialists/jane/` | Review packets and user decisions. |
+| RUDI | `specialists/rudi/` | Memory, retrieval, reasoning, orchestration preview. |
+| Uniblab | `specialists/uniblab/`, `sc_backup.py` | Status, jobs, backups, readiness. |
 
-The repo still has legacy root modules. When touching behavior, prefer moving
-clear ownership into the relevant boundary instead of adding another layer of
-old-module gravity.
+Root Python files are substrate/tools only. New specialist behavior belongs
+under `specialists/`, not in root compatibility shims.
 
 ## Command Posture
 

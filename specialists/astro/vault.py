@@ -6,8 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from cogs_naming import daily_heading, preferred_daily_path
-from cogs_naming import monthly_filename, weekly_filename
+from specialists.cogs.naming import daily_heading, preferred_daily_path
+from specialists.cogs.naming import monthly_filename, weekly_filename
 
 
 DEFAULT_VAULT_DIR = Path.home() / "vault"
@@ -104,7 +104,7 @@ def append_weekly_carry_item_text(
 ) -> bool:
     """Append an item to the Carry In block of the week containing date_iso."""
 
-    from cogs_planning import render_weekly_note_template
+    from specialists.cogs.planning import render_weekly_note_template
 
     path = cogs_dir / "weekly" / weekly_filename(date_iso)
     return _append_planning_carry_item(path, render_weekly_note_template(date_iso), item_text)
@@ -117,7 +117,7 @@ def append_monthly_carry_item_text(
 ) -> bool:
     """Append an item to the Carry In block of the month containing date_iso."""
 
-    from cogs_planning import render_monthly_note_template
+    from specialists.cogs.planning import render_monthly_note_template
 
     path = cogs_dir / "monthly" / monthly_filename(date_iso)
     return _append_planning_carry_item(path, render_monthly_note_template(date_iso[:7]), item_text)

@@ -9,7 +9,7 @@ import re
 import subprocess
 from typing import Iterable, Sequence
 
-from memory_trace_log import read_memory_parent_trace_records
+from specialists.rudi.memory_trace_log import read_memory_parent_trace_records
 
 
 SERVICE_NAME = "sprockets-cogs.service"

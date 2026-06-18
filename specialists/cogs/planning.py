@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Sequence
 
-from cogs_naming import (
+from specialists.cogs.naming import (
     annual_filename,
     apply_daily_rename_plan,
     build_daily_rename_plan,
@@ -17,7 +17,7 @@ from cogs_naming import (
     planned_note_filenames,
     weekly_filename,
 )
-from vault import DEFAULT_DAILY_DIR
+from specialists.astro.vault import DEFAULT_DAILY_DIR
 
 
 DEFAULT_COGS_DIR = DEFAULT_DAILY_DIR.parent

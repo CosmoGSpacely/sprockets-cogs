@@ -1,6 +1,6 @@
 import unittest
 
-import response_routing
+import specialists.rudi.response_routing as response_routing
 
 
 class Stage55ResponseRoutingTests(unittest.TestCase):

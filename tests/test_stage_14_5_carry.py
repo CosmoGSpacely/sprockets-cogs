@@ -4,8 +4,8 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-import carry
-import vault
+import specialists.cogs.carry as carry
+import specialists.astro.vault as vault
 
 
 class Stage145CarryPrimitiveTests(unittest.TestCase):

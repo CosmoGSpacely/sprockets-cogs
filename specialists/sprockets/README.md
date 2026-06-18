@@ -13,7 +13,7 @@ Sprockets is command-driven and review-first for higher-level hierarchy changes.
 
 ## Current Implementation
 
-- `sprockets_specialist.py`
+- `specialist.py`
 - `vault_graph.py`
 - `inspect_hierarchy.py`
 - `models.py`
@@ -25,4 +25,3 @@ Sprockets is command-driven and review-first for higher-level hierarchy changes.
 - Rosie should not freely invent areas, goals, or projects.
 - Sprockets should propose and validate structural changes before any live write.
 - Ambiguous or consequential hierarchy changes belong in Jane's review boundary.
-

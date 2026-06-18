@@ -8,9 +8,9 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import extractor_classifier as ec
-import agentic_loop
-import capture_preview
+import specialists.rosie.extractor_classifier as ec
+import specialists.rosie.loop as agentic_loop
+import specialists.rosie.capture_preview as capture_preview
 
 
 def _response(payload):

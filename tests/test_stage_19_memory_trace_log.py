@@ -5,14 +5,14 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-import agentic_loop
-from memory_guards import MemoryParentTrace
-from memory_trace_log import (
+import specialists.rosie.loop as agentic_loop
+from specialists.rudi.memory_guards import MemoryParentTrace
+from specialists.rudi.memory_trace_log import (
     append_memory_parent_trace,
     memory_parent_trace_record,
     read_memory_parent_trace_records,
 )
-from retrieval_trace_report import format_memory_guard_jsonl_report
+from specialists.rudi.retrieval_trace_report import format_memory_guard_jsonl_report
 
 
 class Stage19MemoryTraceLogTests(unittest.TestCase):

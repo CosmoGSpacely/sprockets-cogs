@@ -4,8 +4,8 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-import job_status
-import job_supervisor
+import specialists.uniblab.job_status as job_status
+import specialists.uniblab.job_supervisor as job_supervisor
 
 
 class Stage27JobSupervisorTests(unittest.TestCase):

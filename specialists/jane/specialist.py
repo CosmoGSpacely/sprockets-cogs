@@ -14,9 +14,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
 
-import agentic_loop
+import specialists.rosie.loop as agentic_loop
 import frontmatter
-import review
+import specialists.jane.review as review
 from models import validate_node
 
 SC_ROOT_ENV = "SPROCKETS_COGS_SC_ROOT"

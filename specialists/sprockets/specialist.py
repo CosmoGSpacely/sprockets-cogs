@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-import inspect_hierarchy
-import vault_graph
+import specialists.astro.inspect_hierarchy as inspect_hierarchy
+import specialists.sprockets.vault_graph as vault_graph
 from slug_utils import slugify
 
 

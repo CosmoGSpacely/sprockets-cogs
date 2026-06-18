@@ -11,15 +11,15 @@ from typing import Protocol
 
 import ollama
 
-from retrieval_types import RetrievalNode
-from vector_math import cosine_similarity
+from specialists.rudi.retrieval_types import RetrievalNode
+from specialists.rudi.vector_math import cosine_similarity
 
 
 DEFAULT_EMBED_MODEL = "nomic-embed-text"
 EMBED_MODEL = os.environ.get("SPROCKETS_COGS_EMBED_MODEL", DEFAULT_EMBED_MODEL)
 DEFAULT_EMBED_KEEP_ALIVE = "24h"
 EMBED_KEEP_ALIVE = os.environ.get("SPROCKETS_COGS_EMBED_KEEP_ALIVE", DEFAULT_EMBED_KEEP_ALIVE)
-DEFAULT_EMBED_CACHE_PATH = Path.home() / ".cache" / "sprockets-cogs" / "embeddings.json"
+DEFAULT_EMBED_CACHE_PATH = Path.home() / ".cache" / "sprockets-cogs" / "specialists.rudi.embeddings.json"
 EMBED_CACHE_PATH = Path(os.environ.get("SPROCKETS_COGS_EMBED_CACHE_PATH", str(DEFAULT_EMBED_CACHE_PATH)))
 
 

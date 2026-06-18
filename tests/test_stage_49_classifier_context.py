@@ -5,10 +5,10 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-import agentic_loop
-import capture_preview
-import classifier_context
-import production_retrieval
+import specialists.rosie.loop as agentic_loop
+import specialists.rosie.capture_preview as capture_preview
+import specialists.rosie.classifier_context as classifier_context
+import specialists.rudi.production_retrieval as production_retrieval
 
 
 class FakeCaptureClassifier:

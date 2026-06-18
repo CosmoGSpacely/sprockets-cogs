@@ -6,8 +6,8 @@ import json
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from classifier_context import build_default_context as build_context
-from extractor_classifier import CAPTURE_MODEL, ExtractClassifier, ExtractClassifierConfig
+from specialists.rosie.classifier_context import build_default_context as build_context
+from specialists.rosie.extractor_classifier import CAPTURE_MODEL, ExtractClassifier, ExtractClassifierConfig
 
 
 @dataclass(frozen=True)

@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import agentic_loop
-import production_retrieval
-from retrieval_eval import ExperimentalRetriever, RetrievalNode
+import specialists.rosie.loop as agentic_loop
+import specialists.rudi.production_retrieval as production_retrieval
+from specialists.rudi.retrieval_eval import ExperimentalRetriever, RetrievalNode
 
 
 class Stage17ProductionRetrievalTests(unittest.TestCase):
@@ -133,7 +133,7 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
             {production_retrieval.RETRIEVER_ENV: "memory-vault"},
             clear=True,
         ):
-            with patch("production_retrieval.build_experimental_retriever") as mock_build:
+            with patch("specialists.rudi.production_retrieval.build_experimental_retriever") as mock_build:
                 mock_build.return_value = experimental
                 results = production_retrieval.retrieve_with_gated_memory(
                     "production readiness",
@@ -173,7 +173,7 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
             },
             clear=True,
         ):
-            with patch("production_retrieval.build_experimental_retriever") as mock_build:
+            with patch("specialists.rudi.production_retrieval.build_experimental_retriever") as mock_build:
                 mock_build.return_value = experimental
                 results = production_retrieval.retrieve_with_gated_memory(
                     "memory",
@@ -269,7 +269,7 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
 
     def test_agentic_loop_retrieval_stays_empty_when_flag_is_disabled(self):
         with patch.dict(os.environ, {}, clear=True):
-            with patch("production_retrieval.retrieve_with_gated_memory") as mock_retrieve:
+            with patch("specialists.rudi.production_retrieval.retrieve_with_gated_memory") as mock_retrieve:
                 results = agentic_loop.retrieve_relevant_nodes("memory")
 
         self.assertEqual(results, [])
@@ -525,7 +525,7 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
             {production_retrieval.MEMORY_RETRIEVAL_ENV: "1"},
             clear=True,
         ):
-            with patch("production_retrieval.retrieve_with_gated_memory") as mock_retrieve:
+            with patch("specialists.rudi.production_retrieval.retrieve_with_gated_memory") as mock_retrieve:
                 mock_retrieve.return_value = (node,)
                 results = agentic_loop.retrieve_relevant_nodes("memory")
 
@@ -538,7 +538,7 @@ class Stage17ProductionRetrievalTests(unittest.TestCase):
             {production_retrieval.MEMORY_RETRIEVAL_ENV: "1"},
             clear=True,
         ):
-            with patch("production_retrieval.retrieve_with_gated_memory") as mock_retrieve:
+            with patch("specialists.rudi.production_retrieval.retrieve_with_gated_memory") as mock_retrieve:
                 mock_retrieve.side_effect = RuntimeError("offline")
                 results = agentic_loop.retrieve_relevant_nodes("memory")
 

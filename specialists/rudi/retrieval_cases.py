@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from retrieval_types import RetrievalCase, RetrievalNode
+from specialists.rudi.retrieval_types import RetrievalCase, RetrievalNode
 
 
 def stage_15_fixture_nodes() -> tuple[RetrievalNode, ...]:

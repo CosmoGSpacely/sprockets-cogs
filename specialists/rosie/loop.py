@@ -15,10 +15,10 @@ from pydantic import ValidationError
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-import classifier_context
-from cogs_format import apply_cogs_item_format
+import specialists.rosie.classifier_context as classifier_context
+from specialists.cogs.format import apply_cogs_item_format
 from entity_state import get_entities_by_tier, upsert_entity
-from extractor_classifier import ExtractClassifier, ExtractClassifierConfig
+from specialists.rosie.extractor_classifier import ExtractClassifier, ExtractClassifierConfig
 from graph.mutations import MutationCommand
 from graph.proposals import ReviewProposal
 from intents.models import (
@@ -29,29 +29,29 @@ from intents.models import (
     RequiredGuard,
     SuggestedRoute,
 )
-import memory_guards
-from memory_trace_log import append_memory_parent_trace
+import specialists.rudi.memory_guards as memory_guards
+from specialists.rudi.memory_trace_log import append_memory_parent_trace
 from models import Confidence, NodeBase, validate_node
 from node_normalization import normalize_raw_node
-from openai_fallback import (
+from specialists.rudi.openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
 )
-from response_routing import (
+from specialists.rudi.response_routing import (
     ResponseContext,
     ResponseEnvelope,
     ResponseType,
     response_context_from_frontmatter,
 )
 from slug_utils import slugify
-from sprockets_specialist import SprocketsSpecialist, SprocketsSpecialistConfig
-import telegram_response
-from time_context import apply_bounded_recurrence_context, apply_runtime_date_context
-from vault_graph import (
+from specialists.sprockets.specialist import SprocketsSpecialist, SprocketsSpecialistConfig
+import specialists.adapters.telegram_response as telegram_response
+from specialists.cogs.time_context import apply_bounded_recurrence_context, apply_runtime_date_context
+from specialists.sprockets.vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,
     build_graph,
 )
-from vault import (
+from specialists.astro.vault import (
     append_cogs_item_text,
     append_monthly_carry_item_text,
     append_weekly_carry_item_text,
@@ -290,7 +290,7 @@ def retrieve_relevant_nodes(query: str) -> list:
     Phase 1: returns empty list.
     Phase 3: semantic search over vault embeddings.
     """
-    from production_retrieval import memory_retrieval_enabled, retrieve_with_gated_memory
+    from specialists.rudi.production_retrieval import memory_retrieval_enabled, retrieve_with_gated_memory
 
     if memory_retrieval_enabled():
         try:

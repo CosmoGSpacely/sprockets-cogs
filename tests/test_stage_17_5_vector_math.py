@@ -1,6 +1,6 @@
 import unittest
 
-from vector_math import cosine_similarity
+from specialists.rudi.vector_math import cosine_similarity
 
 
 class VectorMathTests(unittest.TestCase):

@@ -2,9 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import cogs_naming
-import cogs_planning
-import vault
+import specialists.cogs.naming as cogs_naming
+import specialists.cogs.planning as cogs_planning
+import specialists.astro.vault as vault
 
 
 class Stage26CogsNamingTests(unittest.TestCase):

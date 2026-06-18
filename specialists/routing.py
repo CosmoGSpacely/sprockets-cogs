@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
 
-import cogs_specialist
+import specialists.cogs.specialist as cogs_specialist
 from graph.mutations import MutationCommand
 from graph.proposals import ReviewProposal
 from intents.models import (
@@ -26,10 +26,10 @@ from intents.models import (
     SourceType,
     SuggestedRoute,
 )
-import memory_specialist
-import phase86_status
-import review_specialist
-import sprockets_specialist
+import specialists.rudi.memory_specialist as memory_specialist
+import specialists.uniblab.phase86_status as phase86_status
+import specialists.jane.specialist as review_specialist
+import specialists.sprockets.specialist as sprockets_specialist
 
 
 DEFAULT_INPUT = (

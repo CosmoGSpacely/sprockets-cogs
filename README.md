@@ -105,18 +105,24 @@ scripts/adapter-status
 
 ## Repository Map
 
-- `agentic_loop.py` - Rosie watcher and processing pipeline.
 - `specialists/` - public specialist package map and boundary facades.
+- `specialists/rosie/loop.py` - Rosie watcher and processing pipeline.
+- `specialists/adapters/` and `specialists/orbit/` - Orbit intake, Telegram,
+  rich-source, and shared `.input` source envelopes.
+- `specialists/cogs/` - Cogs planning, carry, daily reliability, and time
+  helpers.
+- `specialists/astro/` - vault write helpers and human-facing ledger surfaces.
+- `specialists/sprockets/` - Sprockets hierarchy and graph read surfaces.
+- `specialists/jane/` - review queue and packet tools.
+- `specialists/rudi/` - memory, retrieval, reasoning, and orchestration
+  preview.
+- `specialists/uniblab/` - status, jobs, backups, readiness, and model probes.
+- `specialists/cogswell/` - database/collection bridge.
 - `graph/` - product graph models, fixtures, validators, and mutations.
 - `intents/` - input intent models and routing contracts.
-- `models.py` - older runtime schemas still used by the capture loop.
-- `prompts.py` - local model prompts and structured-output schemas.
-- `review.py`, `review_specialist.py` - Jane review queue and packet tools.
-- `memory_*`, `retrieval_*` - RUDI memory and retrieval support.
-- `cogs_*`, `sprockets_*` - Cogs and Sprockets specialist surfaces.
-- `collections_*` - Cogswell database/collection bridge.
-- `telegram_adapter.py`, `rich_input.py`, `source_adapters.py` - Orbit intake.
-- `system_status.py`, `job_status.py`, `backup.py` - Uniblab operations.
+- Root Python files are substrate or tools only: `models.py`,
+  `node_normalization.py`, `slug_utils.py`, `entity_state.py`, `sc_backup.py`,
+  `smoke_test.py`, `stage_closeout.py`, and `tools.py`.
 - `scripts/` - venv-aware command wrappers.
 - `tests/` - focused coverage for product behavior and probes.
 

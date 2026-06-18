@@ -3,7 +3,7 @@ import json
 import unittest
 from contextlib import redirect_stdout
 
-import orchestrator_contract as orch
+import specialists.rudi.orchestrator_contract as orch
 
 
 class Stage37OrchestratorContractTests(unittest.TestCase):

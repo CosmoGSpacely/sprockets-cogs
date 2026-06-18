@@ -17,9 +17,11 @@ Rosie is currently the only always-on real-time service.
 
 ## Current Implementation
 
-- `agentic_loop.py`
+- `loop.py`
 - `extractor_classifier.py`
 - `capture_preview.py`
+- `classifier_context.py`
+- `prompts.py`
 - `scripts/capture-preview`
 
 ## Boundaries
@@ -27,4 +29,3 @@ Rosie is currently the only always-on real-time service.
 - Hosted fallback remains review-first.
 - Higher-level hierarchy creation remains human-authored or review-approved.
 - Memory is applied through guarded post-classification code, not prompt context.
-

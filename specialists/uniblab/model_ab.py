@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from extractor_classifier import ExtractClassifier, ExtractClassifierConfig
+from specialists.rosie.extractor_classifier import ExtractClassifier, ExtractClassifierConfig
 from models import validate_node
 
 
@@ -157,7 +157,7 @@ def _structural_guard_reasons(
     raw_nodes: list[dict[str, Any]],
     classified_nodes: list[dict[str, Any]],
 ) -> tuple[str, ...]:
-    from agentic_loop import _structural_guard_reasons as guard_reasons
+    from specialists.rosie.loop import _structural_guard_reasons as guard_reasons
 
     return guard_reasons(content, raw_nodes, classified_nodes)
 

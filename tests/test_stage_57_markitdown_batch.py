@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import markitdown_batch
+import specialists.adapters.markitdown_batch as markitdown_batch
 
 
 class Stage57MarkItDownBatchTests(unittest.TestCase):

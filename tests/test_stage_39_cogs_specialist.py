@@ -4,8 +4,8 @@ import io
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import cogs_specialist
-import vault
+import specialists.cogs.specialist as cogs_specialist
+import specialists.astro.vault as vault
 
 
 class Stage39CogsSpecialistTests(unittest.TestCase):

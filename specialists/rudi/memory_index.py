@@ -13,9 +13,9 @@ from pathlib import Path
 import re
 from typing import Protocol
 
-from embeddings import embedding_text_hash, node_embedding_text
-from retrieval_types import RetrievalNode
-from vector_math import cosine_similarity
+from specialists.rudi.embeddings import embedding_text_hash, node_embedding_text
+from specialists.rudi.retrieval_types import RetrievalNode
+from specialists.rudi.vector_math import cosine_similarity
 
 
 @dataclass(frozen=True)

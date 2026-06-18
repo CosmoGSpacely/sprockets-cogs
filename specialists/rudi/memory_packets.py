@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from retrieval_nodes import load_retrieval_nodes
-from retrieval_strategies import node_slug, node_type_priority
-from retrieval_types import RetrievalNode
+from specialists.rudi.retrieval_nodes import load_retrieval_nodes
+from specialists.rudi.retrieval_strategies import node_slug, node_type_priority
+from specialists.rudi.retrieval_types import RetrievalNode
 
 
 DEFAULT_PACKET_NODE_TYPES = (

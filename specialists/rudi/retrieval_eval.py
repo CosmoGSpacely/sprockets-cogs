@@ -10,16 +10,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from retrieval_cases import (
+from specialists.rudi.retrieval_cases import (
     select_cases,
     stage_15_cases,
     stage_15_fixture_nodes,
     stage_15_real_vault_cases,
     stage_22_packet_vault_cases,
 )
-from retrieval_memory import build_memory_index_retriever as _build_memory_index_retriever
-from retrieval_nodes import load_retrieval_nodes, retrieval_node_counts
-from retrieval_strategies import (
+from specialists.rudi.retrieval_memory import build_memory_index_retriever as _build_memory_index_retriever
+from specialists.rudi.retrieval_nodes import load_retrieval_nodes, retrieval_node_counts
+from specialists.rudi.retrieval_strategies import (
     expand_retrieval_neighbors,
     filter_by_query_intent,
     hybrid_retrieve,
@@ -27,7 +27,7 @@ from retrieval_strategies import (
     lexical_retrieve,
     semantic_query_hints as _semantic_query_hints,
 )
-from retrieval_types import RetrievalCase, RetrievalNode, SemanticQueryHint
+from specialists.rudi.retrieval_types import RetrievalCase, RetrievalNode, SemanticQueryHint
 
 
 @dataclass(frozen=True)
@@ -233,7 +233,7 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
         )
 
     if name == "memory-packet-embedding-gated-vault":
-        from memory_packets import load_memory_packet_retrieval_nodes
+        from specialists.rudi.memory_packets import load_memory_packet_retrieval_nodes
 
         source_nodes = tuple(load_retrieval_nodes(vault_dir))
         packet_nodes = load_memory_packet_retrieval_nodes(vault_dir)
@@ -256,7 +256,7 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
         "hybrid-graph-vault",
         "hybrid-graph-intent-vault",
     }:
-        from embeddings import JsonEmbeddingCache, build_embedding_index, retrieve_by_embedding
+        from specialists.rudi.embeddings import JsonEmbeddingCache, build_embedding_index, retrieve_by_embedding
 
         scan_nodes = tuple(load_retrieval_nodes(vault_dir))
         index = build_embedding_index(scan_nodes, cache=JsonEmbeddingCache.default())
@@ -292,7 +292,7 @@ def build_experimental_retriever(name: str, vault_dir: Path) -> ExperimentalRetr
         )
 
     if name == "current":
-        import agentic_loop
+        import specialists.rosie.loop as agentic_loop
 
         return ExperimentalRetriever(
             name=name,

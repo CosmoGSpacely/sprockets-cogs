@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import agentic_loop
-import inspect_hierarchy
+import specialists.rosie.loop as agentic_loop
+import specialists.astro.inspect_hierarchy as inspect_hierarchy
 import networkx as nx
-import vault_graph
+import specialists.sprockets.vault_graph as vault_graph
 from models import validate_node
 from tests.helpers import write_sprockets_node
 

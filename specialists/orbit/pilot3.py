@@ -13,7 +13,7 @@ import frontmatter
 
 from specialists.adapters.source_surfaces import AdapterStatus, build_adapter_status, format_adapter_status
 from specialists.adapters.telegram_polling import TelegramPollResult, format_poll_result, poll_telegram_once
-from telegram_adapter import (
+from specialists.adapters.telegram_adapter import (
     DEFAULT_TELEGRAM_ENV_FILE,
     TELEGRAM_ALLOWED_CHATS_ENV,
     TELEGRAM_ALLOWED_USERS_ENV,

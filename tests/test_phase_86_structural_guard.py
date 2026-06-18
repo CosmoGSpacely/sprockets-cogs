@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import agentic_loop
+import specialists.rosie.loop as agentic_loop
 
 
 class Phase86StructuralGuardTests(unittest.TestCase):

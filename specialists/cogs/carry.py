@@ -17,7 +17,7 @@ from typing import Any, Sequence
 
 import frontmatter
 
-from vault import CogsBlock, append_cogs_block, mark_block_state, parse_cogs_blocks
+from specialists.astro.vault import CogsBlock, append_cogs_block, mark_block_state, parse_cogs_blocks
 
 
 VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(Path.home() / "vault")))

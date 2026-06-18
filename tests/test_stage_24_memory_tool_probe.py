@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 
-from memory_tool_probe import (
+from specialists.uniblab.memory_tool_probe import (
     MemoryToolChoice,
     format_probe_result,
     parse_memory_tool_choices,
@@ -99,7 +99,7 @@ class MemoryToolProbeTests(TestCase):
         self.assertTrue(result.valid)
         self.assertEqual(result.tool_choice.name, "search_memory")
 
-    @patch("memory_tool_probe.ollama.chat")
+    @patch("specialists.uniblab.memory_tool_probe.ollama.chat")
     def test_probe_memory_tool_choice_calls_ollama_with_read_only_tools(self, mock_chat):
         mock_chat.return_value = {
             "message": {
@@ -128,7 +128,7 @@ class MemoryToolProbeTests(TestCase):
             {"search_memory", "get_memory_node", "summarize_recent_cogs", "no_memory_tool"},
         )
 
-    @patch("memory_tool_probe.ollama.chat")
+    @patch("specialists.uniblab.memory_tool_probe.ollama.chat")
     def test_probe_memory_tool_choice_reports_native_tool_failure(self, mock_chat):
         mock_chat.side_effect = RuntimeError("model does not support tools")
 
@@ -138,7 +138,7 @@ class MemoryToolProbeTests(TestCase):
         self.assertIn("native tool call failed", result.issue)
         self.assertIn("model does not support tools", result.issue)
 
-    @patch("memory_tool_probe.ollama.chat")
+    @patch("specialists.uniblab.memory_tool_probe.ollama.chat")
     def test_probe_memory_tool_choice_json_contract_uses_structured_format(self, mock_chat):
         mock_chat.return_value.message.content = (
             '{"tool": "search_memory", '

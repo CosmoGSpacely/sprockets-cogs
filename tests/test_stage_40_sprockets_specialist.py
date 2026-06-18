@@ -4,7 +4,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import sprockets_specialist
+import specialists.sprockets.specialist as sprockets_specialist
 from tests.helpers import write_sprockets_node
 
 

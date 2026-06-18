@@ -30,7 +30,7 @@ dispatcher.
 - `retrieval_*`
 - `memory_packets.py`
 - `memory_trace_log.py`
-- `specialists/rudi/memory_demo.py`
+- `memory_demo.py`
 - `scripts/orchestrator-route`
 - `scripts/orchestrated-rehearsal`
 - `scripts/agent-message-bus`

@@ -13,12 +13,13 @@ Cogs is command-driven and scheduled. It does not need to run continuously.
 
 ## Current Implementation
 
-- `cogs_specialist.py`
-- `cogs_planning.py`
-- `cogs_naming.py`
+- `specialist.py`
+- `planning.py`
+- `naming.py`
+- `format.py`
+- `time_context.py`
 - `carry.py`
 - `nightly.py`
-- `vault.py`
 - `scripts/cogs-specialist`
 - `scripts/cogs-planning`
 - `scripts/carry`
@@ -31,4 +32,3 @@ Cogs is command-driven and scheduled. It does not need to run continuously.
 - Planning-note maintenance is not part of Rosie's live input loop.
 - Carry/apply workflows should remain previewable and source-checked.
 - ISO-first daily naming is preview-first unless explicitly migrated.
-

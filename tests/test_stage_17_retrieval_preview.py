@@ -3,10 +3,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from memory_index import MemoryQuery, RetrievalConfidence, RetrievalTrace
-from production_retrieval import ProductionRetrievalStatus
-from retrieval_eval import ExperimentalRetriever, RetrievalNode
-from retrieval_preview import (
+from specialists.rudi.memory_index import MemoryQuery, RetrievalConfidence, RetrievalTrace
+from specialists.rudi.production_retrieval import ProductionRetrievalStatus
+from specialists.rudi.retrieval_eval import ExperimentalRetriever, RetrievalNode
+from specialists.rudi.retrieval_preview import (
     format_context_preview,
     format_memory_guard_preview,
     format_preview,
@@ -43,7 +43,7 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
             trace_provider=lambda _query: trace,
         )
 
-        with patch("retrieval_preview.build_experimental_retriever") as mock_build:
+        with patch("specialists.rudi.retrieval_preview.build_experimental_retriever") as mock_build:
             mock_build.return_value = experimental
             with tempfile.TemporaryDirectory() as tmp:
                 vault = Path(tmp)
@@ -67,7 +67,7 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
             trace_provider=lambda _query: None,
         )
 
-        with patch("retrieval_preview.build_experimental_retriever") as mock_build:
+        with patch("specialists.rudi.retrieval_preview.build_experimental_retriever") as mock_build:
             mock_build.return_value = experimental
             preview = preview_retrieval(
                 "Find Phase 3",
@@ -256,7 +256,7 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
 
     def test_preview_production_return_respects_disabled_flag(self):
         with patch.dict("os.environ", {}, clear=True):
-            with patch("retrieval_preview.retrieve_with_gated_memory") as mock_retrieve:
+            with patch("specialists.rudi.retrieval_preview.retrieve_with_gated_memory") as mock_retrieve:
                 preview = preview_production_return("Find memory", Path("/vault"))
 
         self.assertFalse(preview.enabled)
@@ -278,7 +278,7 @@ class Stage17RetrievalPreviewTests(unittest.TestCase):
             {"SPROCKETS_COGS_MEMORY_RETRIEVAL": "1"},
             clear=True,
         ):
-            with patch("retrieval_preview.retrieve_with_gated_memory") as mock_retrieve:
+            with patch("specialists.rudi.retrieval_preview.retrieve_with_gated_memory") as mock_retrieve:
                 mock_retrieve.return_value = (node,)
                 preview = preview_production_return("Find memory", Path("/vault"))
 
@@ -331,7 +331,7 @@ def preview_retrieval_result(
     results: tuple[RetrievalNode, ...],
     trace: object | None,
 ):
-    from retrieval_preview import RetrievalPreview
+    from specialists.rudi.retrieval_preview import RetrievalPreview
 
     return RetrievalPreview(
         query=query,
@@ -348,7 +348,7 @@ def production_return_preview_result(
     results: tuple[RetrievalNode, ...],
     error: str = "",
 ):
-    from retrieval_preview import ProductionReturnPreview
+    from specialists.rudi.retrieval_preview import ProductionReturnPreview
 
     return ProductionReturnPreview(
         query=query,

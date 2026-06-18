@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 
 from models import CogsDailyItem, SprocketsNote, SprocketsTask, validate_node
-from openai_fallback import (
+from specialists.rudi.openai_fallback import (
     _fallback_user_message,
     _openai_classify_schema,
     classify_nodes_with_openai_fallback,

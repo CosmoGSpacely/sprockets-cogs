@@ -11,7 +11,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
-from agent_message_bus import AgentMessage, message_to_dict, new_message
+from specialists.rudi.agent_message_bus import AgentMessage, message_to_dict, new_message
 
 
 WorkflowMode = Literal[

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Sequence
 
-from memory_tool_probe import (
+from specialists.uniblab.memory_tool_probe import (
     MemoryToolProbeResult,
     probe_memory_tool_choice,
     probe_memory_tool_choice_json_contract,

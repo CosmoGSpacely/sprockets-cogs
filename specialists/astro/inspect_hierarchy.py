@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from vault_graph import HIERARCHY_PARENT_NODE_TYPES, build_graph
+from specialists.sprockets.vault_graph import HIERARCHY_PARENT_NODE_TYPES, build_graph
 
 
 VALID_PARENT_TYPES = {

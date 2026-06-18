@@ -5,7 +5,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import agent_message_bus as bus
+import specialists.rudi.agent_message_bus as bus
 
 
 class Stage43AgentMessageBusTests(unittest.TestCase):

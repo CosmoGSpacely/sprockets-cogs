@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import obsidian_views
+import specialists.astro.obsidian_views as obsidian_views
 
 
 class Stage58ObsidianViewsTests(unittest.TestCase):

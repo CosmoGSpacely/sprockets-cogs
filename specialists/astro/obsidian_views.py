@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from vault import DEFAULT_VAULT_DIR
+from specialists.astro.vault import DEFAULT_VAULT_DIR
 
 
 @dataclass(frozen=True)

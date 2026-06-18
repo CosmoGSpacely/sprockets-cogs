@@ -4,8 +4,8 @@ import io
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import nightly
-import vault
+import specialists.cogs.nightly as nightly
+import specialists.astro.vault as vault
 
 
 class Stage145NightlyCarryTests(unittest.TestCase):

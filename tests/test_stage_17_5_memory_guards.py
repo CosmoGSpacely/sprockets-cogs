@@ -1,8 +1,8 @@
 import unittest
 from pathlib import Path
 
-import memory_guards
-from retrieval_types import RetrievalNode
+import specialists.rudi.memory_guards as memory_guards
+from specialists.rudi.retrieval_types import RetrievalNode
 
 
 class Stage175MemoryGuardTests(unittest.TestCase):

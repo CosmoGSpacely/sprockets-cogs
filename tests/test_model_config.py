@@ -3,7 +3,7 @@ import os
 from unittest import TestCase
 from unittest.mock import patch
 
-import agentic_loop
+import specialists.rosie.loop as agentic_loop
 
 
 class ModelConfigTests(TestCase):

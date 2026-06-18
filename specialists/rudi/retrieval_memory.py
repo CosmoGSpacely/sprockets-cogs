@@ -5,12 +5,12 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, datetime
 
-from retrieval_strategies import (
+from specialists.rudi.retrieval_strategies import (
     expand_retrieval_neighbors_with_reasons,
     query_preferred_node_types,
     semantic_query_hints,
 )
-from retrieval_types import RetrievalNode
+from specialists.rudi.retrieval_types import RetrievalNode
 
 
 Retriever = Callable[[str], list[RetrievalNode]]
@@ -24,7 +24,7 @@ def build_memory_index_retriever(
 ) -> tuple[Retriever, Callable[[str], object]]:
     """Build an in-memory benchmark retriever backed by MemoryIndex."""
 
-    from memory_index import (
+    from specialists.rudi.memory_index import (
         InMemoryMemoryIndex,
         MemoryQuery,
         MemoryRecord,
@@ -38,7 +38,7 @@ def build_memory_index_retriever(
     query_vector_provider: Callable[[str], tuple[float, ...] | None] = lambda _query: None
     records = [memory_record_from_retrieval_node(node) for node in nodes]
     if use_embeddings:
-        from embeddings import EMBED_MODEL, JsonEmbeddingCache, build_embedding_index, embed_text
+        from specialists.rudi.embeddings import EMBED_MODEL, JsonEmbeddingCache, build_embedding_index, embed_text
 
         embedded_by_id = {
             embedded.node.node_id: embedded

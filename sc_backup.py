@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal, Sequence
 
-import agentic_loop
+import specialists.rosie.loop as agentic_loop
 
 
 BackupRole = Literal["durable", "optional", "transient", "missing"]

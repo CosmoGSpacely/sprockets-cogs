@@ -7,8 +7,8 @@ import unittest
 
 import frontmatter
 
-import input_adapter
-import markitdown_adapter
+import specialists.adapters.input_adapter as input_adapter
+import specialists.adapters.markitdown_adapter as markitdown_adapter
 
 
 class Stage56MarkItDownAdapterTests(unittest.TestCase):

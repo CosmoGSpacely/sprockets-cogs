@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 import frontmatter
 
-from response_routing import (
+from specialists.rudi.response_routing import (
     ResponseContext,
     ResponseEnvelope,
     ResponseType,
@@ -19,7 +19,7 @@ from response_routing import (
     response_context_from_frontmatter,
     route_response,
 )
-from telegram_adapter import (
+from specialists.adapters.telegram_adapter import (
     DEFAULT_TELEGRAM_ENV_FILE,
     TELEGRAM_API_BASE,
     TELEGRAM_TOKEN_ENV,

@@ -2,7 +2,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from memory_packets import (
+from specialists.rudi.memory_packets import (
     build_memory_packets,
     build_recent_cogs_packet,
     format_memory_packet,
@@ -10,7 +10,7 @@ from memory_packets import (
     memory_packet_to_retrieval_node,
     memory_packet_for_node,
 )
-from retrieval_types import RetrievalNode
+from specialists.rudi.retrieval_types import RetrievalNode
 
 
 class Stage22MemoryPacketTests(unittest.TestCase):

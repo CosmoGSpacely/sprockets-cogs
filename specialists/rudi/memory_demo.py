@@ -5,8 +5,8 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
-import memory_specialist
-import retrieval_preview
+import specialists.rudi.memory_specialist as memory_specialist
+import specialists.rudi.retrieval_preview as retrieval_preview
 
 
 DEFAULT_RETRIEVER = "memory-vault"

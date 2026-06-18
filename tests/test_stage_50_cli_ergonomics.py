@@ -4,10 +4,10 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-import agent_message_bus
-import carry
-import cogs_planning
-import review_specialist
+import specialists.rudi.agent_message_bus as agent_message_bus
+import specialists.cogs.carry as carry
+import specialists.cogs.planning as cogs_planning
+import specialists.jane.specialist as review_specialist
 
 
 class Stage50CliErgonomicsTests(unittest.TestCase):

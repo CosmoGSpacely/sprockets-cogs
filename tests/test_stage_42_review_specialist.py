@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import frontmatter
-import review_specialist
+import specialists.jane.specialist as review_specialist
 
 
 class Stage42ReviewSpecialistTests(unittest.TestCase):

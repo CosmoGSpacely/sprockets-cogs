@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from memory_packets import (
+from specialists.rudi.memory_packets import (
     DEFAULT_PACKET_NODE_TYPES,
     format_memory_packet,
     format_memory_packet_inventory,

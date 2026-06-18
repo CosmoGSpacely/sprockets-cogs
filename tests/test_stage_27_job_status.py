@@ -3,7 +3,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-import job_status
+import specialists.uniblab.job_status as job_status
 
 
 class Stage27JobStatusTests(unittest.TestCase):
@@ -110,7 +110,7 @@ class Stage27JobStatusTests(unittest.TestCase):
         )
         stdout = StringIO()
 
-        with patch("job_status.build_job_status", return_value=status), redirect_stdout(stdout):
+        with patch("specialists.uniblab.job_status.build_job_status", return_value=status), redirect_stdout(stdout):
             job_status.main(["nightly"])
 
         output = stdout.getvalue()

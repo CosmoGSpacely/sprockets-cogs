@@ -16,7 +16,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 import ollama
 
-from input_adapter import InputAttachment, InputEnvelope, write_input_file
+from specialists.adapters.input_adapter import InputAttachment, InputEnvelope, write_input_file
 from slug_utils import slugify
 
 

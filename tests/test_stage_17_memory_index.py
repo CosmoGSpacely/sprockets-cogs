@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from memory_index import (
+from specialists.rudi.memory_index import (
     InMemoryMemoryIndex,
     MemoryNodeMetadata,
     MemoryQuery,
@@ -14,7 +14,7 @@ from memory_index import (
     should_reindex,
     vector_metadata_for,
 )
-from retrieval_eval import RetrievalNode
+from specialists.rudi.retrieval_eval import RetrievalNode
 
 
 class Stage17MemoryIndexTests(unittest.TestCase):

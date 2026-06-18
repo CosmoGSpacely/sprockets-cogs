@@ -4,7 +4,7 @@ from io import StringIO
 from pathlib import Path
 import tempfile
 
-from retrieval_trace_report import (
+from specialists.rudi.retrieval_trace_report import (
     format_memory_guard_report,
     main,
     parse_memory_guard_log,

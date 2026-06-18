@@ -6,10 +6,10 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-import memory_specialist
-import production_retrieval
-from retrieval_eval import RetrievalNode
-from retrieval_preview import RetrievalPreview, ProductionReturnPreview
+import specialists.rudi.memory_specialist as memory_specialist
+import specialists.rudi.production_retrieval as production_retrieval
+from specialists.rudi.retrieval_eval import RetrievalNode
+from specialists.rudi.retrieval_preview import RetrievalPreview, ProductionReturnPreview
 
 
 class Stage41MemorySpecialistTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
 
     def test_cache_inventory_reads_entry_models_and_dimensions(self):
         with tempfile.TemporaryDirectory() as tmp:
-            cache_path = Path(tmp) / "embeddings.json"
+            cache_path = Path(tmp) / "specialists.rudi.embeddings.json"
             cache_path.write_text(json.dumps({
                 "schema_version": 1,
                 "entries": {
@@ -60,7 +60,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
 
     def test_cache_inventory_reports_unreadable_cache_shape(self):
         with tempfile.TemporaryDirectory() as tmp:
-            cache_path = Path(tmp) / "embeddings.json"
+            cache_path = Path(tmp) / "specialists.rudi.embeddings.json"
             cache_path.write_text(json.dumps({"schema_version": 1, "entries": []}))
             specialist = memory_specialist.MemorySpecialist(
                 memory_specialist.MemorySpecialistConfig(embedding_cache_path=cache_path)
@@ -75,7 +75,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
     def test_inventory_includes_production_retrieval_status_without_running_retrieval(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault_dir = Path(tmp) / "vault"
-            cache_path = Path(tmp) / "embeddings.json"
+            cache_path = Path(tmp) / "specialists.rudi.embeddings.json"
             cache_path.write_text(json.dumps({"schema_version": 1, "entries": {}}))
             specialist = memory_specialist.MemorySpecialist(
                 memory_specialist.MemorySpecialistConfig(
@@ -125,7 +125,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
     def test_main_prints_inventory_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault_dir = Path(tmp) / "vault"
-            cache_path = Path(tmp) / "embeddings.json"
+            cache_path = Path(tmp) / "specialists.rudi.embeddings.json"
             cache_path.write_text(json.dumps({"schema_version": 1, "entries": {}}))
             buf = io.StringIO()
 
@@ -147,7 +147,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
 
     def test_main_prints_cache_inventory(self):
         with tempfile.TemporaryDirectory() as tmp:
-            cache_path = Path(tmp) / "embeddings.json"
+            cache_path = Path(tmp) / "specialists.rudi.embeddings.json"
             cache_path.write_text(json.dumps({"schema_version": 1, "entries": {}}))
             buf = io.StringIO()
 
@@ -176,7 +176,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
             memory_specialist.MemorySpecialistConfig(vault_dir=Path("/vault"))
         )
 
-        with patch("memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
+        with patch("specialists.rudi.memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
             mock_preview.return_value = expected
             preview = specialist.retrieval_preview("run beyond laptop", retriever_name="memory-vault")
 
@@ -234,7 +234,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
             memory_specialist.MemorySpecialistConfig(vault_dir=Path("/vault"))
         )
 
-        with patch("memory_specialist.retrieval_preview_module.preview_production_return") as mock_preview:
+        with patch("specialists.rudi.memory_specialist.retrieval_preview_module.preview_production_return") as mock_preview:
             mock_preview.return_value = expected
             preview = specialist.production_return_preview("find memory")
 
@@ -274,7 +274,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
             )
             buf = io.StringIO()
 
-            with patch("memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
+            with patch("specialists.rudi.memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
                 mock_preview.return_value = RetrievalPreview(
                     query="find production",
                     retriever_name="memory-vault",
@@ -307,7 +307,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
         )
         buf = io.StringIO()
 
-        with patch("memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
+        with patch("specialists.rudi.memory_specialist.retrieval_preview_module.preview_retrieval") as mock_preview:
             mock_preview.return_value = RetrievalPreview(
                 query="Need to make this portable",
                 retriever_name="memory-embedding-gated-vault",
@@ -325,7 +325,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
     def test_main_prints_production_return_preview(self):
         buf = io.StringIO()
 
-        with patch("memory_specialist.retrieval_preview_module.preview_production_return") as mock_preview:
+        with patch("specialists.rudi.memory_specialist.retrieval_preview_module.preview_production_return") as mock_preview:
             mock_preview.return_value = ProductionReturnPreview(
                 query="find memory",
                 vault_dir=Path("/vault"),
@@ -433,7 +433,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
 
     def test_cache_coverage_reports_covered_missing_stale_and_extra_nodes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            cache_path = Path(tmp) / "embeddings.json"
+            cache_path = Path(tmp) / "specialists.rudi.embeddings.json"
             covered = RetrievalNode(
                 node_id="projects/covered",
                 title="Covered",
@@ -484,7 +484,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
                 )
             )
 
-            with patch("memory_specialist.load_retrieval_nodes", return_value=[covered, stale, missing]):
+            with patch("specialists.rudi.memory_specialist.load_retrieval_nodes", return_value=[covered, stale, missing]):
                 coverage = specialist.cache_coverage()
 
         self.assertEqual(coverage.node_count, 3)
@@ -510,7 +510,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
                 memory_specialist.MemorySpecialistConfig(embedding_cache_path=cache_path)
             )
 
-            with patch("memory_specialist.load_retrieval_nodes", return_value=[node]):
+            with patch("specialists.rudi.memory_specialist.load_retrieval_nodes", return_value=[node]):
                 coverage = specialist.cache_coverage()
 
         self.assertEqual(coverage.missing_count, 1)
@@ -547,9 +547,9 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
             memory_specialist.MemorySpecialistConfig(vault_dir=Path("/vault"))
         )
 
-        with patch("memory_specialist.retrieval_eval.build_experimental_retriever") as mock_build:
-            with patch("memory_specialist.retrieval_eval.select_cases", return_value=("case",)) as mock_cases:
-                with patch("memory_specialist.retrieval_eval.evaluate_retriever") as mock_eval:
+        with patch("specialists.rudi.memory_specialist.retrieval_eval.build_experimental_retriever") as mock_build:
+            with patch("specialists.rudi.memory_specialist.retrieval_eval.select_cases", return_value=("case",)) as mock_cases:
+                with patch("specialists.rudi.memory_specialist.retrieval_eval.evaluate_retriever") as mock_eval:
                     mock_build.return_value = memory_specialist.retrieval_eval.ExperimentalRetriever(
                         name="memory-vault",
                         nodes=(
@@ -598,11 +598,11 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
 
     def test_main_prints_cache_coverage_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
-            cache_path = Path(tmp) / "embeddings.json"
+            cache_path = Path(tmp) / "specialists.rudi.embeddings.json"
             cache_path.write_text(json.dumps({"schema_version": 1, "entries": {}}))
             buf = io.StringIO()
 
-            with patch("memory_specialist.load_retrieval_nodes", return_value=[]):
+            with patch("specialists.rudi.memory_specialist.load_retrieval_nodes", return_value=[]):
                 with redirect_stdout(buf):
                     memory_specialist.main(["--cache-path", str(cache_path), "--cache-coverage"])
 
@@ -614,7 +614,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
     def test_main_prints_benchmark_preview(self):
         buf = io.StringIO()
 
-        with patch("memory_specialist.MemorySpecialist.benchmark_preview") as mock_benchmark:
+        with patch("specialists.rudi.memory_specialist.MemorySpecialist.benchmark_preview") as mock_benchmark:
             mock_benchmark.return_value = memory_specialist.MemoryBenchmarkPreview(
                 retriever_name="memory-vault",
                 case_set="real-vault",

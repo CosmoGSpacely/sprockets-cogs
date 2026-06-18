@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import embeddings
-from retrieval_eval import RetrievalNode
+import specialists.rudi.embeddings as embeddings
+from specialists.rudi.retrieval_eval import RetrievalNode
 
 
 class Stage16EmbeddingTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
         self.assertEqual(reloaded.EMBED_KEEP_ALIVE, "24h")
         self.assertEqual(
             reloaded.DEFAULT_EMBED_CACHE_PATH,
-            Path.home() / ".cache" / "sprockets-cogs" / "embeddings.json",
+            Path.home() / ".cache" / "sprockets-cogs" / "specialists.rudi.embeddings.json",
         )
 
     def test_embed_model_can_be_overridden_by_environment(self):
@@ -44,7 +44,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
 
         self.assertEqual(reloaded.EMBED_CACHE_PATH, Path("/tmp/test-embeddings.json"))
 
-    @patch("embeddings.ollama.embed")
+    @patch("specialists.rudi.embeddings.ollama.embed")
     def test_embed_text_returns_single_numeric_vector(self, mock_embed):
         mock_embed.return_value = {"embeddings": [[1, 2.5, -3]]}
 
@@ -57,7 +57,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
             keep_alive="24h",
         )
 
-    @patch("embeddings.ollama.embed")
+    @patch("specialists.rudi.embeddings.ollama.embed")
     def test_embed_text_accepts_explicit_model(self, mock_embed):
         mock_embed.return_value = {"embeddings": [[0.1]]}
 
@@ -73,28 +73,28 @@ class Stage16EmbeddingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "text cannot be empty"):
             embeddings.embed_text("   ")
 
-    @patch("embeddings.ollama.embed")
+    @patch("specialists.rudi.embeddings.ollama.embed")
     def test_embed_text_rejects_missing_embeddings(self, mock_embed):
         mock_embed.return_value = {}
 
         with self.assertRaisesRegex(embeddings.EmbeddingError, "missing embeddings list"):
             embeddings.embed_text("memory probe")
 
-    @patch("embeddings.ollama.embed")
+    @patch("specialists.rudi.embeddings.ollama.embed")
     def test_embed_text_wraps_client_errors(self, mock_embed):
         mock_embed.side_effect = ConnectionError("ollama is down")
 
         with self.assertRaisesRegex(embeddings.EmbeddingError, "embedding request failed"):
             embeddings.embed_text("memory probe")
 
-    @patch("embeddings.ollama.embed")
+    @patch("specialists.rudi.embeddings.ollama.embed")
     def test_embed_text_rejects_multiple_embeddings_for_single_text(self, mock_embed):
         mock_embed.return_value = {"embeddings": [[0.1], [0.2]]}
 
         with self.assertRaisesRegex(embeddings.EmbeddingError, "expected exactly one embedding"):
             embeddings.embed_text("memory probe")
 
-    @patch("embeddings.ollama.embed")
+    @patch("specialists.rudi.embeddings.ollama.embed")
     def test_embed_text_rejects_non_numeric_vector(self, mock_embed):
         mock_embed.return_value = {"embeddings": [["not-a-number"]]}
 
@@ -139,7 +139,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
             "title: Alex Rivera",
         )
 
-    @patch("embeddings.embed_text")
+    @patch("specialists.rudi.embeddings.embed_text")
     def test_embed_node_embeds_stable_node_text(self, mock_embed_text):
         mock_embed_text.return_value = [0.1, 0.2]
         node = RetrievalNode(
@@ -161,7 +161,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
             model="test-embed-model",
         )
 
-    @patch("embeddings.embed_text")
+    @patch("specialists.rudi.embeddings.embed_text")
     def test_build_embedding_index_pairs_nodes_with_vectors(self, mock_embed_text):
         nodes = [
             RetrievalNode(
@@ -200,7 +200,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
             model="test-embed-model",
         )
 
-    @patch("embeddings.embed_text")
+    @patch("specialists.rudi.embeddings.embed_text")
     def test_build_embedding_index_reuses_cached_vectors(self, mock_embed_text):
         node = RetrievalNode(
             node_id="projects/phase-3-memory-enhancement",
@@ -210,7 +210,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
             text="Memory retrieval.",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            cache = embeddings.JsonEmbeddingCache(Path(tmp) / "embeddings.json")
+            cache = embeddings.JsonEmbeddingCache(Path(tmp) / "specialists.rudi.embeddings.json")
             text = embeddings.node_embedding_text(node)
             cache.set(
                 node.node_id,
@@ -228,7 +228,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
         self.assertEqual(index[0].vector, (0.1, 0.2))
         mock_embed_text.assert_not_called()
 
-    @patch("embeddings.embed_text")
+    @patch("specialists.rudi.embeddings.embed_text")
     def test_build_embedding_index_updates_cache_when_text_changes(self, mock_embed_text):
         mock_embed_text.return_value = [0.3, 0.4]
         node = RetrievalNode(
@@ -239,7 +239,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
             text="New memory retrieval text.",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            cache = embeddings.JsonEmbeddingCache(Path(tmp) / "embeddings.json")
+            cache = embeddings.JsonEmbeddingCache(Path(tmp) / "specialists.rudi.embeddings.json")
             cache.set(node.node_id, "test-embed-model", "old-hash", [0.1, 0.2])
 
             index = embeddings.build_embedding_index(
@@ -256,13 +256,13 @@ class Stage16EmbeddingTests(unittest.TestCase):
 
     def test_json_embedding_cache_ignores_unknown_schema_versions(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "embeddings.json"
+            path = Path(tmp) / "specialists.rudi.embeddings.json"
             path.write_text('{"schema_version": 999, "entries": {"node": "old"}}')
             cache = embeddings.JsonEmbeddingCache(path)
 
             self.assertIsNone(cache.get("node", "model", "hash"))
 
-    @patch("embeddings.embed_text")
+    @patch("specialists.rudi.embeddings.embed_text")
     def test_retrieve_by_embedding_ranks_nodes_by_cosine_similarity(self, mock_embed_text):
         mock_embed_text.return_value = [1, 0]
         memory = RetrievalNode(
@@ -294,7 +294,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
         ])
         mock_embed_text.assert_called_once_with("run beyond my laptop", model="test-embed-model")
 
-    @patch("embeddings.embed_text")
+    @patch("specialists.rudi.embeddings.embed_text")
     def test_retrieve_by_embedding_tiebreaks_by_node_id(self, mock_embed_text):
         mock_embed_text.return_value = [1, 0]
         later = RetrievalNode(
@@ -321,7 +321,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
             "projects/zeta",
         ])
 
-    @patch("embeddings.embed_text")
+    @patch("specialists.rudi.embeddings.embed_text")
     def test_retrieve_by_embedding_rejects_dimension_mismatch(self, mock_embed_text):
         mock_embed_text.return_value = [1, 0]
         node = RetrievalNode(
@@ -335,7 +335,7 @@ class Stage16EmbeddingTests(unittest.TestCase):
         with self.assertRaisesRegex(embeddings.EmbeddingError, "dimensions do not match"):
             embeddings.retrieve_by_embedding("memory", index)
 
-    @patch("embeddings.embed_text")
+    @patch("specialists.rudi.embeddings.embed_text")
     def test_retrieve_by_embedding_returns_empty_for_non_positive_limit(self, mock_embed_text):
         results = embeddings.retrieve_by_embedding("memory", (), limit=0)
 

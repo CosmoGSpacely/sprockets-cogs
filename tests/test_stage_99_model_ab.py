@@ -1,9 +1,9 @@
 import unittest
 from dataclasses import replace
 
-import model_ab
-import model_capability_probe
-from memory_tool_probe import MemoryToolChoice, MemoryToolProbeResult
+import specialists.uniblab.model_ab as model_ab
+import specialists.uniblab.model_capability_probe as model_capability_probe
+from specialists.uniblab.memory_tool_probe import MemoryToolChoice, MemoryToolProbeResult
 
 
 class FakeClassifier:

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
-from retrieval_eval import RetrievalNode, build_experimental_retriever
+from specialists.rudi.retrieval_eval import RetrievalNode, build_experimental_retriever
 
 
 MEMORY_RETRIEVAL_ENV = "SPROCKETS_COGS_MEMORY_RETRIEVAL"

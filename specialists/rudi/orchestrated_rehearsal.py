@@ -11,8 +11,8 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Sequence
 
-import orchestrator_contract as orchestrator
-from agent_message_bus import AgentMessage, message_to_dict
+import specialists.rudi.orchestrator_contract as orchestrator
+from specialists.rudi.agent_message_bus import AgentMessage, message_to_dict
 
 
 @dataclass(frozen=True)

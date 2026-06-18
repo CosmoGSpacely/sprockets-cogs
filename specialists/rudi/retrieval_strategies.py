@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 import re
 
-from retrieval_types import GraphRetrievalTrace, RetrievalNode, SemanticQueryHint
+from specialists.rudi.retrieval_types import GraphRetrievalTrace, RetrievalNode, SemanticQueryHint
 
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")

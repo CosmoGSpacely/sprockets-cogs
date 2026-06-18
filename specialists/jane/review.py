@@ -2,7 +2,7 @@
 review.py — Human-in-the-loop review of low-confidence and failed nodes.
 
 Usage (on Rosie, with venv active):
-    python review.py
+    python -m specialists.jane.review
 
 For each file in vault/review/, shows the reason and node data, then prompts:
   a — approve: validate and write to vault, archive the review file
@@ -23,7 +23,7 @@ import frontmatter
 
 from models import validate_node
 from node_normalization import normalize_raw_node, review_reason_requires_strict_cogs_date
-from agentic_loop import ARCHIVE_DIR, REVIEW_DIR, write_node
+from specialists.rosie.loop import ARCHIVE_DIR, REVIEW_DIR, write_node
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -445,5 +445,5 @@ if __name__ == "__main__":
     elif args in ([], ["--interactive"]):
         review_all()
     else:
-        print("Usage: python review.py [--count | --list | --report | --packet-preview | --interactive]")
+        print("Usage: python -m specialists.jane.review [--count | --list | --report | --packet-preview | --interactive]")
         raise SystemExit(2)

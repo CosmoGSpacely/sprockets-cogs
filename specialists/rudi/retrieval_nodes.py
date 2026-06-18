@@ -7,8 +7,8 @@ from pathlib import Path
 
 import frontmatter
 
-from retrieval_types import RetrievalNode
-from vault_graph import build_graph, sprockets_dirs
+from specialists.rudi.retrieval_types import RetrievalNode
+from specialists.sprockets.vault_graph import build_graph, sprockets_dirs
 
 
 def retrieval_node_counts(nodes: Iterable[RetrievalNode]) -> dict[str, int]:

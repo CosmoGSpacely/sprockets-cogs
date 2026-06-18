@@ -15,7 +15,7 @@ from typing import Any, Protocol
 
 import ollama
 
-from prompts import (
+from specialists.rosie.prompts import (
     CLASSIFY_EXAMPLES,
     CLASSIFY_SCHEMA,
     CLASSIFY_SYSTEM,

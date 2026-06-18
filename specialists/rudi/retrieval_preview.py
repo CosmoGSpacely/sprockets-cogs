@@ -11,15 +11,15 @@ from pathlib import Path
 import re
 from typing import Iterable
 
-from vault_graph import HIERARCHY_PARENT_NODE_TYPES
-from production_retrieval import (
+from specialists.sprockets.vault_graph import HIERARCHY_PARENT_NODE_TYPES
+from specialists.rudi.production_retrieval import (
     ProductionRetrievalStatus,
     format_retrieval_context,
     memory_retrieval_enabled,
     production_retrieval_status,
     retrieve_with_gated_memory,
 )
-from retrieval_eval import RetrievalNode, build_experimental_retriever
+from specialists.rudi.retrieval_eval import RetrievalNode, build_experimental_retriever
 
 
 DEFAULT_VAULT_DIR = Path.home() / "vault"
