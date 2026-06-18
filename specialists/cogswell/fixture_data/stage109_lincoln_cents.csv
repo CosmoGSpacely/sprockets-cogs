@@ -1,0 +1,6 @@
+collection,item_id,label,category,year,variant,resource_ref,owned,notes
+lincoln_cents,lincoln-1909-vdb,1909 VDB Lincoln cent,coin,1909,VDB,,yes,Seed checklist row; reference details stay external.
+lincoln_cents,lincoln-1909-s-vdb,1909-S VDB Lincoln cent,coin,1909,S VDB,,no,
+lincoln_cents,lincoln-1943-steel,1943 steel Lincoln cent,coin,1943,steel,,no,
+lincoln_cents,lincoln-1955-doubled-die,1955 doubled die Lincoln cent,coin,1955,doubled die,,no,
+lincoln_cents,lincoln-1958-d,1958-D Lincoln cent,coin,1958,D,,yes,

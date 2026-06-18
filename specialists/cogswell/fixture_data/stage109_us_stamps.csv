@@ -1,0 +1,6 @@
+collection,item_id,label,category,year,variant,resource_ref,owned,notes
+us_stamps,columbian-1893-1c,1893 Columbian Exposition 1c,stamp,1893,1c,https://www.si.edu/openaccess,no,Image/resource behavior sample.
+us_stamps,columbian-1893-2c,1893 Columbian Exposition 2c,stamp,1893,2c,https://www.si.edu/openaccess,no,
+us_stamps,jenny-1918-24c,1918 24c Curtiss Jenny,stamp,1918,ordinary,https://www.si.edu/openaccess,yes,
+us_stamps,jenny-1918-24c-invert,1918 24c Curtiss Jenny invert,stamp,1918,invert,https://www.si.edu/openaccess,no,
+us_stamps,black-heritage-sample,Black Heritage series sample stamp,stamp,modern,sample,https://www.si.edu/openaccess,no,Modern thematic placeholder for entity/resource tests.

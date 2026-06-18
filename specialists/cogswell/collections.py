@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sqlite3
 from dataclasses import dataclass
@@ -22,6 +23,8 @@ VALID_STATUSES = {"missing", "have", "want_upgrade", "duplicate"}
 TYPE_FIELDS: dict[str, tuple[str, ...]] = {
     "stamps": ("country", "year", "denomination", "series"),
     "coins": ("country", "year", "denomination", "mint"),
+    "lincoln_cents": ("category", "year", "variant", "resource_ref", "owned"),
+    "us_stamps": ("category", "year", "variant", "resource_ref", "owned"),
     "lbb": ("author", "year"),
 }
 
@@ -120,6 +123,12 @@ def _normalized_row(row: dict[str, str]) -> dict[str, str]:
         if key is None:
             continue
         normalized[key.strip().lower().replace(" ", "_")] = (value or "").strip()
+    if "item_id" in normalized and "catalog_no" not in normalized:
+        normalized["catalog_no"] = normalized["item_id"]
+    if "label" in normalized and "title" not in normalized:
+        normalized["title"] = normalized["label"]
+    if "owned" in normalized and "status" not in normalized:
+        normalized["status"] = _owned_to_status(normalized["owned"])
     return normalized
 
 
@@ -135,6 +144,15 @@ def _valid_status(value: str) -> str:
     if status not in VALID_STATUSES:
         raise ValueError(f"unsupported collection status: {status}")
     return status
+
+
+def _owned_to_status(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "y", "owned", "have"}:
+        return "have"
+    if normalized in {"0", "false", "no", "n", "missing", ""}:
+        return "missing"
+    return normalized
 
 
 def import_csv(db_path: Path, csv_path: Path, *, collection: str | None = None) -> int:
@@ -257,6 +275,64 @@ def query_items(
     return tuple(_row_to_item(row) for row in rows)
 
 
+def export_items(
+    db_path: Path,
+    output_path: Path,
+    *,
+    collection: str | None = None,
+    format: str | None = None,
+) -> Path:
+    """Export queried collection rows to CSV or JSON."""
+
+    items = [_item_with_extra(db_path, item) for item in query_items(db_path, collection=collection)]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_format = format or output_path.suffix.lstrip(".").lower()
+    if output_format == "json":
+        output_path.write_text(
+            json.dumps([_item_export_dict(item) for item in items], indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return output_path
+    if output_format != "csv":
+        raise ValueError("export format must be csv or json")
+
+    fieldnames = [
+        "collection",
+        "item_id",
+        "label",
+        "status",
+        "category",
+        "year",
+        "variant",
+        "resource_ref",
+        "owned",
+        "notes",
+    ]
+    with output_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for item in items:
+            row = _item_export_dict(item)
+            writer.writerow({field: row.get(field, "") for field in fieldnames})
+    return output_path
+
+
+def _item_export_dict(item: CollectionItem) -> dict[str, Any]:
+    extra = item.extra or {}
+    return {
+        "collection": item.collection,
+        "item_id": item.catalog_no,
+        "label": item.title,
+        "status": item.status,
+        "category": extra.get("category", ""),
+        "year": extra.get("year", ""),
+        "variant": extra.get("variant", ""),
+        "resource_ref": extra.get("resource_ref", ""),
+        "owned": extra.get("owned", "yes" if item.status == "have" else "no"),
+        "notes": item.notes or "",
+    }
+
+
 def get_item(
     db_path: Path,
     *,
@@ -296,6 +372,7 @@ def _render_frontmatter(item: CollectionItem) -> str:
         ("cogswell_id", item.id),
         ("collection", item.collection),
         ("catalog_no", item.catalog_no),
+        ("item_id", item.catalog_no),
         ("collection_status", item.status),
         ("condition", item.condition),
         ("location", item.location),
@@ -316,6 +393,30 @@ def _render_frontmatter(item: CollectionItem) -> str:
         else:
             lines.append(f"{key}: {_frontmatter_value(value)}")
     lines.append("---")
+    return "\n".join(lines)
+
+
+def format_collection_surface(
+    db_path: Path,
+    *,
+    collection: str | None = None,
+) -> str:
+    """Return a compact user-visible collection inspection surface."""
+
+    items = [_item_with_extra(db_path, item) for item in query_items(db_path, collection=collection)]
+    title = collection or "all collections"
+    lines = [
+        f"# Cogswell Collection Surface - {title}",
+        "",
+        "| Collection | Owned | Item | Notes |",
+        "|---|---|---|---|",
+    ]
+    for item in items:
+        owned = "yes" if item.status == "have" else "no"
+        notes = (item.notes or "").replace("|", "\\|")
+        lines.append(f"| {item.collection} | {owned} | {item.title} | {notes} |")
+    lines.append("")
+    lines.append("Detailed catalog facts remain in external reference works.")
     return "\n".join(lines)
 
 
@@ -480,6 +581,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     bridge_parser.add_argument("--catalog-no")
     bridge_parser.add_argument("--help", action="help", help=argparse.SUPPRESS)
 
+    surface_parser = subparsers.add_parser("surface", parents=[_base_parser("surface")], add_help=False)
+    surface_parser.add_argument("--collection", choices=tuple(TYPE_FIELDS))
+    surface_parser.add_argument("--help", action="help", help=argparse.SUPPRESS)
+
+    export_parser = subparsers.add_parser("export", parents=[_base_parser("export")], add_help=False)
+    export_parser.add_argument("output_path", type=Path)
+    export_parser.add_argument("--collection", choices=tuple(TYPE_FIELDS))
+    export_parser.add_argument("--format", choices=("csv", "json"))
+    export_parser.add_argument("--help", action="help", help=argparse.SUPPRESS)
+
     args = root.parse_args(argv)
     if args.command == "init":
         init_db(args.db)
@@ -515,6 +626,16 @@ def main(argv: Sequence[str] | None = None) -> None:
                 catalog_no=args.catalog_no,
             )
         )
+    elif args.command == "surface":
+        print(format_collection_surface(args.db, collection=args.collection))
+    elif args.command == "export":
+        path = export_items(
+            args.db,
+            args.output_path,
+            collection=args.collection,
+            format=args.format,
+        )
+        print(f"Cogswell export complete: {path}")
 
 
 if __name__ == "__main__":
