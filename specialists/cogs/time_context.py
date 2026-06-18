@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Mapping, Sequence
 
+from specialists.cogs.format import normalize_cogs_time_text
+
 
 WEEKDAYS = {
     "monday": 0,
@@ -60,6 +62,32 @@ _NUMBER_WORDS = {
     "ten": 10,
 }
 
+_TIME_TEXT = r"(?:1[0-2]|0?[1-9])(?:\:[0-5]\d)?\s*[ap]\.?\s*m?\.?"
+_RECURRENCE_WEEKDAY = (
+    r"mon(?:day)?s?|tue(?:s|sdays?)?|wed(?:nesday)?s?|"
+    r"thu(?:r|rs|rsday)?s?|fri(?:day)?s?|sat(?:urday)?s?|sun(?:day)?s?"
+)
+_NEXT_COUNT_WEEKDAY_RE = re.compile(
+    rf"^\s*(?P<label>.+?)\s+next\s+"
+    rf"(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    rf"(?P<weekday>{_RECURRENCE_WEEKDAY})\s+at\s+(?P<time>{_TIME_TEXT})\s*$",
+    re.IGNORECASE,
+)
+_EVERY_WEEKDAY_FOR_RE = re.compile(
+    rf"^\s*(?P<label>.+?)\s+every\s+(?P<weekday>{_RECURRENCE_WEEKDAY})\s+"
+    rf"for\s+(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    rf"weeks?\s+at\s+(?P<time>{_TIME_TEXT})\s*$",
+    re.IGNORECASE,
+)
+_MULTI_WEEKDAY_FOR_RE = re.compile(
+    rf"^\s*(?P<label>.+?)\s+(?P<weekdays>{_RECURRENCE_WEEKDAY}"
+    rf"(?:\s*(?:,|and)\s*{_RECURRENCE_WEEKDAY})+)\s+for\s+"
+    rf"(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    rf"weeks?\s+at\s+(?P<time>{_TIME_TEXT})\s*$",
+    re.IGNORECASE,
+)
+MAX_BOUNDED_RECURRENCE_OCCURRENCES = 16
+
 
 @dataclass(frozen=True)
 class RuntimeDateDecision:
@@ -70,6 +98,23 @@ class RuntimeDateDecision:
     resolved_date: str
     phrase: str
     horizon: str = "day"
+
+
+@dataclass(frozen=True)
+class BoundedRecurrenceOccurrence:
+    """One deterministic occurrence generated from bounded recurrence text."""
+
+    date: str
+    item_text: str
+
+
+@dataclass(frozen=True)
+class BoundedRecurrenceDecision:
+    """A bounded recurrence expansion applied before recurrence review."""
+
+    index: int
+    phrase: str
+    occurrence_count: int
 
 
 def parse_iso_date(value: str) -> date:
@@ -193,6 +238,73 @@ def apply_runtime_date_context(
     return result, decisions
 
 
+def expand_bounded_recurrence(
+    text: str,
+    processing_date: str,
+    *,
+    max_occurrences: int = MAX_BOUNDED_RECURRENCE_OCCURRENCES,
+) -> list[BoundedRecurrenceOccurrence]:
+    """Expand plain bounded Cogs recurrences into dated item occurrences."""
+
+    source = parse_iso_date(processing_date)
+    for parser in (
+        _expand_multi_weekday_for_weeks,
+        _expand_next_count_weekday,
+        _expand_every_weekday_for_weeks,
+    ):
+        occurrences = parser(text, source)
+        if occurrences:
+            if len(occurrences) > max_occurrences:
+                return []
+            return occurrences
+    return []
+
+
+def apply_bounded_recurrence_context(
+    raw_nodes: Sequence[Mapping[str, object]],
+    classified: Sequence[Mapping[str, object]],
+    processing_date: str,
+) -> tuple[list[dict], list[BoundedRecurrenceDecision]]:
+    """Expand safe bounded recurrence Cogs before the recurrence guard."""
+
+    result: list[dict] = []
+    decisions: list[BoundedRecurrenceDecision] = []
+    for index, node in enumerate(classified):
+        if node.get("node_type") != "cogs/daily":
+            result.append(dict(node))
+            continue
+        texts = [
+            _string(raw_nodes[index].get("raw")) if index < len(raw_nodes) else "",
+            _string(node.get("item_text")),
+            _string(node.get("title")),
+        ]
+        phrase = _first_expandable_phrase(texts, processing_date)
+        if not phrase:
+            result.append(dict(node))
+            continue
+        occurrences = expand_bounded_recurrence(phrase, processing_date)
+        if not occurrences:
+            result.append(dict(node))
+            continue
+        for occurrence in occurrences:
+            expanded = dict(node)
+            expanded["date"] = occurrence.date
+            expanded["item_text"] = occurrence.item_text
+            if "title" in expanded:
+                expanded["title"] = occurrence.item_text
+            expanded.pop("horizon", None)
+            expanded["_bounded_recurrence"] = True
+            result.append(expanded)
+        decisions.append(
+            BoundedRecurrenceDecision(
+                index=index,
+                phrase=phrase,
+                occurrence_count=len(occurrences),
+            )
+        )
+    return result, decisions
+
+
 def _normalize_weekday(value: str) -> str:
     lower = value.lower()
     for name, weekday in WEEKDAYS.items():
@@ -201,6 +313,17 @@ def _normalize_weekday(value: str) -> str:
         if name.startswith(lower) and len(lower) >= 3:
             return name
     raise KeyError(value)
+
+
+def _normalize_recurrence_weekday(value: str) -> str:
+    lower = value.lower().strip()
+    if lower.endswith("sdays"):
+        lower = lower[:-1]
+    elif lower.endswith("days"):
+        lower = lower[:-1]
+    elif lower.endswith("s") and lower not in {"tues", "thurs"}:
+        lower = lower[:-1]
+    return _normalize_weekday(lower)
 
 
 def _duration_count(value: str) -> int:
@@ -212,6 +335,88 @@ def _add_months(value: date, count: int) -> date:
     year = value.year + month_index // 12
     month = month_index % 12 + 1
     return value.replace(year=year, month=month)
+
+
+def _format_occurrence(label: str, time_text: str) -> str:
+    return normalize_cogs_time_text(f"{time_text} {label.strip().upper()}").strip()
+
+
+def _next_weekday_after(source: date, weekday: int) -> date:
+    days = (weekday - source.weekday()) % 7
+    if days == 0:
+        days = 7
+    return source + timedelta(days=days)
+
+
+def _upcoming_weekday_on_or_after(source: date, weekday: int) -> date:
+    return source + timedelta(days=(weekday - source.weekday()) % 7)
+
+
+def _expand_next_count_weekday(text: str, source: date) -> list[BoundedRecurrenceOccurrence]:
+    match = _NEXT_COUNT_WEEKDAY_RE.match(text)
+    if not match:
+        return []
+    count = _duration_count(match.group("count"))
+    weekday = WEEKDAYS[_normalize_recurrence_weekday(match.group("weekday"))]
+    first = _next_weekday_after(source, weekday)
+    item_text = _format_occurrence(match.group("label"), match.group("time"))
+    return [
+        BoundedRecurrenceOccurrence((first + timedelta(weeks=i)).isoformat(), item_text)
+        for i in range(count)
+    ]
+
+
+def _expand_every_weekday_for_weeks(text: str, source: date) -> list[BoundedRecurrenceOccurrence]:
+    match = _EVERY_WEEKDAY_FOR_RE.match(text)
+    if not match:
+        return []
+    count = _duration_count(match.group("count"))
+    weekday = WEEKDAYS[_normalize_recurrence_weekday(match.group("weekday"))]
+    first = _upcoming_weekday_on_or_after(source, weekday)
+    item_text = _format_occurrence(match.group("label"), match.group("time"))
+    return [
+        BoundedRecurrenceOccurrence((first + timedelta(weeks=i)).isoformat(), item_text)
+        for i in range(count)
+    ]
+
+
+def _expand_multi_weekday_for_weeks(text: str, source: date) -> list[BoundedRecurrenceOccurrence]:
+    tail_match = re.search(
+        rf"\s+for\s+(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+        rf"weeks?\s+at\s+(?P<time>{_TIME_TEXT})\s*$",
+        text,
+        re.IGNORECASE,
+    )
+    if not tail_match:
+        return []
+    prefix = text[:tail_match.start()].strip()
+    weekday_matches = list(re.finditer(_RECURRENCE_WEEKDAY, prefix, re.IGNORECASE))
+    if len(weekday_matches) < 2:
+        return []
+    label = prefix[:weekday_matches[0].start()].strip()
+    if not label:
+        return []
+    count = _duration_count(tail_match.group("count"))
+    weekday_names = [match.group(0) for match in weekday_matches]
+    weekdays = sorted({WEEKDAYS[_normalize_recurrence_weekday(day)] for day in weekday_names})
+    item_text = _format_occurrence(label, tail_match.group("time"))
+    week_start = source - timedelta(days=source.weekday())
+    occurrences: list[BoundedRecurrenceOccurrence] = []
+    for week in range(count):
+        for weekday in weekdays:
+            occurrence = week_start + timedelta(weeks=week, days=weekday)
+            if occurrence < source:
+                continue
+            occurrences.append(BoundedRecurrenceOccurrence(occurrence.isoformat(), item_text))
+    return occurrences
+
+
+def _first_expandable_phrase(texts: Sequence[str], processing_date: str) -> str:
+    for text in texts:
+        phrase = text.strip()
+        if phrase and expand_bounded_recurrence(phrase, processing_date):
+            return phrase
+    return ""
 
 
 def _string(value: object) -> str:

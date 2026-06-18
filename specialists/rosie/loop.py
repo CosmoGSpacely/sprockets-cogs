@@ -46,7 +46,7 @@ from response_routing import (
 from slug_utils import slugify
 from sprockets_specialist import SprocketsSpecialist, SprocketsSpecialistConfig
 import telegram_response
-from time_context import apply_runtime_date_context
+from time_context import apply_bounded_recurrence_context, apply_runtime_date_context
 from vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,
     build_graph,
@@ -535,6 +535,9 @@ def route_recurrence_to_review(raw_nodes: list[dict], classified: list[dict]) ->
     result: list[dict] = []
     for index, node in enumerate(classified):
         if node.get("node_type") != "cogs/daily":
+            result.append(node)
+            continue
+        if node.get("_bounded_recurrence"):
             result.append(node)
             continue
         texts = [
@@ -1112,6 +1115,14 @@ def process_input(file_path: Path) -> None:
                 decision.original_date or "(missing)",
                 decision.resolved_date,
             )
+        classified, recurrence_decisions = apply_bounded_recurrence_context(raw_nodes, classified, source_date)
+        for decision in recurrence_decisions:
+            log.info(
+                "Bounded recurrence expanded: node=%d occurrences=%d phrase=%r",
+                decision.index,
+                decision.occurrence_count,
+                decision.phrase,
+            )
         classified, format_decisions = apply_cogs_item_format(raw_nodes, classified)
         for decision in format_decisions:
             log.info(
@@ -1174,6 +1185,18 @@ def process_input(file_path: Path) -> None:
                     decision.phrase,
                     decision.original_date or "(missing)",
                     decision.resolved_date,
+                )
+            reclassified, retry_recurrence_decisions = apply_bounded_recurrence_context(
+                retry_raw,
+                reclassified,
+                source_date,
+            )
+            for decision in retry_recurrence_decisions:
+                log.info(
+                    "Bounded recurrence expanded on retry: node=%d occurrences=%d phrase=%r",
+                    decision.index,
+                    decision.occurrence_count,
+                    decision.phrase,
                 )
             reclassified, retry_format_decisions = apply_cogs_item_format(retry_raw, reclassified)
             for decision in retry_format_decisions:

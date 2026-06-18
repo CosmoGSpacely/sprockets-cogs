@@ -17,7 +17,7 @@ from typing import Any, Sequence
 
 import frontmatter
 
-from vault import CogsBlock, append_cogs_item_text, mark_block_state, parse_cogs_blocks
+from vault import CogsBlock, append_cogs_block, mark_block_state, parse_cogs_blocks
 
 
 VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(Path.home() / "vault")))
@@ -340,9 +340,9 @@ def apply_plan_document(plan: dict[str, Any]) -> list[str]:
         if action in {"carry", "schedule"}:
             post.content = mark_block_state(content, block, ">")
             source_path.write_text(frontmatter.dumps(post))
-            appended = append_cogs_item_text(
+            appended = append_cogs_block(
                 item["destination_date"],
-                item_text,
+                tuple(item["lines"]),
                 source_path.parent,
             )
             verb = "appended" if appended else "already existed"

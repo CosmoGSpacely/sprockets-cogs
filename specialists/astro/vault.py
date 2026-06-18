@@ -27,6 +27,16 @@ class CogsBlock:
     item_text: str
 
 
+@dataclass(frozen=True)
+class CorrectionResult:
+    """Result from a vault-facing Cogs locator correction."""
+
+    status: str
+    message: str
+    source_path: Path | None = None
+    target_path: Path | None = None
+
+
 def daily_note_path(date_iso: str, daily_dir: Path = DEFAULT_DAILY_DIR) -> Path:
     return preferred_daily_path(date_iso, daily_dir, style="iso-weekday")
 
@@ -57,6 +67,33 @@ def append_cogs_item_text(
         if existing and not existing.endswith("\n"):
             f.write("\n")
         f.write(f"- [ ] {item_text}\n")
+    return True
+
+
+def append_cogs_block(
+    date_iso: str,
+    block_lines: tuple[str, ...] | list[str],
+    daily_dir: Path = DEFAULT_DAILY_DIR,
+) -> bool:
+    """Append a full Cogs block, preserving indented detail lines."""
+
+    if not block_lines:
+        raise ValueError("block_lines cannot be empty")
+    first_match = TASK_LINE_RE.match(block_lines[0])
+    if not first_match:
+        raise ValueError("first block line must be a Cogs task line")
+    item_text = first_match.group("text").strip()
+    note_path = ensure_daily_note(date_iso, daily_dir)
+    existing = note_path.read_text()
+    if any(f"{state} {item_text}" in existing for state in ["- [ ]", "- [x]", "- [>]", "- [-]"]):
+        return False
+
+    normalized = list(block_lines)
+    normalized[0] = TASK_LINE_RE.sub(r"- [ ] \g<text>", normalized[0], count=1)
+    with note_path.open("a") as f:
+        if existing and not existing.endswith("\n"):
+            f.write("\n")
+        f.write("\n".join(normalized).rstrip() + "\n")
     return True
 
 
@@ -163,4 +200,67 @@ def mark_block_state(content: str, block: CogsBlock, state: str) -> str:
     line = lines[block.start_line]
     lines[block.start_line] = TASK_LINE_RE.sub(f"- [{state}] " + r"\g<text>", line, count=1)
     trailing_newline = "\n" if content.endswith("\n") else ""
+    return "\n".join(lines) + trailing_newline
+
+
+def correct_cog_locator(
+    query: str,
+    destination_date: str,
+    daily_dir: Path = DEFAULT_DAILY_DIR,
+    *,
+    replacement_text: str | None = None,
+) -> CorrectionResult:
+    """Move one clearly matched open Cog to a corrected daily locator."""
+
+    matches = _find_open_blocks(query, daily_dir)
+    if not matches:
+        return CorrectionResult("review", f"no open Cog matched {query!r}")
+    if len(matches) > 1:
+        return CorrectionResult("review", f"{len(matches)} open Cogs matched {query!r}")
+
+    source_path, block = matches[0]
+    source_content = source_path.read_text()
+    corrected_text = replacement_text or block.item_text
+    corrected_lines = _replacement_block_lines(block, corrected_text)
+
+    updated_source = _mark_block_corrected(source_content, block, destination_date)
+    source_path.write_text(updated_source)
+    appended = append_cogs_block(destination_date, corrected_lines, daily_dir)
+    target_path = daily_note_path(destination_date, daily_dir)
+    verb = "moved" if appended else "already present"
+    return CorrectionResult(
+        "corrected",
+        f"{verb} {block.item_text!r} to {destination_date}",
+        source_path=source_path,
+        target_path=target_path,
+    )
+
+
+def _find_open_blocks(query: str, daily_dir: Path) -> list[tuple[Path, CogsBlock]]:
+    normalized = query.lower().strip()
+    if not normalized or not daily_dir.exists():
+        return []
+    matches: list[tuple[Path, CogsBlock]] = []
+    for path in sorted(daily_dir.glob("*.md")):
+        content = path.read_text()
+        for block in parse_cogs_blocks(content, states={" "}):
+            if normalized in block.item_text.lower():
+                matches.append((path, block))
+    return matches
+
+
+def _replacement_block_lines(block: CogsBlock, replacement_text: str) -> tuple[str, ...]:
+    lines = list(block.lines)
+    lines[0] = TASK_LINE_RE.sub(f"- [ ] {replacement_text}", lines[0], count=1)
+    return tuple(lines)
+
+
+def _mark_block_corrected(content: str, block: CogsBlock, destination_date: str) -> str:
+    marked = mark_block_state(content, block, ">")
+    lines = marked.splitlines()
+    note = f"  correction: moved to {destination_date}"
+    insert_at = block.start_line + 1
+    if note not in lines[insert_at:block.end_line + 2]:
+        lines.insert(insert_at, note)
+    trailing_newline = "\n" if marked.endswith("\n") else ""
     return "\n".join(lines) + trailing_newline

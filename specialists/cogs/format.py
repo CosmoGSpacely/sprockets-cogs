@@ -8,13 +8,14 @@ from typing import Mapping, Sequence
 
 
 TIME_TOKEN_RE = re.compile(
-    r"\b(?P<hour>1[0-2]|0?[1-9])(?P<minute>:[0-5]\d)?\s*(?P<suffix>[ap])\.?\s*m?\.?\b",
+    r"\b(?P<hour>1[0-2]|0?[1-9])(?P<minute>:[0-5]\d)?\s*"
+    r"(?P<suffix>[ap])(?:\.?\s*m\.?|\.)?\b",
     re.IGNORECASE,
 )
 TIME_SPAN_RE = re.compile(
-    r"\b(?P<start>(?:1[0-2]|0?[1-9])(?:\:[0-5]\d)?\s*[ap]\.?\s*m?\.?)"
+    r"\b(?P<start>(?:1[0-2]|0?[1-9])(?:\:[0-5]\d)?\s*[ap](?:\.?\s*m\.?|\.)?)"
     r"\s*(?:to|through|until|-|–|—)\s*"
-    r"(?P<end>(?:1[0-2]|0?[1-9])(?:\:[0-5]\d)?\s*[ap]\.?\s*m?\.?)\b",
+    r"(?P<end>(?:1[0-2]|0?[1-9])(?:\:[0-5]\d)?\s*[ap](?:\.?\s*m\.?|\.)?)\b",
     re.IGNORECASE,
 )
 
