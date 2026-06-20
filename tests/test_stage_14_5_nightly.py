@@ -2,6 +2,7 @@ import tempfile
 import unittest
 import io
 from contextlib import redirect_stdout
+from datetime import datetime
 from pathlib import Path
 
 import specialists.cogs.nightly as nightly
@@ -9,6 +10,27 @@ import specialists.astro.vault as vault
 
 
 class Stage145NightlyCarryTests(unittest.TestCase):
+    def test_default_window_carries_yesterday_into_today(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            yesterday = vault.ensure_daily_note("2026-06-18", daily_dir)
+            yesterday.write_text(yesterday.read_text() + "- [ ] Carry yesterday\n")
+            today = vault.ensure_daily_note("2026-06-19", daily_dir)
+            today.write_text(today.read_text() + "- [ ] Keep today open\n")
+
+            original_today = nightly._today
+            try:
+                nightly._today = lambda: datetime(2026, 6, 19, 4, 30)
+                plan = nightly.build_nightly_plan(daily_dir=daily_dir)
+            finally:
+                nightly._today = original_today
+
+            self.assertEqual(plan["default_destination_date"], "2026-06-19")
+            self.assertEqual(len(plan["items"]), 1)
+            self.assertEqual(plan["items"][0]["item_text"], "Carry yesterday")
+            self.assertEqual(plan["items"][0]["source"]["date"], "2026-06-18")
+            self.assertEqual(plan["items"][0]["destination_date"], "2026-06-19")
+
     def test_build_nightly_plan_includes_only_open_blocks_through_cutoff(self):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)

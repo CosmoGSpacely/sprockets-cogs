@@ -21,11 +21,11 @@ def _today() -> datetime:
 
 
 def default_through_date() -> str:
-    return _today().strftime("%Y-%m-%d")
+    return (_today() - timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 def default_destination_date() -> str:
-    return (_today() + timedelta(days=1)).strftime("%Y-%m-%d")
+    return _today().strftime("%Y-%m-%d")
 
 
 def build_nightly_plan(
@@ -119,12 +119,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--through",
         default=None,
-        help="YYYY-MM-DD cutoff for source daily notes. Defaults to today. Read-only with --dry-run or --report.",
+        help="YYYY-MM-DD cutoff for source daily notes. Defaults to yesterday. Read-only with --dry-run or --report.",
     )
     parser.add_argument(
         "--to",
         default=None,
-        help="YYYY-MM-DD destination daily note. Defaults to tomorrow. Used for carry actions.",
+        help="YYYY-MM-DD destination daily note. Defaults to today. Used for carry actions.",
     )
     parser.add_argument(
         "--daily-dir",
