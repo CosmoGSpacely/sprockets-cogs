@@ -58,6 +58,39 @@ class Stage114FrictionLoopTests(unittest.TestCase):
             self.assertIn("type: friction-candidate", text)
             self.assertIn("input processing failed: ValueError", text)
 
+    def test_close_matching_records_dispositions_open_pattern(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "friction.jsonl"
+            friction.append_record(
+                source="review-queue",
+                pattern="manual review UX seed remains unresolved in review queue",
+                evidence="/vault/review/one.md",
+                proposed_fix="test",
+                log_path=log,
+            )
+            friction.append_record(
+                source="review-queue",
+                pattern="manual review UX seed remains unresolved in review queue",
+                evidence="/vault/review/two.md",
+                proposed_fix="test",
+                log_path=log,
+            )
+
+            changed = friction.close_matching_records(
+                pattern="manual review UX seed remains unresolved in review queue",
+                status="deferred",
+                details="scheduled to Stage 119",
+                log_path=log,
+            )
+            records = friction.load_friction_records(log)
+            open_summaries = friction.summarize_records(records)
+            all_output = friction.format_friction_summary(records, open_only=False)
+
+        self.assertEqual(changed, 2)
+        self.assertEqual(open_summaries, ())
+        self.assertEqual({record.status for record in records}, {"deferred"})
+        self.assertIn("open records: 0", all_output)
+
     def test_jane_discard_records_friction(self):
         with tempfile.TemporaryDirectory() as tmp:
             log = Path(tmp) / "friction.jsonl"

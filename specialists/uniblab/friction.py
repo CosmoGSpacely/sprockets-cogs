@@ -23,7 +23,7 @@ DEFAULT_CANDIDATE_DIR = Path(
 
 OPEN_STATUSES = {"open"}
 KNOWN_FIXES = {"guard", "fixture", "prompt-change", "test", "deferred"}
-KNOWN_STATUSES = {"open", "promoted", "killed"}
+KNOWN_STATUSES = {"open", "promoted", "deferred", "killed"}
 
 
 @dataclass(frozen=True)
@@ -140,6 +140,51 @@ def load_friction_records(log_path: Path = DEFAULT_FRICTION_LOG) -> tuple[Fricti
     return tuple(records)
 
 
+def close_matching_records(
+    *,
+    pattern: str,
+    status: str,
+    log_path: Path = DEFAULT_FRICTION_LOG,
+    details: str = "",
+) -> int:
+    """Mark open records matching a normalized pattern as dispositioned."""
+    if status not in KNOWN_STATUSES - OPEN_STATUSES:
+        raise ValueError(f"unknown closed friction status: {status}")
+    target = normalize_pattern(pattern)
+    records = load_friction_records(log_path)
+    updated: list[FrictionRecord] = []
+    changed = 0
+    close_note = " ".join(str(details or "").split())
+    for record in records:
+        if record.status in OPEN_STATUSES and record.pattern == target:
+            merged_details = close_note or record.details
+            if close_note and record.details:
+                merged_details = f"{record.details} | closeout: {close_note}"
+            updated.append(
+                FrictionRecord(
+                    record_id=record.record_id,
+                    created_at=record.created_at,
+                    source=record.source,
+                    pattern=record.pattern,
+                    proposed_fix=record.proposed_fix,
+                    evidence=record.evidence,
+                    status=status,
+                    frequency=record.frequency,
+                    details=merged_details,
+                )
+            )
+            changed += 1
+        else:
+            updated.append(record)
+    if changed:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(
+            "".join(json.dumps(asdict(record), sort_keys=True) + "\n" for record in updated),
+            encoding="utf-8",
+        )
+    return changed
+
+
 def summarize_records(records: Iterable[FrictionRecord], *, open_only: bool = True) -> tuple[FrictionSummary, ...]:
     grouped: dict[tuple[str, str, str, str], list[FrictionRecord]] = defaultdict(list)
     for record in records:
@@ -183,13 +228,13 @@ def format_friction_summary(records: Sequence[FrictionRecord], *, open_only: boo
         lines.append("No friction records found.")
         return "\n".join(lines)
     lines.extend([
-        "| Count | Source | Proposed fix | Pattern | Evidence |",
-        "|---:|---|---|---|---|",
+        "| Count | Status | Source | Proposed fix | Pattern | Evidence |",
+        "|---:|---|---|---|---|---|",
     ])
     for item in summaries:
         evidence = "<br>".join(_markdown_cell(path, 80) for path in item.evidence)
         lines.append(
-            f"| {item.count} | {_markdown_cell(item.source, 32)} | "
+            f"| {item.count} | {_markdown_cell(item.status, 16)} | {_markdown_cell(item.source, 32)} | "
             f"{_markdown_cell(item.proposed_fix, 24)} | {_markdown_cell(item.pattern, 100)} | {evidence} |"
         )
     return "\n".join(lines)
@@ -306,12 +351,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--all", action="store_true", help="include promoted and killed records")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--add", action="store_true", help="append one friction record")
+    mode.add_argument("--close-pattern", help="mark matching open records as dispositioned")
     mode.add_argument("--write-candidate", action="store_true", help="write a candidate note for the top open pattern")
     parser.add_argument("--source", default="manual")
     parser.add_argument("--pattern")
     parser.add_argument("--evidence", default="")
     parser.add_argument("--proposed-fix", default="fixture", choices=sorted(KNOWN_FIXES))
     parser.add_argument("--details", default="")
+    parser.add_argument("--status", default="deferred", choices=sorted(KNOWN_STATUSES - OPEN_STATUSES))
     parser.add_argument("--candidate-dir", type=Path, default=DEFAULT_CANDIDATE_DIR)
     return parser
 
@@ -331,6 +378,15 @@ def main(argv: Sequence[str] | None = None) -> None:
             log_path=args.log,
         )
         print(f"Wrote friction record {record.record_id} to {args.log}")
+        return
+    if args.close_pattern:
+        count = close_matching_records(
+            pattern=args.close_pattern,
+            status=args.status,
+            log_path=args.log,
+            details=args.details,
+        )
+        print(f"Closed {count} friction record(s) as {args.status}.")
         return
     records = load_friction_records(args.log)
     if args.write_candidate:
