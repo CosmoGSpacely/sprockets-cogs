@@ -85,6 +85,10 @@ scripts/check
 Useful operator commands:
 
 ```bash
+scripts/sc
+scripts/sc status
+scripts/sc review --count
+scripts/sc friction
 scripts/status
 scripts/pilot3-status
 scripts/pilot3-telegram-once
@@ -117,7 +121,8 @@ scripts/adapter-status
 - `specialists/jane/` - review queue and packet tools.
 - `specialists/rudi/` - memory, retrieval, reasoning, and orchestration
   preview.
-- `specialists/uniblab/` - status, jobs, backups, readiness, and model probes.
+- `specialists/uniblab/` - status, jobs, backups, friction, readiness, and
+  model probes.
 - `specialists/cogswell/` - database/collection bridge.
 - `substrate/` - shared product contracts and small cross-boundary helpers.
 - `graph/` - product graph models, fixtures, validators, and mutations.

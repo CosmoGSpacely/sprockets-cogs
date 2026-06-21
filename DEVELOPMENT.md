@@ -81,6 +81,10 @@ Root Python files are not ownership homes. Shared contracts belong in
 Safe read-only commands:
 
 ```bash
+scripts/sc
+scripts/sc status
+scripts/sc review --count
+scripts/sc friction
 scripts/status
 scripts/pilot3-status
 scripts/adapter-status
@@ -110,6 +114,8 @@ scripts/review
 ```
 
 Write commands should have a preview, status, dry-run, or explicit target path.
+`scripts/sc` is a dispatcher only; it delegates to owner scripts and does not
+merge specialist services.
 
 ## Testing Rules
 

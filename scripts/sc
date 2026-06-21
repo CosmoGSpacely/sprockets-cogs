@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+    cat <<'USAGE'
+Sprockets-Cogs operator command surface
+
+Usage:
+  scripts/sc <command> [args...]
+  scripts/sc --help <command>
+
+Commands:
+  status    Uniblab: live service/runtime status          -> scripts/status
+  ingest    Orbit: poll Telegram once                     -> scripts/pilot3-telegram-once
+  review    Jane: inspect/process review queue            -> scripts/review
+  friction  Uniblab: summarize/write friction records     -> scripts/friction
+  daily     Cogs: daily/planning surface inventory         -> scripts/cogs-planning --inventory
+  closeout  Uniblab: append stage closeout results         -> scripts/stage-closeout
+  carry     Astro/Cogs: carry command surface              -> scripts/carry
+  backup    Uniblab: runtime backup surface                -> scripts/sc-backup
+
+This dispatcher only delegates. It does not merge services or duplicate
+specialist logic.
+USAGE
+}
+
+command_help() {
+    case "${1:-}" in
+        status)   echo "status: Uniblab -> scripts/status";;
+        ingest)   echo "ingest: Orbit -> scripts/pilot3-telegram-once";;
+        review)   echo "review: Jane -> scripts/review";;
+        friction) echo "friction: Uniblab -> scripts/friction";;
+        daily)    echo "daily: Cogs -> scripts/cogs-planning --inventory by default";;
+        closeout) echo "closeout: Uniblab -> scripts/stage-closeout";;
+        carry)    echo "carry: Astro/Cogs -> scripts/carry";;
+        backup)   echo "backup: Uniblab -> scripts/sc-backup";;
+        *) echo "Unknown command for help: ${1:-}"; usage; exit 2;;
+    esac
+}
+
+require_script() {
+    local script="$1"
+    if [[ ! -x "$ROOT/$script" ]]; then
+        echo "sc: mapped script is missing or not executable: $script" >&2
+        exit 127
+    fi
+}
+
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 0
+fi
+
+if [[ "${1:-}" == "--help" ]]; then
+    if [[ $# -eq 1 ]]; then
+        usage
+        exit 0
+    fi
+    command_help "$2"
+    exit 0
+fi
+
+cmd="$1"
+shift
+
+case "$cmd" in
+    status)
+        require_script scripts/status
+        exec "$ROOT/scripts/status" "$@"
+        ;;
+    ingest)
+        require_script scripts/pilot3-telegram-once
+        exec "$ROOT/scripts/pilot3-telegram-once" "$@"
+        ;;
+    review)
+        require_script scripts/review
+        exec "$ROOT/scripts/review" "$@"
+        ;;
+    friction)
+        require_script scripts/friction
+        exec "$ROOT/scripts/friction" "$@"
+        ;;
+    daily)
+        require_script scripts/cogs-planning
+        if [[ $# -eq 0 ]]; then
+            exec "$ROOT/scripts/cogs-planning" --inventory
+        fi
+        exec "$ROOT/scripts/cogs-planning" "$@"
+        ;;
+    closeout)
+        require_script scripts/stage-closeout
+        exec "$ROOT/scripts/stage-closeout" "$@"
+        ;;
+    carry)
+        require_script scripts/carry
+        exec "$ROOT/scripts/carry" "$@"
+        ;;
+    backup)
+        require_script scripts/sc-backup
+        exec "$ROOT/scripts/sc-backup" "$@"
+        ;;
+    *)
+        echo "sc: unknown command: $cmd" >&2
+        usage >&2
+        exit 2
+        ;;
+esac

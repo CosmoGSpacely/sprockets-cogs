@@ -24,6 +24,7 @@ import frontmatter
 from substrate.models import validate_node
 from substrate.node_normalization import normalize_raw_node, review_reason_requires_strict_cogs_date
 from specialists.rosie.loop import ARCHIVE_DIR, REVIEW_DIR, write_node
+from specialists.uniblab.friction import record_review_apply_error, record_review_discard
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -407,6 +408,13 @@ def review_all() -> None:
             continue
 
         if choice == "d":
+            record_review_discard(
+                review_file=path,
+                reason=reason,
+                node_type=str(raw.get("node_type", "?")),
+                title=str(raw.get("title", "?")),
+                item_text=str(raw.get("item_text", "?")),
+            )
             _archive(path, approved=False)
             discarded += 1
 
@@ -423,6 +431,7 @@ def review_all() -> None:
                 _archive(path, approved=True)
                 approved += 1
             except Exception as e:
+                record_review_apply_error(review_file=path, reason=reason, error=e)
                 print(f"  [ERROR] Could not write node: {e}")
                 print("  Left in review/ for inspection.")
                 skipped += 1

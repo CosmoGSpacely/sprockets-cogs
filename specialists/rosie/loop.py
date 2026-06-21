@@ -37,6 +37,7 @@ from specialists.rudi.openai_fallback import (
     classify_nodes_with_openai_fallback,
     openai_fallback_enabled,
 )
+from specialists.uniblab.friction import record_processing_failure
 from specialists.rudi.response_routing import (
     ResponseContext,
     ResponseEnvelope,
@@ -1230,7 +1231,8 @@ def process_input(file_path: Path) -> None:
         send_processed_ack(session_id, resolved, response_context)
         archive_input(processing_path)
 
-    except Exception:
+    except Exception as exc:
+        record_processing_failure(input_file=processing_path, error=exc)
         log.exception(
             "Failed to process %s — left in processing/ for inspection",
             file_path.name,
