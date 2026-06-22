@@ -5,7 +5,9 @@ Jane is the human-in-the-loop review specialist.
 ## Responsibility
 
 Jane owns review packet presentation, decision import previews, guarded apply
-previews, and uncertainty handling.
+previews, and uncertainty handling. Jane decision values are `approve`,
+`reject`, `edit`, and `skip`; `discard` remains a compatibility alias for
+`reject`.
 
 Jane is where the system makes ambiguity visible instead of hiding it inside
 automation.
@@ -13,7 +15,8 @@ automation.
 ## Runtime Form
 
 Jane is command-driven. Live apply behavior remains intentionally guarded and
-preview-first.
+preview-first. Astro owns the vault action surface that carries Jane decisions
+back from human-edited packets.
 
 ## Current Implementation
 

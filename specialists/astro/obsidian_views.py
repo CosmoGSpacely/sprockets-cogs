@@ -35,6 +35,8 @@ def stage_58_view_notes() -> tuple[ObsidianViewNote, ...]:
 
     return (
         ObsidianViewNote(Path("HOME.md"), _home_note()),
+        ObsidianViewNote(Path("Sprockets/areas-index.md"), _areas_index_note()),
+        ObsidianViewNote(Path("Sprockets/goals-index.md"), _goals_index_note()),
         ObsidianViewNote(Path("Sprockets/tasks-index.md"), _tasks_index_note()),
         ObsidianViewNote(Path("Sprockets/projects-index.md"), _projects_index_note()),
         ObsidianViewNote(Path("Sprockets/contacts-index.md"), _contacts_index_note()),
@@ -50,7 +52,15 @@ def stage_59_navigation_notes() -> tuple[ObsidianViewNote, ...]:
     return tuple(
         note
         for note in stage_58_view_notes()
-        if note.relative_path in {Path("HOME.md"), Path("Cogs/cogs-navigation.md")}
+        if note.relative_path
+        in {
+            Path("HOME.md"),
+            Path("Sprockets/areas-index.md"),
+            Path("Sprockets/goals-index.md"),
+            Path("Sprockets/tasks-index.md"),
+            Path("Sprockets/projects-index.md"),
+            Path("Cogs/cogs-navigation.md"),
+        }
     )
 
 
@@ -133,25 +143,111 @@ def format_view_write_result(results: Sequence[ObsidianViewWriteResult]) -> str:
 def _home_note() -> str:
     return """# Sprockets-Cogs Home
 
-## Cogs
+## Germane Today
+
+The home surface favors explicit operational signals over generic recency.
+
+### Today
+
+```dataview
+TABLE WITHOUT ID file.link AS Daily, date AS Date
+FROM "Cogs"
+WHERE node_type = "cogs/daily" AND date = date(today)
+LIMIT 1
+```
+
+### This Week
+
+```dataview
+TABLE WITHOUT ID file.link AS Week, week AS Week
+FROM "Cogs"
+WHERE node_type = "cogs/weekly" AND week = dateformat(date(today), "kkkk-'W'WW")
+LIMIT 1
+```
+
+### This Month
+
+```dataview
+TABLE WITHOUT ID file.link AS Month, link(file.path + "#5WOW", "5WOW") AS "5WOW"
+FROM "Cogs"
+WHERE node_type = "cogs/monthly" AND month = dateformat(date(today), "yyyy-MM")
+LIMIT 1
+```
+
+### Pinned Sprockets
+
+```dataview
+TABLE WITHOUT ID file.link AS Sprocket, node_type AS Type, parent AS Parent, status AS Status
+FROM "Sprockets"
+WHERE user_pin = true
+SORT updated DESC
+LIMIT 12
+```
+
+## Navigation
+
+### Cogs
 
 - [[Cogs/cogs-navigation|Cogs navigation]]
 
-## Sprockets
+### Sprockets
 
+- [[Sprockets/areas-index|Areas]]
+- [[Sprockets/goals-index|Goals]]
 - [[Sprockets/tasks-index|Open tasks]]
 - [[Sprockets/projects-index|Projects]]
 - [[Sprockets/contacts-index|Contacts]]
 - [[Sprockets/hierarchy-view|Hierarchy]]
 
-## Review
+### Review
 
 - [[REVIEW|Jane review]]
+
+## Germane Criteria
+
+- scheduled or due today;
+- current week/month planning horizon;
+- explicit user pin;
+- active project membership through visible parent links;
+- recent manual carry when Astro records it.
+
+Unsafe signals: creation date alone, generic recency, and semantic retrieval
+without an explicit retrieval gate.
+"""
+
+
+def _areas_index_note() -> str:
+    return """# Sprockets Areas
+
+View surface only. Structural edits become proposals.
+
+```dataview
+TABLE WITHOUT ID file.link AS Area, status AS Status, updated AS Updated
+FROM "Sprockets/areas"
+WHERE node_type = "sprockets/area"
+SORT title ASC
+```
+"""
+
+
+def _goals_index_note() -> str:
+    return """# Sprockets Goals
+
+View surface only. Structural edits become proposals.
+
+```dataview
+TABLE WITHOUT ID file.link AS Goal, parent AS Area, status AS Status, updated AS Updated
+FROM "Sprockets/goals"
+WHERE node_type = "sprockets/goal"
+SORT parent ASC, title ASC
+```
 """
 
 
 def _tasks_index_note() -> str:
     return """# Open Sprockets Tasks
+
+View surface only. Structural edits become proposals.
 
 ```dataview
 TABLE WITHOUT ID file.link AS Task, parent AS Parent, status AS Status, created AS Created, updated AS Updated
@@ -164,6 +260,8 @@ SORT updated DESC
 
 def _projects_index_note() -> str:
     return """# Sprockets Projects
+
+View surface only. Structural edits become proposals.
 
 ```dataview
 TABLE WITHOUT ID file.link AS Project, parent AS Parent, created AS Created, updated AS Updated

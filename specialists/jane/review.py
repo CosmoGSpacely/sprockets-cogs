@@ -25,6 +25,7 @@ from substrate.models import validate_node
 from substrate.node_normalization import normalize_raw_node, review_reason_requires_strict_cogs_date
 from specialists.rosie.loop import ARCHIVE_DIR, REVIEW_DIR, write_node
 from specialists.uniblab.friction import record_review_apply_error, record_review_discard
+from substrate.cog_appearance_registry import CogAppearance
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -192,8 +193,11 @@ def _packet_frontmatter(review_dir: Path, report: dict, items: list[dict]) -> li
     lines = [
         "---",
         "type: review-packet",
+        "packet_schema: jane-vault-action-v1",
         "status: pending",
         "queue: review",
+        "decision_owner: Jane",
+        "surface_owner: Astro",
         f"item_count: {report['total']}",
         f"parseable_count: {report['parseable']}",
         f"unparseable_count: {report['unparseable']}",
@@ -237,10 +241,10 @@ def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
     lines = _packet_frontmatter(review_dir, report, items) + [
         "# Sprockets-Cogs Review Packet",
         "",
-        "> Preview only until Jane's guarded apply command is run. Generated",
-        "> from the canonical review queue. Fill the Decision table",
-        "> with `approve`, `discard`, or `skip`; leave blank for pending. Then",
-        "> run Jane's packet import/apply preview before confirmed apply.",
+        "> Vault action surface. Jane owns decision semantics; Astro owns",
+        "> parsing vault-authored marks. Fill the Decision table with",
+        "> `approve`, `reject`, `edit`, or `skip`; leave blank for pending.",
+        "> `discard` remains a compatibility alias for `reject`.",
         "",
         "## Summary",
         "",
@@ -276,7 +280,7 @@ def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
         )
     lines.append("")
     lines.extend([
-        "## Decision",
+        "## Vault Decision Surface",
         "",
         "| File | Decision | Notes |",
         "|---|---|---|",
@@ -294,7 +298,8 @@ def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
         )
     lines.extend([
         "",
-        "Decision values: `approve`, `discard`, `skip`, or blank for pending.",
+        "Decision values: `approve`, `reject`, `edit`, `skip`, or blank for pending.",
+        "`discard` remains a compatibility alias for `reject`.",
         "Always run packet import/apply preview before confirmed apply.",
         "",
     ])
@@ -313,6 +318,84 @@ def review_packet_markdown(review_dir: Path = REVIEW_DIR) -> str:
         "- `scripts/review --list` for per-item terminal details.",
         "",
     ])
+    return "\n".join(lines)
+
+
+def appearance_conflict_packet_markdown(
+    *,
+    cog_id: str,
+    source_action: str,
+    proposed_state: str,
+    appearances: list[CogAppearance] | tuple[CogAppearance, ...],
+    registry_path: str = ".graph/cog-appearances.json",
+) -> str:
+    """Return a one-question Jane packet for conflicting Cog appearances."""
+
+    lines = [
+        "---",
+        "type: appearance-conflict-review",
+        "packet_schema: jane-appearance-conflict-v1",
+        "status: pending",
+        "decision_owner: Jane",
+        "surface_owner: Astro",
+        f"cog_id: {cog_id}",
+        f"registry_path: {registry_path}",
+        "---",
+        "",
+        "# Cogs Appearance Conflict",
+        "",
+        "Jane asks one compact question; Astro applies the reconciled state across",
+        "the known appearance set.",
+        "",
+        "## Source Action",
+        "",
+        _shorten(source_action, 240),
+        "",
+        "## Proposed State Change",
+        "",
+        f"- Cog: `{_shorten(cog_id, 96)}`",
+        f"- Proposed state: `{_shorten(proposed_state, 48)}`",
+        f"- Registry: `{registry_path}`",
+        "",
+        "## Known Appearances",
+        "",
+        "| Surface | Period | Path | Marker | State |",
+        "|---|---|---|---|---|",
+    ]
+    for appearance in appearances:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    _markdown_cell(appearance.surface, 32),
+                    _markdown_cell(appearance.period, 32),
+                    _markdown_cell(appearance.path, 96),
+                    _markdown_cell(appearance.marker, 16),
+                    _markdown_cell(appearance.state, 24),
+                ]
+            )
+            + " |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Vault Decision Surface",
+            "",
+            "| Conflict | Decision | Notes |",
+            "|---|---|---|",
+            f"| {cog_id} |  |  |",
+            "",
+            "Decision values: `approve`, `reject`, `edit`, `skip`, or blank for pending.",
+            "",
+            "## Audit Meaning",
+            "",
+            "- approve: apply the proposed state to all known appearances.",
+            "- reject: leave current appearance states unchanged and archive the packet.",
+            "- edit: keep the packet open for a corrected state or missing appearance.",
+            "- skip: leave the packet pending without changing Cogs state.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 

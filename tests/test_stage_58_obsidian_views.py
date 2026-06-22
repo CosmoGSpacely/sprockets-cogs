@@ -15,6 +15,8 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
             [str(note.relative_path) for note in notes],
             [
                 "HOME.md",
+                "Sprockets/areas-index.md",
+                "Sprockets/goals-index.md",
                 "Sprockets/tasks-index.md",
                 "Sprockets/projects-index.md",
                 "Sprockets/contacts-index.md",
@@ -29,7 +31,14 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
 
         self.assertEqual(
             [str(note.relative_path) for note in notes],
-            ["HOME.md", "Cogs/cogs-navigation.md"],
+            [
+                "HOME.md",
+                "Sprockets/areas-index.md",
+                "Sprockets/goals-index.md",
+                "Sprockets/tasks-index.md",
+                "Sprockets/projects-index.md",
+                "Cogs/cogs-navigation.md",
+            ],
         )
 
     def test_preview_shows_target_paths_and_generated_markdown(self):
@@ -47,17 +56,25 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
         home = _note_markdown("HOME.md")
 
         self.assertIn("[[Cogs/cogs-navigation|Cogs navigation]]", home)
+        self.assertIn("[[Sprockets/areas-index|Areas]]", home)
+        self.assertIn("[[Sprockets/goals-index|Goals]]", home)
         self.assertIn("[[Sprockets/hierarchy-view|Hierarchy]]", home)
         self.assertIn("[[REVIEW|Jane review]]", home)
-        self.assertNotIn("Recent Sprockets", home)
-        self.assertNotIn('FROM "Sprockets"', home)
+        self.assertIn("## Germane Today", home)
+        self.assertIn("Unsafe signals", home)
+        self.assertIn("user_pin = true", home)
         self.assertNotIn("tp.date.now", home)
 
     def test_index_notes_use_live_stage_58_field_posture(self):
+        areas_index = _note_markdown("Sprockets/areas-index.md")
+        goals_index = _note_markdown("Sprockets/goals-index.md")
         task_index = _note_markdown("Sprockets/tasks-index.md")
         projects_index = _note_markdown("Sprockets/projects-index.md")
         contacts_index = _note_markdown("Sprockets/contacts-index.md")
 
+        self.assertIn('node_type = "sprockets/area"', areas_index)
+        self.assertIn('node_type = "sprockets/goal"', goals_index)
+        self.assertIn("View surface only", areas_index)
         self.assertIn('node_type = "sprockets/task"', task_index)
         self.assertIn('status != "complete"', task_index)
         self.assertIn("parent AS Parent", task_index)
@@ -122,6 +139,8 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
             self.assertEqual(results[0].status, "exists")
             self.assertEqual(home.read_text(encoding="utf-8"), "manual home\n")
             self.assertEqual(results[1].status, "created")
+            self.assertTrue((vault / "Sprockets/areas-index.md").exists())
+            self.assertTrue((vault / "Sprockets/goals-index.md").exists())
             self.assertTrue((vault / "Sprockets/tasks-index.md").exists())
             self.assertTrue((vault / "Cogs/cogs-navigation.md").exists())
 
@@ -137,8 +156,8 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
                 obsidian_views.main(["--vault-dir", str(vault), "--create"])
 
             self.assertIn("- writes: vault", first_stdout.getvalue())
-            self.assertIn("- summary: created: 7", first_stdout.getvalue())
-            self.assertIn("- summary: exists: 7", second_stdout.getvalue())
+            self.assertIn("- summary: created: 9", first_stdout.getvalue())
+            self.assertIn("- summary: exists: 9", second_stdout.getvalue())
 
     def test_refresh_navigation_notes_replaces_reviewed_navigation_notes_only(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -155,10 +174,12 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
                 vault_dir=vault,
             )
 
-            self.assertEqual([result.status for result in results], ["updated", "created"])
+            self.assertEqual([result.status for result in results], ["updated", "created", "created", "updated", "created", "created"])
             self.assertIn("# Sprockets-Cogs Home", home.read_text(encoding="utf-8"))
+            self.assertTrue((vault / "Sprockets" / "areas-index.md").exists())
+            self.assertTrue((vault / "Sprockets" / "goals-index.md").exists())
             self.assertTrue((vault / "Cogs" / "cogs-navigation.md").exists())
-            self.assertEqual(tasks.read_text(encoding="utf-8"), "manual tasks\n")
+            self.assertIn("# Open Sprockets Tasks", tasks.read_text(encoding="utf-8"))
 
     def test_refresh_navigation_cli_reports_reviewed_write_scope(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -168,10 +189,11 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
             with redirect_stdout(stdout):
                 obsidian_views.main(["--vault-dir", str(vault), "--refresh-navigation"])
 
-            self.assertIn("- notes: 2", stdout.getvalue())
-            self.assertIn("- summary: created: 2", stdout.getvalue())
+            self.assertIn("- notes: 6", stdout.getvalue())
+            self.assertIn("- summary: created: 6", stdout.getvalue())
             self.assertTrue((vault / "HOME.md").exists())
-            self.assertFalse((vault / "Sprockets" / "tasks-index.md").exists())
+            self.assertTrue((vault / "Sprockets" / "tasks-index.md").exists())
+            self.assertFalse((vault / "REVIEW.md").exists())
 
 
 def _note_markdown(relative_path: str) -> str:

@@ -94,6 +94,7 @@ class ReviewDecisionApplyPreview:
     actions: tuple[ReviewDecisionApplyAction, ...]
     approve_count: int
     discard_count: int
+    edit_count: int
     skip_count: int
     pending_count: int
     rejected_count: int
@@ -214,6 +215,8 @@ class ReviewSpecialist:
         if preview.rejected_count:
             issues = "; ".join(action.issue for action in preview.actions if action.issue)
             raise ValueError(f"packet apply rejected: {issues}")
+        if preview.edit_count:
+            raise ValueError("packet apply rejected: edit decisions require manual packet rewrite")
         if preview.approve_count + preview.discard_count == 0:
             raise ValueError("packet apply found no approve/discard actions")
 
@@ -282,8 +285,10 @@ class ReviewSpecialist:
                     actions.append(_action_from_row(row, effect="reject", valid=False, issue=issue))
                 else:
                     actions.append(_action_from_row(row, effect="approve"))
-            elif row.decision == "discard":
+            elif row.decision in DISCARD_DECISIONS:
                 actions.append(_action_from_row(row, effect="discard"))
+            elif row.decision == "edit":
+                actions.append(_action_from_row(row, effect="edit"))
             elif row.decision == "skip":
                 actions.append(_action_from_row(row, effect="skip"))
 
@@ -343,11 +348,12 @@ def _dict_str_int(value: object) -> dict[str, int]:
     return {str(key): count for key, count in value.items() if isinstance(count, int)}
 
 
-VALID_REVIEW_DECISIONS = {"approve", "discard", "skip"}
+VALID_REVIEW_DECISIONS = {"approve", "reject", "discard", "edit", "skip"}
+DISCARD_DECISIONS = {"reject", "discard"}
 PACKET_STATUS_DECISIONS = {
     "pending": "pending",
     "approved": "approve",
-    "rejected": "discard",
+    "rejected": "reject",
     "deferred": "skip",
 }
 
@@ -363,6 +369,7 @@ def _apply_preview_from_actions(
         actions=actions,
         approve_count=sum(1 for action in actions if action.effect == "approve"),
         discard_count=sum(1 for action in actions if action.effect == "discard"),
+        edit_count=sum(1 for action in actions if action.effect == "edit"),
         skip_count=sum(1 for action in actions if action.effect == "skip"),
         pending_count=sum(1 for action in actions if action.effect == "pending"),
         rejected_count=sum(1 for action in actions if action.effect == "reject"),
@@ -376,6 +383,8 @@ def _packet_apply_action(
     if not row.valid:
         return _action_from_row(row, effect="reject", valid=False, issue=row.issue)
     if row.decision != "approve":
+        if row.decision in DISCARD_DECISIONS:
+            return _action_from_row(row, effect="discard")
         effect = "pending" if row.decision == "pending" else row.decision
         return _action_from_row(row, effect=effect)
     review_path = config.review_dir / row.file
@@ -577,9 +586,10 @@ def review_decision_template(review_dir: Path = review.REVIEW_DIR) -> str:
     lines = [
         "# Sprockets-Cogs Review Decision Template",
         "",
-        "> Preview/import contract only. This template does not approve, discard,",
-        "> archive, or write anything by itself. Use decisions `approve`, `discard`,",
-        "> or `skip`; leave blank for pending.",
+        "> Preview/import contract only. This template does not approve, reject,",
+        "> edit, archive, or write anything by itself. Use decisions `approve`,",
+        "> `reject`, `edit`, or `skip`; leave blank for pending. `discard`",
+        "> remains a compatibility alias for `reject`.",
         "",
         "| File | Decision | Notes |",
         "|---|---|---|",
@@ -709,7 +719,7 @@ def parse_review_decision_template(markdown: str) -> tuple[ReviewDecisionRow, ..
                     decision=decision,
                     notes=notes,
                     valid=False,
-                    issue="decision must be approve, discard, skip, or blank",
+                    issue="decision must be approve, reject, edit, skip, discard, or blank",
                 )
             )
         else:
@@ -787,6 +797,7 @@ def format_decision_apply_preview(preview: ReviewDecisionApplyPreview) -> str:
         f"- rows: {len(preview.actions)}",
         f"- would approve: {preview.approve_count}",
         f"- would discard: {preview.discard_count}",
+        f"- would edit: {preview.edit_count}",
         f"- would skip: {preview.skip_count}",
         f"- pending: {preview.pending_count}",
         f"- rejected: {preview.rejected_count}",
@@ -802,6 +813,8 @@ def format_decision_apply_preview(preview: ReviewDecisionApplyPreview) -> str:
             detail = f"reject: {action.issue}"
         elif action.effect == "pending":
             detail = "pending: no action"
+        elif action.effect == "edit":
+            detail = "edit requested: leave in review for manual packet rewrite"
         else:
             detail = f"would {action.effect}"
         lines.append(f"- {action.file}: {action.decision} -> {detail}")

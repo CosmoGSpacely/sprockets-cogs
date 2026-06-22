@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import frontmatter
 import specialists.jane.specialist as review_specialist
+from substrate.cog_appearance_registry import CogAppearance
 
 
 class Stage42ReviewSpecialistTests(unittest.TestCase):
@@ -429,10 +430,49 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
 
             self.assertEqual(result.packet_path, packet_path)
             self.assertTrue(packet_path.read_text().startswith("---\ntype: review-packet\n"))
+            self.assertIn("packet_schema: jane-vault-action-v1", packet_path.read_text())
+            self.assertIn("## Vault Decision Surface", packet_path.read_text())
             self.assertIn("| pending.md |  |  |", packet_path.read_text())
             self.assertEqual(preview.invalid_count, 0)
             self.assertEqual(preview.pending_count, 1)
             self.assertNotIn("# Sprockets-Cogs Review Operations Packet", packet_path.read_text())
+
+    def test_packet_decisions_accept_reject_and_edit_vault_markers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "reject.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/note",
+                    "title": "Reject from packet",
+                    "confidence": "low",
+                },
+            )
+            _write_review_file(
+                review_dir / "edit.md",
+                reason="confidence: low",
+                raw={
+                    "node_type": "sprockets/note",
+                    "title": "Edit from packet",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+            packet = root / "packet.md"
+            packet.write_text(_packet_with_decisions(specialist, {"reject.md": "reject", "edit.md": "edit"}))
+
+            preview = specialist.packet_apply_preview(packet)
+
+            self.assertEqual(preview.discard_count, 1)
+            self.assertEqual(preview.edit_count, 1)
+            self.assertEqual(preview.skip_count, 0)
+            self.assertIn("reject.md", {action.file for action in preview.actions})
+            self.assertIn("edit.md", {action.file for action in preview.actions})
 
     def test_main_writes_importable_review_packet_to_configured_path(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -499,6 +539,7 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
 
             self.assertEqual(preview.approve_count, 1)
             self.assertEqual(preview.discard_count, 1)
+            self.assertEqual(preview.edit_count, 0)
             self.assertEqual(preview.skip_count, 0)
             self.assertEqual(preview.pending_count, 0)
             self.assertEqual(preview.rejected_count, 3)
@@ -783,6 +824,36 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("Review specialist approved packet apply", output)
             self.assertIn("- packet status: applied", output)
             self.assertIn("- vault writes: yes", output)
+
+    def test_appearance_conflict_packet_references_registry_and_known_surfaces(self):
+        appearances = [
+            CogAppearance(
+                cog_id="cog-july-3-walmart",
+                surface="day",
+                period="2026-07-03",
+                path="Cogs/2026/07/27/2026-07-03 Fri.md",
+            ),
+            CogAppearance(
+                cog_id="cog-july-3-walmart",
+                surface="5wow",
+                period="2026-06",
+                path="Cogs/2026/2026-06.md",
+            ),
+        ]
+
+        packet = review_specialist.review.appearance_conflict_packet_markdown(
+            cog_id="cog-july-3-walmart",
+            source_action="User checked the June 5WOW appearance as done.",
+            proposed_state="done",
+            appearances=appearances,
+        )
+
+        self.assertIn("type: appearance-conflict-review", packet)
+        self.assertIn("registry_path: .graph/cog-appearances.json", packet)
+        self.assertIn("Jane asks one compact question", packet)
+        self.assertIn("| day | 2026-07-03 | Cogs/2026/07/27/2026-07-03 Fri.md | [ ] | open |", packet)
+        self.assertIn("| 5wow | 2026-06 | Cogs/2026/2026-06.md | [ ] | open |", packet)
+        self.assertIn("| cog-july-3-walmart |  |  |", packet)
 
 
 def _write_review_file(path: Path, reason: str, raw: dict) -> None:
