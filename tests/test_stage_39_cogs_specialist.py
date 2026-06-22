@@ -85,7 +85,7 @@ class Stage39CogsSpecialistTests(unittest.TestCase):
 
             preview = specialist.planning_preview("2026-05-13")
 
-            self.assertEqual([item.kind for item in preview.create_plan], ["weekly", "monthly", "annual"])
+            self.assertEqual([item.kind for item in preview.create_plan], ["daily", "weekly", "monthly", "annual"])
             self.assertIn("Planning-note create preview", preview.report)
             self.assertIn("No files written.", preview.report)
             self.assertFalse((cogs_dir / "weekly" / "2026-W20.md").exists())
@@ -105,7 +105,7 @@ class Stage39CogsSpecialistTests(unittest.TestCase):
 
             self.assertIn("Cogs specialist planning preview", output)
             self.assertIn("- writes: no", output)
-            self.assertIn("- planned items: 3", output)
+            self.assertIn("- planned items: 4", output)
 
     def test_main_prints_inventory_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -197,7 +197,7 @@ class Stage39CogsSpecialistTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("Cogs specialist planning preview", output)
-            self.assertIn("- planned items: 3", output)
+            self.assertIn("- planned items: 4", output)
             self.assertIn("No files written.", output)
 
 

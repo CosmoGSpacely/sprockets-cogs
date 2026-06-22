@@ -371,6 +371,7 @@ def apply_daily_rename_plan(
             continue
         if item.target_path.exists():
             raise FileExistsError(f"Daily rename target already exists: {item.target_path}")
+        item.target_path.parent.mkdir(parents=True, exist_ok=True)
         item.source_path.rename(item.target_path)
         applied.append(item)
     return applied

@@ -276,7 +276,7 @@ class Stage106RuntimeTimeContextTests(TestCase):
 
             weekly_note = root / "vault" / "Cogs" / "2026" / "06" / "2026-W24.md"
             self.assertTrue(weekly_note.exists())
-            self.assertIn("## Carry In\n\n- [ ] Call Tom\n\n## Weekdays", weekly_note.read_text(encoding="utf-8"))
+            self.assertIn("## Carry In\n\n- [ ] Call Tom\n\n## This Week", weekly_note.read_text(encoding="utf-8"))
             self.assertTrue((archive_dir / "telegram-call-next-week.input").exists())
 
     def test_ordinary_cogs_capture_does_not_call_memory_parent_retrieval(self):

@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from specialists.cogs.naming import daily_heading, monthly_path, preferred_daily_path, weekly_path
+from specialists.cogs.naming import monthly_path, preferred_daily_path, weekly_path
 
 
 DEFAULT_VAULT_DIR = Path.home() / "vault"
@@ -44,12 +44,10 @@ def daily_note_path(date_iso: str, daily_dir: Path = DEFAULT_DAILY_DIR) -> Path:
 def ensure_daily_note(date_iso: str, daily_dir: Path = DEFAULT_DAILY_DIR) -> Path:
     path = daily_note_path(date_iso, daily_dir)
     if not path.exists():
+        from specialists.cogs.planning import render_daily_note_template
+
         path.parent.mkdir(parents=True, exist_ok=True)
-        heading = daily_heading(date_iso)
-        path.write_text(
-            f"---\nnode_type: cogs/daily\ndate: {date_iso}\ntags: [cogs/daily]\n---\n\n"
-            f"# {heading}\n\n"
-        )
+        path.write_text(render_daily_note_template(date_iso))
     return path
 
 
