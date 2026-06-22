@@ -6,12 +6,12 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from specialists.cogs.naming import daily_heading, preferred_daily_path
-from specialists.cogs.naming import monthly_filename, weekly_filename
+from specialists.cogs.naming import daily_heading, monthly_path, preferred_daily_path, weekly_path
 
 
 DEFAULT_VAULT_DIR = Path.home() / "vault"
-DEFAULT_DAILY_DIR = DEFAULT_VAULT_DIR / "Cogs" / "daily"
+DEFAULT_COGS_DIR = DEFAULT_VAULT_DIR / "Cogs"
+DEFAULT_DAILY_DIR = DEFAULT_COGS_DIR
 
 TASK_LINE_RE = re.compile(r"^(?P<indent>\s*)- \[(?P<state>[ x>\-])\] (?P<text>.*)$")
 
@@ -106,7 +106,7 @@ def append_weekly_carry_item_text(
 
     from specialists.cogs.planning import render_weekly_note_template
 
-    path = cogs_dir / "weekly" / weekly_filename(date_iso)
+    path = weekly_path(date_iso, cogs_dir)
     return _append_planning_carry_item(path, render_weekly_note_template(date_iso), item_text)
 
 
@@ -119,7 +119,7 @@ def append_monthly_carry_item_text(
 
     from specialists.cogs.planning import render_monthly_note_template
 
-    path = cogs_dir / "monthly" / monthly_filename(date_iso)
+    path = monthly_path(date_iso, cogs_dir)
     return _append_planning_carry_item(path, render_monthly_note_template(date_iso[:7]), item_text)
 
 
@@ -241,7 +241,7 @@ def _find_open_blocks(query: str, daily_dir: Path) -> list[tuple[Path, CogsBlock
     if not normalized or not daily_dir.exists():
         return []
     matches: list[tuple[Path, CogsBlock]] = []
-    for path in sorted(daily_dir.glob("*.md")):
+    for path in sorted(daily_dir.rglob("*.md")):
         content = path.read_text()
         for block in parse_cogs_blocks(content, states={" "}):
             if normalized in block.item_text.lower():

@@ -210,7 +210,7 @@ def _cogs_navigation_note() -> str:
 
 ```dataview
 TABLE WITHOUT ID file.link AS Daily, date AS Date
-FROM "Cogs/daily"
+FROM "Cogs"
 WHERE node_type = "cogs/daily" AND date = date(today)
 LIMIT 1
 ```
@@ -219,7 +219,7 @@ LIMIT 1
 
 ```dataview
 TABLE WITHOUT ID file.link AS Week, week AS Week
-FROM "Cogs/weekly"
+FROM "Cogs"
 WHERE node_type = "cogs/weekly" AND week = dateformat(date(today), "kkkk-'W'WW")
 LIMIT 1
 ```
@@ -230,7 +230,7 @@ The current 5WOW planning view lives in the current monthly Cogs note.
 
 ```dataview
 TABLE WITHOUT ID file.link AS Month, link(file.path + "#5WOW", "Open 5WOW") AS "5WOW"
-FROM "Cogs/monthly"
+FROM "Cogs"
 WHERE node_type = "cogs/monthly" AND month = dateformat(date(today), "yyyy-MM")
 LIMIT 1
 ```
@@ -241,23 +241,23 @@ The implemented far-horizon surface is the current annual note for now.
 
 ```dataview
 TABLE WITHOUT ID file.link AS Year, year AS Year
-FROM "Cogs/annual"
+FROM "Cogs"
 WHERE node_type = "cogs/annual" AND string(year) = dateformat(date(today), "yyyy")
 LIMIT 1
 ```
 
 ## Periods
 
-- [[Cogs/daily|Daily notes]]
-- [[Cogs/weekly|Weekly notes]]
-- [[Cogs/monthly|Monthly notes]]
-- [[Cogs/annual|Annual notes]]
+- Daily notes are nested under `Cogs/YYYY/MM/WW/`.
+- Weekly notes are nested under `Cogs/YYYY/MM/`.
+- Monthly notes are nested under `Cogs/YYYY/`.
+- Annual notes live at `Cogs/YYYY.md`.
 
 ## Recent Daily Notes
 
 ```dataview
 TABLE WITHOUT ID file.link AS Daily, date AS Date
-FROM "Cogs/daily"
+FROM "Cogs"
 WHERE node_type = "cogs/daily" AND date
 SORT date DESC
 LIMIT 7
@@ -267,7 +267,7 @@ LIMIT 7
 
 ```dataview
 TABLE WITHOUT ID file.link AS Week, week AS Week
-FROM "Cogs/weekly"
+FROM "Cogs"
 WHERE node_type = "cogs/weekly"
 SORT week DESC
 LIMIT 7

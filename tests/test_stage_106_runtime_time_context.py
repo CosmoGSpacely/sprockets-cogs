@@ -207,7 +207,7 @@ class Stage106RuntimeTimeContextTests(TestCase):
                 memory_trace.return_value.reason = "disabled"
                 agentic_loop.process_input(input_path)
 
-            monthly_note = root / "vault" / "Cogs" / "monthly" / "2026-07.md"
+            monthly_note = root / "vault" / "Cogs" / "2026" / "2026-07.md"
             self.assertTrue(monthly_note.exists())
             monthly_text = monthly_note.read_text(encoding="utf-8")
             self.assertIn("## Carry In\n\n- [ ] 8a CRAFT FAIR\n\n## Dates", monthly_text)
@@ -274,7 +274,7 @@ class Stage106RuntimeTimeContextTests(TestCase):
                 memory_trace.return_value.reason = "disabled"
                 agentic_loop.process_input(input_path)
 
-            weekly_note = root / "vault" / "Cogs" / "weekly" / "2026-W24.md"
+            weekly_note = root / "vault" / "Cogs" / "2026" / "06" / "2026-W24.md"
             self.assertTrue(weekly_note.exists())
             self.assertIn("## Carry In\n\n- [ ] Call Tom\n\n## Weekdays", weekly_note.read_text(encoding="utf-8"))
             self.assertTrue((archive_dir / "telegram-call-next-week.input").exists())

@@ -21,7 +21,7 @@ from specialists.astro.vault import CogsBlock, append_cogs_block, mark_block_sta
 
 
 VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(Path.home() / "vault")))
-DAILY_DIR = VAULT_DIR / "Cogs" / "daily"
+DAILY_DIR = VAULT_DIR / "Cogs"
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,7 @@ def scan_daily_notes(
     datetime.strptime(cutoff, "%Y-%m-%d")
 
     candidates: list[CarryCandidate] = []
-    for path in sorted(daily_dir.glob("*.md")):
+    for path in sorted(daily_dir.rglob("*.md")):
         try:
             date = _date_from_daily_note(path)
         except Exception:

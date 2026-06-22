@@ -73,7 +73,7 @@ class Stage76GraphValidatorTests(unittest.TestCase):
             current_locator=CogLocator(
                 horizon="day",
                 period="2026-06-05",
-                path="Cogs/daily/Fri 05 Jun 2026.md",
+                path="Cogs/2026/06/23/2026-06-05 Fri.md",
             ),
         )
 

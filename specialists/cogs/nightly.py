@@ -129,7 +129,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--daily-dir",
         default=str(DEFAULT_DAILY_DIR),
-        help="Cogs daily-note directory. Defaults to the real vault daily directory. Writes unless --dry-run or --report is used.",
+        help="Cogs daily-note directory/root. Defaults to the real vault Cogs root. Writes unless --dry-run or --report is used.",
     )
     parser.add_argument(
         "--dry-run",
@@ -148,7 +148,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
         specialist = CogsSpecialist(
             CogsSpecialistConfig(
-                cogs_dir=Path(args.daily_dir).parent,
+                cogs_dir=Path(args.daily_dir),
                 daily_dir=Path(args.daily_dir),
             )
         )

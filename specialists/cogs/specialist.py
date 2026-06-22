@@ -13,14 +13,14 @@ from typing import Any, Sequence
 import specialists.cogs.carry as carry
 import specialists.cogs.planning as cogs_planning
 import specialists.cogs.nightly as nightly
-from specialists.astro.vault import DEFAULT_DAILY_DIR
+from specialists.astro.vault import DEFAULT_COGS_DIR, DEFAULT_DAILY_DIR
 
 
 @dataclass(frozen=True)
 class CogsSpecialistConfig:
     """Filesystem roots owned by the Cogs specialist."""
 
-    cogs_dir: Path = DEFAULT_DAILY_DIR.parent
+    cogs_dir: Path = DEFAULT_COGS_DIR
     daily_dir: Path = DEFAULT_DAILY_DIR
 
 
@@ -163,13 +163,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Read-only Cogs specialist preview.")
     parser.add_argument(
         "--cogs-dir",
-        default=str(DEFAULT_DAILY_DIR.parent),
+        default=str(DEFAULT_COGS_DIR),
         help="Cogs root directory. Defaults to the real vault Cogs directory.",
     )
     parser.add_argument(
         "--daily-dir",
         default=None,
-        help="Cogs daily-note directory. Defaults to COGS_DIR/daily.",
+        help="Cogs daily-note directory/root. Defaults to COGS_DIR.",
     )
     parser.add_argument(
         "--through",
@@ -208,7 +208,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def specialist_from_args(args: argparse.Namespace) -> CogsSpecialist:
     cogs_dir = Path(args.cogs_dir)
-    daily_dir = Path(args.daily_dir) if args.daily_dir else cogs_dir / "daily"
+    daily_dir = Path(args.daily_dir) if args.daily_dir else cogs_dir
     return CogsSpecialist(CogsSpecialistConfig(cogs_dir=cogs_dir, daily_dir=daily_dir))
 
 

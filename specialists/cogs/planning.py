@@ -11,16 +11,20 @@ from typing import Sequence
 
 from specialists.cogs.naming import (
     annual_filename,
+    annual_path,
+    apply_cogs_directory_migration_plan,
     apply_daily_rename_plan,
+    build_cogs_directory_migration_plan,
     build_daily_rename_plan,
     monthly_filename,
+    monthly_path,
     planned_note_filenames,
     weekly_filename,
+    weekly_path,
 )
-from specialists.astro.vault import DEFAULT_DAILY_DIR
+from specialists.astro.vault import DEFAULT_COGS_DIR, DEFAULT_DAILY_DIR
 
 
-DEFAULT_COGS_DIR = DEFAULT_DAILY_DIR.parent
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri")
 FULL_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
@@ -60,6 +64,12 @@ def _count_markdown_files(path: Path) -> int:
     return sum(1 for _ in path.glob("*.md"))
 
 
+def _count_markdown_files_recursive(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return sum(1 for _ in path.rglob("*.md"))
+
+
 def format_planning_names(date_iso: str) -> str:
     names = planned_note_filenames(date_iso)
     lines = [f"Planning note names for {date_iso}:"]
@@ -71,18 +81,10 @@ def format_planning_names(date_iso: str) -> str:
     return "\n".join(lines)
 
 
-def _existing_periodic_path(folder: Path, filename: str) -> Path | None:
-    path = folder / filename
-    return path if path.exists() else None
-
-
 def build_inventory(cogs_dir: Path = DEFAULT_COGS_DIR, reference_date: str | None = None) -> CogsPlanningInventory:
     ref = reference_date or date.today().isoformat()
     names = planned_note_filenames(ref)
-    daily_dir = cogs_dir / "daily"
-    weekly_dir = cogs_dir / "weekly"
-    monthly_dir = cogs_dir / "monthly"
-    annual_dir = cogs_dir / "annual"
+    daily_dir = cogs_dir
 
     rename_plan = build_daily_rename_plan(daily_dir)
     daily_legacy_count = sum(1 for item in rename_plan if item.status == "rename")
@@ -97,15 +99,15 @@ def build_inventory(cogs_dir: Path = DEFAULT_COGS_DIR, reference_date: str | Non
         cogs_dir=cogs_dir,
         reference_date=ref,
         daily_count=len(rename_plan),
-        weekly_count=_count_markdown_files(weekly_dir),
-        monthly_count=_count_markdown_files(monthly_dir),
-        annual_count=_count_markdown_files(annual_dir),
+        weekly_count=sum(1 for _ in cogs_dir.rglob("????-W??.md")) if cogs_dir.exists() else 0,
+        monthly_count=sum(1 for _ in cogs_dir.rglob("????-??.md")) if cogs_dir.exists() else 0,
+        annual_count=sum(1 for _ in cogs_dir.glob("????.md")) if cogs_dir.exists() else 0,
         daily_legacy_count=daily_legacy_count,
         daily_iso_count=daily_iso_count,
         daily_invalid_count=daily_invalid_count,
-        current_weekly_exists=_existing_periodic_path(weekly_dir, weekly_name) is not None,
-        current_monthly_exists=_existing_periodic_path(monthly_dir, monthly_name) is not None,
-        current_annual_exists=_existing_periodic_path(annual_dir, annual_name) is not None,
+        current_weekly_exists=weekly_path(ref, cogs_dir).exists(),
+        current_monthly_exists=monthly_path(ref, cogs_dir).exists(),
+        current_annual_exists=annual_path(ref, cogs_dir).exists(),
         current_weekly_name=weekly_name,
         current_monthly_name=monthly_name,
         current_annual_name=annual_name,
@@ -183,6 +185,41 @@ def apply_daily_renames(daily_dir: Path) -> str:
             lines.append(f"- renamed {item.source_path.name} -> {item.target_path.name}")
         else:
             lines.append(f"- kept    {item.source_path.name} ({item.reason})")
+    return "\n".join(lines)
+
+
+def format_cogs_directory_migration_plan(cogs_dir: Path = DEFAULT_COGS_DIR) -> str:
+    plan = build_cogs_directory_migration_plan(cogs_dir)
+    if not plan:
+        return f"No flat Cogs notes found in {cogs_dir}."
+    counts: dict[str, int] = {}
+    for item in plan:
+        counts[item.status] = counts.get(item.status, 0) + 1
+    summary = ", ".join(f"{status}: {count}" for status, count in sorted(counts.items()))
+    lines = [f"Cogs directory migration plan for {cogs_dir}", f"Summary: {summary}"]
+    for item in plan:
+        rel_source = item.source_path.relative_to(cogs_dir)
+        rel_target = item.target_path.relative_to(cogs_dir)
+        lines.append(f"- {item.status:<15} {item.kind:<7} {rel_source} -> {rel_target} ({item.reason})")
+    lines.append("No files written.")
+    return "\n".join(lines)
+
+
+def apply_cogs_directory_migration(cogs_dir: Path = DEFAULT_COGS_DIR) -> str:
+    applied = apply_cogs_directory_migration_plan(cogs_dir)
+    if not applied:
+        return f"No flat Cogs notes found in {cogs_dir}."
+    counts = {
+        "moved": sum(1 for item in applied if item.status == "move"),
+        "already-current": sum(1 for item in applied if item.status == "already-current"),
+    }
+    summary = ", ".join(f"{status}: {count}" for status, count in counts.items() if count)
+    lines = [f"Cogs directory migration apply for {cogs_dir}", f"Summary: {summary}"]
+    for item in applied:
+        rel_source = item.source_path.relative_to(cogs_dir)
+        rel_target = item.target_path.relative_to(cogs_dir)
+        verb = "moved" if item.status == "move" else "kept"
+        lines.append(f"- {verb:<5} {item.kind:<7} {rel_source} -> {rel_target}")
     return "\n".join(lines)
 
 
@@ -380,8 +417,6 @@ def build_create_plan(cogs_dir: Path, value: str) -> list[PlanningCreatePlanItem
     YYYY-MM-DD previews weekly, monthly, and annual notes for that date.
     YYYY-MM previews monthly and annual notes for that month.
     """
-    monthly_dir = cogs_dir / "monthly"
-    annual_dir = cogs_dir / "annual"
     if len(value) == 7:
         month_start = parse_month(value)
         month = value
@@ -389,19 +424,18 @@ def build_create_plan(cogs_dir: Path, value: str) -> list[PlanningCreatePlanItem
         return [
             _plan_item(
                 "monthly",
-                monthly_dir / monthly_filename(month_start.isoformat()),
+                monthly_path(month_start.isoformat(), cogs_dir),
                 render_monthly_note_template(month),
             ),
-            _plan_item("annual", annual_dir / annual_filename(month_start.isoformat()), render_annual_note_template(year)),
+            _plan_item("annual", annual_path(month_start.isoformat(), cogs_dir), render_annual_note_template(year)),
         ]
 
     date_value = datetime.strptime(value, "%Y-%m-%d").date()
     month = date_value.strftime("%Y-%m")
-    weekly_dir = cogs_dir / "weekly"
     return [
-        _plan_item("weekly", weekly_dir / weekly_filename(value), render_weekly_note_template(value)),
-        _plan_item("monthly", monthly_dir / monthly_filename(value), render_monthly_note_template(month)),
-        _plan_item("annual", annual_dir / annual_filename(value), render_annual_note_template(date_value.year)),
+        _plan_item("weekly", weekly_path(value, cogs_dir), render_weekly_note_template(value)),
+        _plan_item("monthly", monthly_path(value, cogs_dir), render_monthly_note_template(month)),
+        _plan_item("annual", annual_path(value, cogs_dir), render_annual_note_template(date_value.year)),
     ]
 
 
@@ -475,6 +509,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Rename daily notes from a reviewed ISO-first plan. Refuses blocked items.",
     )
     parser.add_argument(
+        "--directory-migration-plan",
+        action="store_true",
+        help="Preview flat-to-nested Cogs directory migration. Read-only.",
+    )
+    parser.add_argument(
+        "--directory-migration-apply",
+        action="store_true",
+        help="Apply reviewed flat-to-nested Cogs directory migration. Refuses blocked items.",
+    )
+    parser.add_argument(
         "--inventory",
         action="store_true",
         help="Report existing Cogs planning-note files. Read-only.",
@@ -526,7 +570,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--daily-dir",
         default=str(DEFAULT_DAILY_DIR),
-        help="Cogs daily-note directory. Defaults to the real vault daily directory.",
+        help="Cogs daily-note directory/root. Defaults to the real vault Cogs root.",
     )
     args = parser.parse_args(argv)
 
@@ -538,6 +582,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
     if args.daily_rename_apply:
         print(apply_daily_renames(Path(args.daily_dir)))
+        return
+    if args.directory_migration_plan:
+        print(format_cogs_directory_migration_plan(Path(args.cogs_dir)))
+        return
+    if args.directory_migration_apply:
+        print(apply_cogs_directory_migration(Path(args.cogs_dir)))
         return
     if args.inventory:
         print(format_inventory(Path(args.cogs_dir)))
@@ -562,7 +612,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     parser.error(
         "choose --names, --daily-rename-plan, --daily-rename-apply, --inventory, --month, --template, "
-        "--preview-create, --create, or --ensure-current"
+        "--directory-migration-plan, --directory-migration-apply, --preview-create, --create, or --ensure-current"
     )
 
 

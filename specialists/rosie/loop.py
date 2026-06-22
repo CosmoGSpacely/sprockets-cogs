@@ -77,7 +77,7 @@ MEMORY_TRACE_PATH_ENV = "SPROCKETS_COGS_MEMORY_TRACE_PATH"
 MEMORY_TRACE_FILENAME = "memory-parent-traces.jsonl"
 STRUCTURAL_GUARD_ENV = "SPROCKETS_COGS_STRUCTURAL_GUARD"
 
-DAILY_DIR      = VAULT_DIR / "Cogs" / "daily"
+DAILY_DIR      = VAULT_DIR / "Cogs"
 REVIEW_DIR     = VAULT_DIR / "review"
 
 SPROCKETS_FOLDERS = {
@@ -170,7 +170,7 @@ def _ensure_daily_note(date_iso: str) -> Path:
 def _append_cogs_item(node: NodeBase) -> None:
     """Append a Cogs daily item to the correct daily note."""
     horizon = getattr(node, "horizon", "day")
-    cogs_dir = DAILY_DIR.parent
+    cogs_dir = DAILY_DIR.parent if DAILY_DIR.name == "daily" else DAILY_DIR
     if horizon == "week":
         appended = append_weekly_carry_item_text(node.date, node.item_text, cogs_dir)
         if appended:

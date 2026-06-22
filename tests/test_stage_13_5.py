@@ -31,7 +31,7 @@ class Stage135HardeningTests(unittest.TestCase):
                 self.assertEqual(reloaded.ARCHIVE_DIR, root / "sc" / "archive")
                 self.assertEqual(reloaded.OUTPUT_DIR, root / "sc" / "output")
                 self.assertEqual(reloaded.VAULT_DIR, root / "vault")
-                self.assertEqual(reloaded.DAILY_DIR, root / "vault" / "Cogs" / "daily")
+                self.assertEqual(reloaded.DAILY_DIR, root / "vault" / "Cogs")
         finally:
             os.environ.clear()
             os.environ.update(original_env)

@@ -291,14 +291,14 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
     def test_load_retrieval_nodes_includes_daily_notes_with_stable_date_ids(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
-            daily = vault / "Cogs" / "daily" / "Sat 02 May 2026.md"
+            daily = vault / "Cogs" / "2026" / "05" / "18" / "2026-05-02 Sat.md"
             daily.parent.mkdir(parents=True, exist_ok=True)
             daily.write_text("- [ ] Continue retrieval traces\n")
 
             nodes = load_retrieval_nodes(vault)
 
         by_id = {node.node_id: node for node in nodes}
-        self.assertEqual(by_id["daily/2026-05-02"].title, "Sat 02 May 2026")
+        self.assertEqual(by_id["daily/2026-05-02"].title, "2026-05-02 Sat")
         self.assertEqual(by_id["daily/2026-05-02"].node_type, "cogs/daily")
         self.assertIn("retrieval traces", by_id["daily/2026-05-02"].text)
 
@@ -605,9 +605,10 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
             vault = Path(tmp)
             future_date = date.today() + timedelta(days=2)
             current_date = date.today() - timedelta(days=1)
-            future = vault / "Cogs" / "daily" / future_date.strftime("%a %d %b %Y.md")
-            current = vault / "Cogs" / "daily" / current_date.strftime("%a %d %b %Y.md")
+            future = vault / "Cogs" / future_date.strftime("%Y/%m/%W") / future_date.strftime("%Y-%m-%d %a.md")
+            current = vault / "Cogs" / current_date.strftime("%Y/%m/%W") / current_date.strftime("%Y-%m-%d %a.md")
             future.parent.mkdir(parents=True, exist_ok=True)
+            current.parent.mkdir(parents=True, exist_ok=True)
             future.write_text("- [ ] Future note\n")
             current.write_text("- [ ] Current note\n")
 
@@ -794,7 +795,7 @@ class Stage15RetrievalEvalTests(unittest.TestCase):
                 "parent: [[build-sprockets-cogs]]\n",
                 "Improve retrieval and memory behavior.",
             )
-            daily = vault / "Cogs" / "daily" / "Mon 04 May 2026.md"
+            daily = vault / "Cogs" / "2026" / "05" / "18" / "2026-05-04 Mon.md"
             daily.parent.mkdir(parents=True, exist_ok=True)
             daily.write_text("- [ ] Review memory packet indexing\n")
 

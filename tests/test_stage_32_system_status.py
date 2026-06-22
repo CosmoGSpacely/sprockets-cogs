@@ -329,10 +329,11 @@ class Stage32SystemStatusTests(unittest.TestCase):
             (cogs_dir / "weekly").mkdir(parents=True)
             (cogs_dir / "monthly").mkdir(parents=True)
             (cogs_dir / "annual").mkdir(parents=True)
-            (cogs_dir / "daily" / "Tue 12 May 2026.md").write_text("# legacy\n")
-            (cogs_dir / "weekly" / "2026-W20.md").write_text("# week\n")
-            (cogs_dir / "monthly" / "2026-05.md").write_text("# month\n")
-            (cogs_dir / "annual" / "2026.md").write_text("# year\n")
+            (cogs_dir / "2026" / "05" / "20").mkdir(parents=True)
+            (cogs_dir / "2026" / "05" / "2026-W20.md").write_text("# week\n")
+            (cogs_dir / "2026" / "2026-05.md").write_text("# month\n")
+            (cogs_dir / "2026.md").write_text("# year\n")
+            (cogs_dir / "2026" / "05" / "20" / "2026-05-12 Tue.md").write_text("# day\n")
             runtime = system_status.RuntimeStatus(
                 model="test-model",
                 sc_root=root / "sc",

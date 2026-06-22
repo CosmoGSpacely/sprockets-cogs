@@ -96,12 +96,12 @@ class Stage26CogsNamingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cogs_dir = Path(tmp)
             daily_dir = cogs_dir / "daily"
-            weekly_dir = cogs_dir / "weekly"
-            monthly_dir = cogs_dir / "monthly"
-            annual_dir = cogs_dir / "annual"
+            weekly_dir = cogs_dir / "2026" / "05"
+            monthly_dir = cogs_dir / "2026"
+            annual_dir = cogs_dir
             weekly_dir.mkdir(parents=True)
-            monthly_dir.mkdir(parents=True)
-            annual_dir.mkdir(parents=True)
+            monthly_dir.mkdir(parents=True, exist_ok=True)
+            annual_dir.mkdir(parents=True, exist_ok=True)
             _write_legacy_daily_note(daily_dir, "2026-05-11")
             (weekly_dir / "2026-W20.md").write_text("# Week\n")
             (monthly_dir / "2026-05.md").write_text("# Month\n")
@@ -125,6 +125,66 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
             self.assertEqual(path.name, "2026-05-11 Mon.md")
             self.assertFalse((daily_dir / "Mon 11 May 2026.md").exists())
+
+    def test_vault_daily_note_path_uses_nested_cogs_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp) / "Cogs"
+
+            path = vault.ensure_daily_note("2026-05-11", cogs_dir)
+
+            self.assertEqual(path, cogs_dir / "2026" / "05" / "20" / "2026-05-11 Mon.md")
+            self.assertTrue(path.exists())
+
+    def test_cogs_directory_migration_plan_moves_flat_periodic_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp) / "Cogs"
+            daily = _write_legacy_daily_note(cogs_dir / "daily", "2026-05-11")
+            weekly = cogs_dir / "weekly" / "2026-W20.md"
+            monthly = cogs_dir / "monthly" / "2026-05.md"
+            annual = cogs_dir / "annual" / "2026.md"
+            for path, text in [
+                (weekly, "---\nnode_type: cogs/weekly\nweek: 2026-W20\n---\n"),
+                (monthly, "---\nnode_type: cogs/monthly\nmonth: 2026-05\n---\n"),
+                (annual, "---\nnode_type: cogs/annual\nyear: 2026\n---\n"),
+            ]:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text)
+
+            plan = cogs_naming.build_cogs_directory_migration_plan(cogs_dir)
+            by_kind = {item.kind: item for item in plan}
+
+            self.assertEqual(by_kind["daily"].source_path, daily)
+            self.assertEqual(by_kind["daily"].target_path, cogs_dir / "2026" / "05" / "20" / "2026-05-11 Mon.md")
+            self.assertEqual(by_kind["weekly"].target_path, cogs_dir / "2026" / "05" / "2026-W20.md")
+            self.assertEqual(by_kind["monthly"].target_path, cogs_dir / "2026" / "2026-05.md")
+            self.assertEqual(by_kind["annual"].target_path, cogs_dir / "2026.md")
+            self.assertEqual({item.status for item in plan}, {"move"})
+
+    def test_cogs_directory_migration_apply_moves_flat_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp) / "Cogs"
+            legacy = _write_legacy_daily_note(cogs_dir / "daily", "2026-05-11")
+
+            output = cogs_planning.apply_cogs_directory_migration(cogs_dir)
+            target = cogs_dir / "2026" / "05" / "20" / "2026-05-11 Mon.md"
+
+            self.assertIn("Summary: moved: 1", output)
+            self.assertFalse(legacy.exists())
+            self.assertTrue(target.exists())
+
+    def test_cogs_directory_migration_plan_blocks_duplicate_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cogs_dir = Path(tmp) / "Cogs"
+            first = cogs_dir / "daily" / "First.md"
+            second = cogs_dir / "daily" / "Second.md"
+            for path in (first, second):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("---\nnode_type: cogs/daily\ndate: 2026-05-11\n---\n")
+
+            plan = cogs_naming.build_cogs_directory_migration_plan(cogs_dir)
+
+            self.assertEqual({item.status for item in plan}, {"collision"})
+            self.assertTrue(all("multiple source files" in item.reason for item in plan))
 
     def test_daily_rename_apply_renames_reviewed_legacy_notes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -242,9 +302,9 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
             self.assertEqual([item.kind for item in plan], ["weekly", "monthly", "annual"])
             self.assertEqual([item.status for item in plan], ["create", "create", "create"])
-            self.assertEqual(plan[0].path, cogs_dir / "weekly" / "2026-W20.md")
-            self.assertEqual(plan[1].path, cogs_dir / "monthly" / "2026-05.md")
-            self.assertEqual(plan[2].path, cogs_dir / "annual" / "2026.md")
+            self.assertEqual(plan[0].path, cogs_dir / "2026" / "05" / "2026-W20.md")
+            self.assertEqual(plan[1].path, cogs_dir / "2026" / "2026-05.md")
+            self.assertEqual(plan[2].path, cogs_dir / "2026.md")
             self.assertFalse(plan[0].path.exists())
             self.assertIn("node_type: cogs/weekly", plan[0].template)
 
@@ -255,13 +315,13 @@ class Stage26CogsNamingTests(unittest.TestCase):
             plan = cogs_planning.build_create_plan(cogs_dir, "2026-05")
 
             self.assertEqual([item.kind for item in plan], ["monthly", "annual"])
-            self.assertEqual(plan[0].path, cogs_dir / "monthly" / "2026-05.md")
-            self.assertEqual(plan[1].path, cogs_dir / "annual" / "2026.md")
+            self.assertEqual(plan[0].path, cogs_dir / "2026" / "2026-05.md")
+            self.assertEqual(plan[1].path, cogs_dir / "2026.md")
 
     def test_create_plan_marks_existing_targets_without_overwriting(self):
         with tempfile.TemporaryDirectory() as tmp:
             cogs_dir = Path(tmp)
-            monthly = cogs_dir / "monthly" / "2026-05.md"
+            monthly = cogs_dir / "2026" / "2026-05.md"
             monthly.parent.mkdir(parents=True)
             monthly.write_text("existing\n")
 
@@ -299,16 +359,16 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
             results = cogs_planning.create_planning_notes(cogs_dir, "2026-05", "monthly")
 
-            monthly = cogs_dir / "monthly" / "2026-05.md"
+            monthly = cogs_dir / "2026" / "2026-05.md"
             self.assertEqual(results, [f"created monthly: {monthly}"])
             self.assertTrue(monthly.exists())
             self.assertIn("## 5WOW", monthly.read_text())
-            self.assertFalse((cogs_dir / "annual" / "2026.md").exists())
+            self.assertFalse((cogs_dir / "2026.md").exists())
 
     def test_create_planning_notes_refuses_to_overwrite_existing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             cogs_dir = Path(tmp)
-            monthly = cogs_dir / "monthly" / "2026-05.md"
+            monthly = cogs_dir / "2026" / "2026-05.md"
             monthly.parent.mkdir(parents=True)
             monthly.write_text("manual\n")
 
@@ -323,9 +383,9 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
             results = cogs_planning.ensure_current_planning_notes(cogs_dir, "2026-05-13")
 
-            weekly = cogs_dir / "weekly" / "2026-W20.md"
-            monthly = cogs_dir / "monthly" / "2026-05.md"
-            annual = cogs_dir / "annual" / "2026.md"
+            weekly = cogs_dir / "2026" / "05" / "2026-W20.md"
+            monthly = cogs_dir / "2026" / "2026-05.md"
+            annual = cogs_dir / "2026.md"
             self.assertEqual(
                 results,
                 [
@@ -341,7 +401,7 @@ class Stage26CogsNamingTests(unittest.TestCase):
     def test_ensure_current_planning_notes_preserves_existing_notes(self):
         with tempfile.TemporaryDirectory() as tmp:
             cogs_dir = Path(tmp)
-            monthly = cogs_dir / "monthly" / "2026-05.md"
+            monthly = cogs_dir / "2026" / "2026-05.md"
             monthly.parent.mkdir(parents=True)
             monthly.write_text("manual\n")
 

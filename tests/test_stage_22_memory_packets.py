@@ -110,21 +110,21 @@ class Stage22MemoryPacketTests(unittest.TestCase):
             node_id="daily/2026-05-04",
             title="Mon 04 May 2026",
             node_type="cogs/daily",
-            path=Path("Cogs/daily/Mon 04 May 2026.md"),
+            path=Path("Cogs/2026/05/19/2026-05-04 Mon.md"),
             text="---\ntags: [daily]\n---\n# Daily\n- [ ] Review memory packets",
         )
         older = RetrievalNode(
             node_id="daily/2026-05-01",
             title="Fri 01 May 2026",
             node_type="cogs/daily",
-            path=Path("Cogs/daily/Fri 01 May 2026.md"),
+            path=Path("Cogs/2026/05/18/2026-05-01 Fri.md"),
             text="- [x] Finish graph retrieval",
         )
         future = RetrievalNode(
             node_id="daily/2026-05-06",
             title="Wed 06 May 2026",
             node_type="cogs/daily",
-            path=Path("Cogs/daily/Wed 06 May 2026.md"),
+            path=Path("Cogs/2026/05/19/2026-05-06 Wed.md"),
             text="- [ ] Future item",
         )
 

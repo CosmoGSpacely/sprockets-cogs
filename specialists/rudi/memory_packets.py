@@ -114,7 +114,7 @@ def build_recent_cogs_packet(
         node_id="memory/recent-cogs",
         title=f"Recent Cogs history ({oldest.isoformat()} to {newest.isoformat()})",
         node_type="memory/recent-cogs",
-        path=Path("Cogs/daily"),
+        path=Path("Cogs"),
         parent_slugs=(),
         child_ids=tuple(node.node_id for node in selected),
         child_titles=tuple(node.title for node in selected),

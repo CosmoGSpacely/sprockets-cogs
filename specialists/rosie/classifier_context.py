@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from specialists.cogs.naming import resolve_existing_daily_path
 from specialists.rudi.entity_state import get_entities_by_tier
 from specialists.rudi.production_retrieval import format_retrieval_context, memory_context_enabled
 from specialists.sprockets.specialist import SprocketsSpecialist, SprocketsSpecialistConfig
@@ -26,7 +27,7 @@ def configured_vault_dir() -> Path:
 
 
 def configured_daily_dir() -> Path:
-    return configured_vault_dir() / "Cogs" / "daily"
+    return configured_vault_dir() / "Cogs"
 
 
 def build_hierarchy_context(
@@ -68,9 +69,9 @@ def build_base_context(
     hot contact/entity names, and hierarchy parent target labels.
     """
 
-    today = datetime.now().strftime("%a %d %b %Y")
-    note_path = daily_dir / f"{today}.md"
-    if not note_path.exists():
+    today_iso = datetime.now().strftime("%Y-%m-%d")
+    note_path = resolve_existing_daily_path(today_iso, daily_dir)
+    if note_path is None or not note_path.exists():
         cogs_line = "Already in today's note: (none)"
     else:
         items = [

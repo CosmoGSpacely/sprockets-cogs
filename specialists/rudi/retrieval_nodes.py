@@ -23,11 +23,26 @@ def retrieval_node_counts(nodes: Iterable[RetrievalNode]) -> dict[str, int]:
 def daily_node_id(path: Path) -> str:
     """Return a stable retrieval node ID for an Obsidian daily note path."""
 
-    try:
-        date = datetime.strptime(path.stem, "%a %d %b %Y").strftime("%Y-%m-%d")
-    except ValueError:
-        date = path.stem
+    date = path.stem
+    for fmt in ("%Y-%m-%d %a", "%Y-%m-%d", "%a %d %b %Y"):
+        try:
+            date = datetime.strptime(path.stem, fmt).strftime("%Y-%m-%d")
+            break
+        except ValueError:
+            continue
     return f"daily/{date}"
+
+
+def _is_daily_note(path: Path) -> bool:
+    """Return true for current ISO-first or legacy daily note filenames."""
+
+    for fmt in ("%Y-%m-%d %a", "%Y-%m-%d", "%a %d %b %Y"):
+        try:
+            datetime.strptime(path.stem, fmt)
+            return True
+        except ValueError:
+            continue
+    return False
 
 
 def load_retrieval_nodes(vault_dir: Path) -> list[RetrievalNode]:
@@ -55,9 +70,11 @@ def load_retrieval_nodes(vault_dir: Path) -> list[RetrievalNode]:
                 )
             )
 
-    daily_dir = vault_dir / "Cogs" / "daily"
-    if daily_dir.exists():
-        for path in sorted(daily_dir.glob("*.md")):
+    cogs_dir = vault_dir / "Cogs"
+    if cogs_dir.exists():
+        for path in sorted(cogs_dir.rglob("*.md")):
+            if not _is_daily_note(path):
+                continue
             nodes.append(
                 RetrievalNode(
                     node_id=daily_node_id(path),

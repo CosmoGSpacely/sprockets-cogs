@@ -80,13 +80,13 @@ class Stage77MutationCommandTests(unittest.TestCase):
                 "from_locator": {
                     "horizon": "day",
                     "period": "2026-06-06",
-                    "path": "Cogs/daily/Sat 06 Jun 2026.md",
+                    "path": "Cogs/2026/06/23/2026-06-06 Sat.md",
                     "marker": "line:14",
                 },
                 "to_locator": {
                     "horizon": "week",
                     "period": "2026-W24",
-                    "path": "Cogs/weekly/2026-W24.md",
+                    "path": "Cogs/2026/06/2026-W24.md",
                     "marker": "carry",
                 },
             },

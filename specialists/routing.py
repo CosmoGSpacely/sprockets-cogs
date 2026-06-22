@@ -219,7 +219,7 @@ def run_all_specialist_route(
     cogs = cogs_specialist.CogsSpecialist(
         cogs_specialist.CogsSpecialistConfig(
             cogs_dir=cogs_root,
-            daily_dir=cogs_root / "daily",
+            daily_dir=cogs_root,
         )
     )
     cogs_preview = cogs.planning_preview(normalized.runtime_time.local_date)

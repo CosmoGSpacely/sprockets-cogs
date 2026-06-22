@@ -452,7 +452,7 @@ class Stage41MemorySpecialistTests(unittest.TestCase):
                 node_id="daily/2026-05-13",
                 title="Wed 13 May 2026",
                 node_type="cogs/daily",
-                path=Path("/vault/Cogs/daily/Wed 13 May 2026.md"),
+                path=Path("/vault/Cogs/2026/05/20/2026-05-13 Wed.md"),
             )
             cache_path.write_text(json.dumps({
                 "schema_version": 1,

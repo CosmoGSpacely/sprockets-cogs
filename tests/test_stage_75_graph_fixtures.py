@@ -47,7 +47,7 @@ class Stage75GraphFixtureTests(unittest.TestCase):
         )
         self.assertEqual(
             loaded["valid_primary_bridge"].cogs[0].current_locator.path,
-            "Cogs/daily/Sat 06 Jun 2026.md",
+            "Cogs/2026/06/23/2026-06-06 Sat.md",
         )
 
     def test_graph_level_invalid_fixtures_still_load_for_stage_76_validators(self):
