@@ -52,7 +52,7 @@ class MaintenanceJobStatus:
 
 NIGHTLY_JOB = MaintenanceJob(
     name="nightly",
-    description="Nightly Cogs carry safety net",
+    description="Astro daily service and Cogs carry handoff",
     service_unit="sprockets-cogs-nightly.service",
     timer_unit="sprockets-cogs-nightly.timer",
     service_template=PROJECT_ROOT / "systemd" / "user" / "sprockets-cogs-nightly.service",

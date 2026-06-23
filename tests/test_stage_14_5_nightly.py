@@ -104,10 +104,13 @@ class Stage145NightlyCarryTests(unittest.TestCase):
             self.assertIn("Nightly carry report", output)
             self.assertIn("- open candidates: 1", output)
             self.assertIn("- planned actions: carry: 1", output)
+            self.assertIn("- horizon reference: 2026-05-04", output)
+            self.assertIn("- horizon creates:", output)
             self.assertIn("- writes: no", output)
             self.assertIn("scripts/nightly --dry-run --through 2026-05-02 --to 2026-05-04", output)
             self.assertIn("scripts/nightly --through 2026-05-02 --to 2026-05-04", output)
             self.assertIn("- [ ] Carry me", old_note.read_text())
+            self.assertFalse((daily_dir / "2026" / "2026-05-5WOW.md").exists())
 
     def test_nightly_report_cli_delegates_through_cogs_specialist_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -132,9 +135,66 @@ class Stage145NightlyCarryTests(unittest.TestCase):
             output = buf.getvalue()
             self.assertIn("Nightly carry report", output)
             self.assertIn("- open candidates: 1", output)
+            self.assertIn("- horizon reference: 2026-05-04", output)
             self.assertIn("- writes: no", output)
             self.assertIn("- [ ] Carry me", old_note.read_text())
             self.assertFalse(vault.daily_note_path("2026-05-04", daily_dir).exists())
+
+    def test_nightly_dry_run_previews_horizon_before_carry_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            old_note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            old_note.write_text(old_note.read_text() + "- [ ] Carry me\n")
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                nightly.main(
+                    [
+                        "--dry-run",
+                        "--daily-dir",
+                        str(daily_dir),
+                        "--through",
+                        "2026-05-02",
+                        "--to",
+                        "2026-05-04",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Astro horizon ensure preview", output)
+            self.assertIn("- reference: 2026-05-04", output)
+            self.assertIn("- writes: no", output)
+            self.assertIn("1 carry action(s) would be applied", output)
+            self.assertFalse((daily_dir / "2026" / "2026-05-5WOW.md").exists())
+
+    def test_nightly_apply_ensures_horizon_then_hands_off_to_carry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            old_note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            old_note.write_text(old_note.read_text() + "- [ ] Carry me\n")
+            buf = io.StringIO()
+
+            with redirect_stdout(buf):
+                nightly.main(
+                    [
+                        "--daily-dir",
+                        str(daily_dir),
+                        "--through",
+                        "2026-05-02",
+                        "--to",
+                        "2026-05-04",
+                    ]
+                )
+
+            output = buf.getvalue()
+            self.assertIn("Astro horizon ensure", output)
+            self.assertIn("created 5wow:", output)
+            self.assertIn("created 12mf:", output)
+            self.assertIn("Cogs automatic carry handoff", output)
+            self.assertTrue((daily_dir / "2026" / "2026-05-5WOW.md").exists())
+            self.assertTrue((daily_dir / "2026" / "2026-05-12MF.md").exists())
+            self.assertIn("- [>] Carry me", old_note.read_text())
+            self.assertIn("- [ ] Carry me", vault.daily_note_path("2026-05-04", daily_dir).read_text())
 
 
 if __name__ == "__main__":

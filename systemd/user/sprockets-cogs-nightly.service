@@ -1,5 +1,5 @@
 [Unit]
-Description=Sprockets-Cogs nightly carry safety net
+Description=Sprockets-Cogs Astro daily service
 Documentation=https://github.com/CosmoGSpacely/sprockets-cogs
 
 [Service]

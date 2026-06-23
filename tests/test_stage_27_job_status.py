@@ -52,7 +52,7 @@ class Stage27JobStatusTests(unittest.TestCase):
 
         output = job_status.format_job_status(status)
 
-        self.assertIn("nightly: Nightly Cogs carry safety net", output)
+        self.assertIn("nightly: Astro daily service and Cogs carry handoff", output)
         self.assertIn("sprockets-cogs-nightly.service", output)
         self.assertIn("sprockets-cogs-nightly.timer", output)
         self.assertIn("service template:", output)
@@ -89,7 +89,7 @@ class Stage27JobStatusTests(unittest.TestCase):
         self.assertIn("WorkingDirectory=/home/cosmo/sprockets-cogs", service)
         self.assertIn("ExecStart=/home/cosmo/sprockets-cogs/scripts/nightly", service)
         self.assertIn("NoNewPrivileges=true", service)
-        self.assertIn("OnCalendar=*-*-* 04:30:00", timer)
+        self.assertIn("OnCalendar=*-*-* 00:00:00", timer)
         self.assertIn("Persistent=true", timer)
         self.assertIn("Unit=sprockets-cogs-nightly.service", timer)
         self.assertIn("WantedBy=timers.target", timer)
@@ -114,7 +114,7 @@ class Stage27JobStatusTests(unittest.TestCase):
             job_status.main(["nightly"])
 
         output = stdout.getvalue()
-        self.assertIn("nightly: Nightly Cogs carry safety net", output)
+        self.assertIn("nightly: Astro daily service and Cogs carry handoff", output)
         self.assertIn("timer is not installed", output)
 
 

@@ -100,7 +100,7 @@ def append_weekly_carry_item_text(
     item_text: str,
     cogs_dir: Path = DEFAULT_VAULT_DIR / "Cogs",
 ) -> bool:
-    """Append an item to the Carry In block of the week containing date_iso."""
+    """Append an item to the CARRY block of the week containing date_iso."""
 
     from specialists.cogs.planning import render_weekly_note_template
 
@@ -113,7 +113,7 @@ def append_monthly_carry_item_text(
     item_text: str,
     cogs_dir: Path = DEFAULT_VAULT_DIR / "Cogs",
 ) -> bool:
-    """Append an item to the Carry In block of the month containing date_iso."""
+    """Append an item to the CARRY block of the month containing date_iso."""
 
     from specialists.cogs.planning import render_monthly_note_template
 
@@ -130,7 +130,8 @@ def _append_planning_carry_item(path: Path, template: str, item_text: str) -> bo
     if any(f"{state} {item_text}" in content for state in ["- [ ]", "- [x]", "- [>]", "- [-]"]):
         return False
 
-    updated = _append_under_heading(content, "## Carry In", f"- [ ] {item_text}")
+    heading = "## CARRY" if "## CARRY" in content or "## Carry In" not in content else "## Carry In"
+    updated = _append_under_heading(content, heading, f"- [ ] {item_text}")
     path.write_text(updated)
     return True
 

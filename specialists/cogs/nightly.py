@@ -1,7 +1,9 @@
-"""Nightly Cogs carry safety net.
+"""Astro daily service with Cogs carry handoff.
 
-This script is intentionally mechanical: carry still-open Cogs blocks forward
-while respecting any item already acted on by manual or interactive carry.
+The run order is deliberate:
+
+1. Astro ensures the near-future vault horizon exists.
+2. Cogs receives the handoff and carries still-open daily Cogs forward.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from pathlib import Path
 from typing import Sequence
 
 from specialists.cogs.carry import apply_plan_document, build_plan_document, preview_apply_plan_document, scan_daily_notes
+from specialists.cogs.planning import build_horizon_create_plan, ensure_planning_horizon
 from specialists.astro.vault import DEFAULT_DAILY_DIR
 
 
@@ -38,6 +41,20 @@ def build_nightly_plan(
     destination = destination_date or default_destination_date()
     candidates = scan_daily_notes(daily_dir=daily_dir, through_date=through)
     return build_plan_document(candidates, destination)
+
+
+def summarize_horizon_plan(cogs_dir: Path = DEFAULT_DAILY_DIR, reference_date: str | None = None) -> dict[str, object]:
+    """Summarize Astro horizon work without writing."""
+    ref = reference_date or default_destination_date()
+    plan = build_horizon_create_plan(cogs_dir, ref)
+    status_counts: Counter[str] = Counter(item.status for item in plan)
+    kind_counts: Counter[str] = Counter(item.kind for item in plan if item.status == "create")
+    return {
+        "reference_date": ref,
+        "item_count": len(plan),
+        "status_counts": dict(sorted(status_counts.items())),
+        "create_counts": dict(sorted(kind_counts.items())),
+    }
 
 
 def summarize_nightly_plan(plan: dict) -> dict[str, object]:
@@ -88,6 +105,7 @@ def format_nightly_report(
     through = through_date or default_through_date()
     destination = destination_date or str(plan.get("default_destination_date", "") or default_destination_date())
     summary = summarize_nightly_plan(plan)
+    horizon = summarize_horizon_plan(daily_dir, destination)
     action_counts = summary["action_counts"]
     if isinstance(action_counts, dict) and action_counts:
         action_text = ", ".join(f"{action}: {count}" for action, count in action_counts.items())
@@ -103,6 +121,9 @@ def format_nightly_report(
         f"- source files: {summary['source_file_count']}",
         f"- source dates: {summary['source_date_count']}",
         f"- planned actions: {action_text}",
+        f"- horizon reference: {horizon['reference_date']}",
+        f"- horizon plan: {horizon['status_counts']}",
+        f"- horizon creates: {horizon['create_counts']}",
         "- writes: no",
         f"- dry run: scripts/nightly --dry-run --through {through} --to {destination}",
         f"- apply manually: scripts/nightly --through {through} --to {destination}",
@@ -134,12 +155,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Preview nightly carry actions. Read-only; no vault writes.",
+        help="Preview Astro horizon and Cogs carry actions. Read-only; no vault writes.",
     )
     parser.add_argument(
         "--report",
         action="store_true",
-        help="Summarize the nightly plan. Read-only; no vault writes.",
+        help="Summarize the Astro daily service plan. Read-only; no vault writes.",
+    )
+    parser.add_argument(
+        "--skip-horizon",
+        action="store_true",
+        help="Skip Astro horizon ensure. Intended only for narrow debugging.",
     )
     args = parser.parse_args(argv)
 
@@ -161,10 +187,25 @@ def main(argv: Sequence[str] | None = None) -> None:
         destination_date=args.to,
     )
     if args.dry_run:
+        if not args.skip_horizon:
+            horizon = summarize_horizon_plan(Path(args.daily_dir), args.to or default_destination_date())
+            print("Astro horizon ensure preview")
+            print(f"- reference: {horizon['reference_date']}")
+            print(f"- status: {horizon['status_counts']}")
+            print(f"- creates: {horizon['create_counts']}")
+            print("- writes: no")
+            print()
         print(preview_apply_plan_document(plan))
         return
 
+    if not args.skip_horizon:
+        horizon_results = ensure_planning_horizon(Path(args.daily_dir), args.to or default_destination_date())
+        print("Astro horizon ensure")
+        print("\n".join(horizon_results) if horizon_results else "No horizon actions applied.")
+        print()
+
     results = apply_plan_document(plan)
+    print("Cogs automatic carry handoff")
     print("\n".join(results) if results else "No nightly carry actions applied.")
 
 

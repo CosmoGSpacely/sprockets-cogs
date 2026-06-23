@@ -16,6 +16,8 @@ from specialists.cogs.naming import (
     apply_daily_rename_plan,
     build_cogs_directory_migration_plan,
     build_daily_rename_plan,
+    five_wow_path,
+    forward12_path,
     monthly_filename,
     monthly_path,
     nested_daily_path,
@@ -77,8 +79,9 @@ def format_planning_names(date_iso: str) -> str:
     lines.append(f"- daily: {names['daily']}")
     lines.append(f"- weekly: {names['weekly']}")
     lines.append(f"- monthly: {names['monthly']}")
+    lines.append(f"- 5WOW: {names['5wow']}")
+    lines.append(f"- 12MF: {names['12mf']}")
     lines.append(f"- annual: {names['annual']}")
-    lines.append(f"- 5WOW: monthly section anchor {names['five_wow_anchor']}")
     return "\n".join(lines)
 
 
@@ -283,7 +286,8 @@ def format_month_preview(month: str) -> str:
     lines.append(f"- annual note: {annual_name}")
     lines.append(f"- first ISO week: {weekly_name}")
     lines.append("- calendar section: monthly Mon-Sun grid")
-    lines.append("- 5WOW section: vertical weekday planning view")
+    lines.append("- 5WOW file: vertical weekday planning view")
+    lines.append("- 12MF file: twelve-month forward look")
     lines.append("")
     lines.extend(_calendar_table(month))
     lines.append("")
@@ -314,9 +318,7 @@ def render_daily_note_template(date_iso: str) -> str:
     return (
         _frontmatter("cogs/daily", "date", date_iso)
         + f"# {dt:%a %d %b %Y}\n\n"
-        + "## Appointments & Settings\n\n"
-        + "## Today\n\n"
-        + "## Carry In\n"
+        + "<!-- Cogs stay in likely day order: explicit times, then daypart/order hints. -->\n"
     )
 
 
@@ -332,9 +334,7 @@ def render_weekly_note_template(date_iso: str) -> str:
         _frontmatter("cogs/weekly", "week", f"{iso_year}-W{iso_week:02d}"),
         f"# Week {iso_week:02d} - {start:%b %Y}",
         "",
-        "## 5WOW",
-        "",
-        "## Carry In",
+        "## CARRY",
         "",
         "## This Week",
         "",
@@ -347,14 +347,14 @@ def render_weekly_note_template(date_iso: str) -> str:
 
 
 def _five_wow_vertical_table(month: str) -> list[str]:
-    lines = ["| Week | Day | Date | Setting | Notes |", "|---|---|---|---|---|"]
+    lines = ["| Week | Day | Date | Cogs | Notes |", "|---|---|---|---|---|"]
     for week, day_label, date_iso in five_wow_rows(month):
         lines.append(f"| {week} | {day_label} | {date_iso} |  |  |")
     return lines
 
 
 def forward_12_month_rows(month: str) -> list[tuple[int, str]]:
-    """Return 12 month buckets from the anchor month through the next 11."""
+    """Return 12MF buckets from the anchor month through the next 11."""
     first = parse_month(month)
     rows: list[tuple[int, str]] = []
     for offset in range(12):
@@ -366,9 +366,9 @@ def forward_12_month_rows(month: str) -> list[tuple[int, str]]:
 
 
 def _forward_12_month_table(month: str) -> list[str]:
-    lines = ["| + | Month | Notes |", "|---|---|---|"]
+    lines = ["| + | Month | Cogs | Notes |", "|---|---|---|---|"]
     for offset, month_label in forward_12_month_rows(month):
-        lines.append(f"| {offset} | {month_label} |  |")
+        lines.append(f"| {offset} | {month_label} |  |  |")
     return lines
 
 
@@ -382,15 +382,7 @@ def render_monthly_note_template(month: str) -> str:
         "",
         *_calendar_table(month),
         "",
-        "## 5WOW",
-        "",
-        *_five_wow_vertical_table(month),
-        "",
-        "## 12-Month Forward Look",
-        "",
-        *_forward_12_month_table(month),
-        "",
-        "## Carry In",
+        "## CARRY",
         "",
         "## Dates",
         "",
@@ -403,12 +395,38 @@ def render_monthly_note_template(month: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_five_wow_note_template(month: str) -> str:
+    lines = [
+        _frontmatter("cogs/5wow", "month", month),
+        f"# {month} 5WOW",
+        "",
+        "<!-- Window surface: five Monday-Friday weeks. Cogs shown here remain appearances of dated Cogs. -->",
+        "",
+        *_five_wow_vertical_table(month),
+        "",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_12mf_note_template(month: str) -> str:
+    lines = [
+        _frontmatter("cogs/12mf", "month", month),
+        f"# {month} 12MF",
+        "",
+        "<!-- Window surface: twelve-month forward look from the anchor month. -->",
+        "",
+        *_forward_12_month_table(month),
+        "",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def render_annual_note_template(year: int) -> str:
     lines = [
         _frontmatter("cogs/annual", "year", str(year)),
         f"# {year}",
         "",
-        "## Carry In",
+        "## CARRY",
         "",
         "## Months",
         "",
@@ -426,6 +444,10 @@ def format_template_preview(template: str, value: str) -> str:
         return render_weekly_note_template(value)
     if template == "monthly":
         return render_monthly_note_template(value)
+    if template == "5wow":
+        return render_five_wow_note_template(value)
+    if template == "12mf":
+        return render_12mf_note_template(value)
     if template == "annual":
         year = int(value)
         return render_annual_note_template(year)
@@ -458,6 +480,8 @@ def build_create_plan(cogs_dir: Path, value: str) -> list[PlanningCreatePlanItem
                 monthly_path(month_start.isoformat(), cogs_dir),
                 render_monthly_note_template(month),
             ),
+            _plan_item("5wow", five_wow_path(month_start.isoformat(), cogs_dir), render_five_wow_note_template(month)),
+            _plan_item("12mf", forward12_path(month_start.isoformat(), cogs_dir), render_12mf_note_template(month)),
             _plan_item("annual", annual_path(month_start.isoformat(), cogs_dir), render_annual_note_template(year)),
         ]
 
@@ -467,6 +491,8 @@ def build_create_plan(cogs_dir: Path, value: str) -> list[PlanningCreatePlanItem
         _plan_item("daily", nested_daily_path(value, cogs_dir), render_daily_note_template(value)),
         _plan_item("weekly", weekly_path(value, cogs_dir), render_weekly_note_template(value)),
         _plan_item("monthly", monthly_path(value, cogs_dir), render_monthly_note_template(month)),
+        _plan_item("5wow", five_wow_path(value, cogs_dir), render_five_wow_note_template(month)),
+        _plan_item("12mf", forward12_path(value, cogs_dir), render_12mf_note_template(month)),
         _plan_item("annual", annual_path(value, cogs_dir), render_annual_note_template(date_value.year)),
     ]
 
@@ -477,7 +503,7 @@ def filter_create_plan(
 ) -> list[PlanningCreatePlanItem]:
     if kind == "all":
         return plan
-    if kind not in {"daily", "weekly", "monthly", "annual"}:
+    if kind not in {"daily", "weekly", "monthly", "5wow", "12mf", "annual"}:
         raise ValueError(f"Unsupported planning-note kind: {kind!r}")
     return [item for item in plan if item.kind == kind]
 
@@ -566,6 +592,16 @@ def build_horizon_create_plan(
             monthly_path(month_start.isoformat(), cogs_dir),
             render_monthly_note_template(month),
         )
+        by_path[five_wow_path(month_start.isoformat(), cogs_dir)] = _plan_item(
+            "5wow",
+            five_wow_path(month_start.isoformat(), cogs_dir),
+            render_five_wow_note_template(month),
+        )
+        by_path[forward12_path(month_start.isoformat(), cogs_dir)] = _plan_item(
+            "12mf",
+            forward12_path(month_start.isoformat(), cogs_dir),
+            render_12mf_note_template(month),
+        )
 
     for year in sorted({ref.year, _add_months(ref.replace(day=1), 11).year}):
         year_start = date(year, 1, 1)
@@ -618,11 +654,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--month",
         metavar="YYYY-MM",
-        help="Preview a monthly planning note and 5WOW section shape. Read-only.",
+        help="Preview monthly, 5WOW, and 12MF planning surface names. Read-only.",
     )
     parser.add_argument(
         "--template",
-        choices=("daily", "weekly", "monthly", "annual"),
+        choices=("daily", "weekly", "monthly", "5wow", "12mf", "annual"),
         help="Preview a full planning-note Markdown template. Read-only.",
     )
     parser.add_argument(
@@ -645,11 +681,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--ensure-horizon",
         action="store_true",
-        help="Create near-future daily/weekly/monthly/annual notes for manual carry landing surfaces.",
+        help="Create near-future day/week/5WOW/month/12MF/year notes for manual carry landing surfaces.",
     )
     parser.add_argument(
         "--kind",
-        choices=("daily", "weekly", "monthly", "annual", "all"),
+        choices=("daily", "weekly", "monthly", "5wow", "12mf", "annual", "all"),
         default="all",
         help="Limit --create to one planning-note kind. Defaults to all.",
     )
@@ -657,7 +693,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--for",
         dest="template_value",
         metavar="DATE",
-        help="Template/reference value: daily/weekly YYYY-MM-DD, monthly YYYY-MM, annual YYYY.",
+        help="Template/reference value: daily/weekly YYYY-MM-DD, monthly/5WOW/12MF YYYY-MM, annual YYYY.",
     )
     parser.add_argument(
         "--cogs-dir",

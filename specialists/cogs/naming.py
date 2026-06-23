@@ -88,6 +88,22 @@ def monthly_path(date_iso: str, cogs_dir: Path, style: str = "iso") -> Path:
     return cogs_dir / f"{parse_date_iso(date_iso):%Y}" / monthly_filename(date_iso, style)
 
 
+def five_wow_filename(date_iso: str) -> str:
+    return f"{parse_date_iso(date_iso):%Y-%m}-5WOW.md"
+
+
+def five_wow_path(date_iso: str, cogs_dir: Path) -> Path:
+    return cogs_dir / f"{parse_date_iso(date_iso):%Y}" / five_wow_filename(date_iso)
+
+
+def forward12_filename(date_iso: str) -> str:
+    return f"{parse_date_iso(date_iso):%Y-%m}-12MF.md"
+
+
+def forward12_path(date_iso: str, cogs_dir: Path) -> Path:
+    return cogs_dir / f"{parse_date_iso(date_iso):%Y}" / forward12_filename(date_iso)
+
+
 def annual_path(date_iso: str, cogs_dir: Path) -> Path:
     return cogs_dir / annual_filename(date_iso)
 
@@ -154,9 +170,8 @@ def annual_filename(date_iso: str) -> str:
 def five_wow_anchor(date_iso: str) -> str:
     """Return the monthly 5WOW anchor for a date.
 
-    5WOW is five weeks of weekdays: a month-shaped planning view that fits into
-    a 5x5 Mon-Fri grid. Stage 26 treats it as a monthly view/section, not as a
-    separate schema type.
+    5WOW is five weeks of weekdays: a month-shaped planning file that fits into
+    a 5x5 Mon-Fri grid.
     """
     return parse_date_iso(date_iso).strftime("%Y-%m")
 
@@ -167,6 +182,8 @@ def planned_note_filenames(date_iso: str) -> dict[str, str]:
         "daily": daily_filename(date_iso, "iso-weekday"),
         "weekly": weekly_filename(date_iso, "iso"),
         "monthly": monthly_filename(date_iso, "iso"),
+        "5wow": five_wow_filename(date_iso),
+        "12mf": forward12_filename(date_iso),
         "annual": annual_filename(date_iso),
         "five_wow_anchor": five_wow_anchor(date_iso),
     }

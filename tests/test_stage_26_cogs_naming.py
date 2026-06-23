@@ -19,6 +19,8 @@ class Stage26CogsNamingTests(unittest.TestCase):
         self.assertEqual(names["daily"], "2026-05-11 Mon.md")
         self.assertEqual(names["weekly"], "2026-W20.md")
         self.assertEqual(names["monthly"], "2026-05.md")
+        self.assertEqual(names["5wow"], "2026-05-5WOW.md")
+        self.assertEqual(names["12mf"], "2026-05-12MF.md")
         self.assertEqual(names["annual"], "2026.md")
         self.assertEqual(names["five_wow_anchor"], "2026-05")
 
@@ -74,13 +76,14 @@ class Stage26CogsNamingTests(unittest.TestCase):
             self.assertEqual(by_name["2026-05-11 Mon.md"].status, "already-current")
             self.assertEqual(by_name["loose.md"].status, "invalid")
 
-    def test_planning_preview_formats_5wow_as_monthly_anchor(self):
+    def test_planning_preview_formats_window_files_as_separate_surfaces(self):
         output = cogs_planning.format_planning_names("2026-05-11")
 
         self.assertIn("- daily: 2026-05-11 Mon.md", output)
         self.assertIn("- weekly: 2026-W20.md", output)
         self.assertIn("- monthly: 2026-05.md", output)
-        self.assertIn("- 5WOW: monthly section anchor 2026-05", output)
+        self.assertIn("- 5WOW: 2026-05-5WOW.md", output)
+        self.assertIn("- 12MF: 2026-05-12MF.md", output)
 
     def test_daily_rename_plan_preview_is_readable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -259,22 +262,24 @@ class Stage26CogsNamingTests(unittest.TestCase):
         self.assertIn("- annual note: 2026.md", output)
         self.assertIn("- first ISO week: 2026-W18.md", output)
         self.assertIn("- calendar section: monthly Mon-Sun grid", output)
-        self.assertIn("- 5WOW section: vertical weekday planning view", output)
+        self.assertIn("- 5WOW file: vertical weekday planning view", output)
+        self.assertIn("- 12MF file: twelve-month forward look", output)
         self.assertIn("| Week | Mon | Tue | Wed | Thu | Fri | Sat | Sun |", output)
         self.assertIn("| 1 |  |  |  |  | 01 | 02 | 03 |", output)
-        self.assertIn("| Week | Day | Date | Setting | Notes |", output)
+        self.assertIn("| Week | Day | Date | Cogs | Notes |", output)
         self.assertIn("| 1 | Mon | 2026-04-27 |  |  |", output)
         self.assertIn("| 1 | Fri | 2026-05-01 |  |  |", output)
 
-    def test_daily_template_preview_includes_paper_sections(self):
+    def test_daily_template_preview_is_flat_day_order_surface(self):
         output = cogs_planning.render_daily_note_template("2026-05-13")
 
         self.assertIn("node_type: cogs/daily", output)
         self.assertIn("date: 2026-05-13", output)
         self.assertIn("# Wed 13 May 2026", output)
-        self.assertIn("## Appointments & Settings", output)
-        self.assertIn("## Today", output)
-        self.assertIn("## Carry In", output)
+        self.assertIn("likely day order", output)
+        self.assertNotIn("## Appointments", output)
+        self.assertNotIn("## Today", output)
+        self.assertNotIn("## Carry", output)
 
     def test_weekly_template_preview_uses_iso_week_and_day_sections(self):
         output = cogs_planning.render_weekly_note_template("2026-05-13")
@@ -282,25 +287,44 @@ class Stage26CogsNamingTests(unittest.TestCase):
         self.assertIn("node_type: cogs/weekly", output)
         self.assertIn("week: 2026-W20", output)
         self.assertIn("# Week 20 - May 2026", output)
-        self.assertIn("## 5WOW", output)
+        self.assertIn("## CARRY", output)
+        self.assertNotIn("## 5WOW", output)
         self.assertIn("## This Week", output)
         self.assertIn("### Mon 2026-05-11", output)
         self.assertIn("### Sun 2026-05-17", output)
 
-    def test_monthly_template_preview_includes_5wow_and_day_sections(self):
+    def test_monthly_template_preview_is_month_surface_only(self):
         output = cogs_planning.render_monthly_note_template("2026-05")
 
         self.assertIn("node_type: cogs/monthly", output)
         self.assertIn("month: 2026-05", output)
         self.assertIn("## Calendar", output)
         self.assertIn("| 1 |  |  |  |  | 01 | 02 | 03 |", output)
-        self.assertIn("## 5WOW", output)
-        self.assertIn("| 1 | Mon | 2026-04-27 |  |  |", output)
-        self.assertIn("## 12-Month Forward Look", output)
-        self.assertIn("| 1 | 2026-05 |  |", output)
-        self.assertIn("| 12 | 2027-04 |  |", output)
+        self.assertIn("## CARRY", output)
+        self.assertNotIn("## 5WOW", output)
+        self.assertNotIn("## 12-Month Forward Look", output)
         self.assertIn("### Fri 2026-05-01", output)
         self.assertIn("### Sun 2026-05-31", output)
+
+    def test_5wow_template_is_separate_window_surface(self):
+        output = cogs_planning.render_five_wow_note_template("2026-06")
+
+        self.assertIn("node_type: cogs/5wow", output)
+        self.assertIn("month: 2026-06", output)
+        self.assertIn("# 2026-06 5WOW", output)
+        self.assertIn("| Week | Day | Date | Cogs | Notes |", output)
+        self.assertIn("| 1 | Mon | 2026-06-01 |  |  |", output)
+        self.assertIn("| 5 | Fri | 2026-07-03 |  |  |", output)
+
+    def test_12mf_template_is_separate_window_surface(self):
+        output = cogs_planning.render_12mf_note_template("2026-06")
+
+        self.assertIn("node_type: cogs/12mf", output)
+        self.assertIn("month: 2026-06", output)
+        self.assertIn("# 2026-06 12MF", output)
+        self.assertIn("| + | Month | Cogs | Notes |", output)
+        self.assertIn("| 1 | 2026-06 |  |  |", output)
+        self.assertIn("| 12 | 2027-05 |  |  |", output)
 
     def test_forward_12_month_rows_cross_year_boundary(self):
         rows = cogs_planning.forward_12_month_rows("2026-06")
@@ -321,6 +345,8 @@ class Stage26CogsNamingTests(unittest.TestCase):
         self.assertIn("# Wed 13 May 2026", cogs_planning.format_template_preview("daily", "2026-05-13"))
         self.assertIn("# Week 20 - May 2026", cogs_planning.format_template_preview("weekly", "2026-05-13"))
         self.assertIn("# 2026-05", cogs_planning.format_template_preview("monthly", "2026-05"))
+        self.assertIn("# 2026-05 5WOW", cogs_planning.format_template_preview("5wow", "2026-05"))
+        self.assertIn("# 2026-05 12MF", cogs_planning.format_template_preview("12mf", "2026-05"))
         self.assertIn("# 2026", cogs_planning.format_template_preview("annual", "2026"))
 
     def test_create_plan_for_date_previews_week_month_and_year_without_writing(self):
@@ -329,12 +355,14 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
             plan = cogs_planning.build_create_plan(cogs_dir, "2026-05-13")
 
-            self.assertEqual([item.kind for item in plan], ["daily", "weekly", "monthly", "annual"])
-            self.assertEqual([item.status for item in plan], ["create", "create", "create", "create"])
+            self.assertEqual([item.kind for item in plan], ["daily", "weekly", "monthly", "5wow", "12mf", "annual"])
+            self.assertEqual([item.status for item in plan], ["create", "create", "create", "create", "create", "create"])
             self.assertEqual(plan[0].path, cogs_dir / "2026" / "05" / "20" / "2026-05-13 Wed.md")
             self.assertEqual(plan[1].path, cogs_dir / "2026" / "05" / "2026-W20.md")
             self.assertEqual(plan[2].path, cogs_dir / "2026" / "2026-05.md")
-            self.assertEqual(plan[3].path, cogs_dir / "2026.md")
+            self.assertEqual(plan[3].path, cogs_dir / "2026" / "2026-05-5WOW.md")
+            self.assertEqual(plan[4].path, cogs_dir / "2026" / "2026-05-12MF.md")
+            self.assertEqual(plan[5].path, cogs_dir / "2026.md")
             self.assertFalse(plan[0].path.exists())
             self.assertIn("node_type: cogs/daily", plan[0].template)
 
@@ -344,9 +372,11 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
             plan = cogs_planning.build_create_plan(cogs_dir, "2026-05")
 
-            self.assertEqual([item.kind for item in plan], ["monthly", "annual"])
+            self.assertEqual([item.kind for item in plan], ["monthly", "5wow", "12mf", "annual"])
             self.assertEqual(plan[0].path, cogs_dir / "2026" / "2026-05.md")
-            self.assertEqual(plan[1].path, cogs_dir / "2026.md")
+            self.assertEqual(plan[1].path, cogs_dir / "2026" / "2026-05-5WOW.md")
+            self.assertEqual(plan[2].path, cogs_dir / "2026" / "2026-05-12MF.md")
+            self.assertEqual(plan[3].path, cogs_dir / "2026.md")
 
     def test_create_plan_marks_existing_targets_without_overwriting(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -368,10 +398,12 @@ class Stage26CogsNamingTests(unittest.TestCase):
             output = cogs_planning.format_create_plan(cogs_dir, "2026-05-13")
 
             self.assertIn("Planning-note create preview for 2026-05-13", output)
-            self.assertIn("Summary: create: 4", output)
+            self.assertIn("Summary: create: 6", output)
             self.assertIn("create daily", output)
             self.assertIn("create weekly", output)
             self.assertIn("create monthly", output)
+            self.assertIn("create 5wow", output)
+            self.assertIn("create 12mf", output)
             self.assertIn("create annual", output)
             self.assertIn("No files written.", output)
 
@@ -402,7 +434,7 @@ class Stage26CogsNamingTests(unittest.TestCase):
             monthly = cogs_dir / "2026" / "2026-05.md"
             self.assertEqual(results, [f"created monthly: {monthly}"])
             self.assertTrue(monthly.exists())
-            self.assertIn("## 5WOW", monthly.read_text())
+            self.assertNotIn("## 5WOW", monthly.read_text())
             self.assertFalse((cogs_dir / "2026.md").exists())
 
     def test_create_planning_notes_refuses_to_overwrite_existing_file(self):
@@ -425,17 +457,23 @@ class Stage26CogsNamingTests(unittest.TestCase):
 
             weekly = cogs_dir / "2026" / "05" / "2026-W20.md"
             monthly = cogs_dir / "2026" / "2026-05.md"
+            five_wow = cogs_dir / "2026" / "2026-05-5WOW.md"
+            twelve_mf = cogs_dir / "2026" / "2026-05-12MF.md"
             annual = cogs_dir / "2026.md"
             self.assertEqual(
                 results,
                 [
                     f"created weekly: {weekly}",
                     f"created monthly: {monthly}",
+                    f"created 5wow: {five_wow}",
+                    f"created 12mf: {twelve_mf}",
                     f"created annual: {annual}",
                 ],
             )
             self.assertTrue(weekly.exists())
             self.assertTrue(monthly.exists())
+            self.assertTrue(five_wow.exists())
+            self.assertTrue(twelve_mf.exists())
             self.assertTrue(annual.exists())
             self.assertFalse((cogs_dir / "2026" / "05" / "20" / "2026-05-13 Wed.md").exists())
 
@@ -450,6 +488,8 @@ class Stage26CogsNamingTests(unittest.TestCase):
             self.assertTrue((cogs_dir / "2026" / "06" / "2026-W26.md").exists())
             self.assertTrue((cogs_dir / "2026" / "09" / "2026-W38.md").exists())
             self.assertTrue((cogs_dir / "2026" / "2026-08.md").exists())
+            self.assertTrue((cogs_dir / "2026" / "2026-08-5WOW.md").exists())
+            self.assertTrue((cogs_dir / "2026" / "2026-08-12MF.md").exists())
             self.assertTrue((cogs_dir / "2027.md").exists())
             self.assertIn("created daily:", "\n".join(results))
             self.assertIn("created annual:", "\n".join(results))

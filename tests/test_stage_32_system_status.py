@@ -181,7 +181,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
             self.assertIn("- total: 2", output)
             self.assertIn("- memory retrieval: enabled", output)
             self.assertIn("- memory context: disabled", output)
-            self.assertIn("nightly: Nightly Cogs carry safety net", output)
+            self.assertIn("nightly: Astro daily service and Cogs carry handoff", output)
             self.assertIn("sprockets-cogs-nightly.timer", output)
 
     def test_main_accepts_argv_for_direct_cli_tests(self):

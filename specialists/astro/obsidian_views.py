@@ -168,9 +168,27 @@ LIMIT 1
 ### This Month
 
 ```dataview
-TABLE WITHOUT ID file.link AS Month, link(file.path + "#5WOW", "5WOW") AS "5WOW"
+TABLE WITHOUT ID file.link AS Month, month AS Month
 FROM "Cogs"
 WHERE node_type = "cogs/monthly" AND month = dateformat(date(today), "yyyy-MM")
+LIMIT 1
+```
+
+### 5WOW
+
+```dataview
+TABLE WITHOUT ID file.link AS "5WOW", month AS Month
+FROM "Cogs"
+WHERE node_type = "cogs/5wow" AND month = dateformat(date(today), "yyyy-MM")
+LIMIT 1
+```
+
+### 12MF
+
+```dataview
+TABLE WITHOUT ID file.link AS "12MF", month AS Month
+FROM "Cogs"
+WHERE node_type = "cogs/12mf" AND month = dateformat(date(today), "yyyy-MM")
 LIMIT 1
 ```
 
@@ -322,14 +340,30 @@ WHERE node_type = "cogs/weekly" AND week = dateformat(date(today), "kkkk-'W'WW")
 LIMIT 1
 ```
 
-### This Month and 5WOW
-
-The current 5WOW planning view lives in the current monthly Cogs note.
+### This Month
 
 ```dataview
-TABLE WITHOUT ID file.link AS Month, link(file.path + "#5WOW", "Open 5WOW") AS "5WOW"
+TABLE WITHOUT ID file.link AS Month, month AS Month
 FROM "Cogs"
 WHERE node_type = "cogs/monthly" AND month = dateformat(date(today), "yyyy-MM")
+LIMIT 1
+```
+
+### 5WOW
+
+```dataview
+TABLE WITHOUT ID file.link AS "5WOW", month AS Month
+FROM "Cogs"
+WHERE node_type = "cogs/5wow" AND month = dateformat(date(today), "yyyy-MM")
+LIMIT 1
+```
+
+### 12MF
+
+```dataview
+TABLE WITHOUT ID file.link AS "12MF", month AS Month
+FROM "Cogs"
+WHERE node_type = "cogs/12mf" AND month = dateformat(date(today), "yyyy-MM")
 LIMIT 1
 ```
 
@@ -348,7 +382,7 @@ LIMIT 1
 
 - Daily notes are nested under `Cogs/YYYY/MM/WW/`.
 - Weekly notes are nested under `Cogs/YYYY/MM/`.
-- Monthly notes are nested under `Cogs/YYYY/`.
+- Monthly, 5WOW, and 12MF notes are nested under `Cogs/YYYY/`.
 - Annual notes live at `Cogs/YYYY.md`.
 
 ## Recent Daily Notes

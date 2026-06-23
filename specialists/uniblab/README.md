@@ -4,9 +4,9 @@ Uniblab is the operations, health, status, and readiness specialist.
 
 ## Responsibility
 
-Uniblab owns service status, timer status, local model checks, embedding model
-checks, runtime path posture, review count, backup/sync visibility, and future
-readiness checks.
+Uniblab owns service status, timer status, scheduled service harnesses, local
+model checks, embedding model checks, runtime path posture, review count,
+backup/sync visibility, and future readiness checks.
 
 ## Runtime Form
 
