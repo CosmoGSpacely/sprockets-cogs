@@ -110,6 +110,28 @@ class Stage145CarryPrimitiveTests(unittest.TestCase):
                 "  - [ ] return battery",
             ))
 
+    def test_marked_carry_plan_previews_source_destination_and_preserved_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            daily_dir = Path(tmp)
+            note = vault.ensure_daily_note("2026-05-01", daily_dir)
+            note.write_text(
+                note.read_text()
+                + "- [>] WALMART\n"
+                  "  - [ ] return battery\n"
+                  "  - [ ] buy vitamins\n"
+            )
+
+            candidates = carry.scan_marked_carry_notes(daily_dir, through_date="2026-05-03")
+            plan = carry.build_plan_document(candidates, "2026-05-04")
+            preview = carry.preview_apply_plan_document(plan)
+
+            self.assertEqual(len(candidates), 1)
+            self.assertIn("keep [>] in 2026-05-01", preview)
+            self.assertIn("append [ ] to 2026-05-04: WALMART", preview)
+            self.assertIn("preserve:", preview)
+            self.assertIn("return battery", preview)
+            self.assertIn("buy vitamins", preview)
+
     def test_print_candidates_summarizes_file_line_and_block(self):
         with tempfile.TemporaryDirectory() as tmp:
             daily_dir = Path(tmp)

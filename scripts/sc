@@ -20,6 +20,7 @@ Commands:
   closeout  Uniblab: append stage closeout results         -> scripts/stage-closeout
   carry     Astro/Cogs: carry command surface              -> scripts/carry
   backup    Uniblab: runtime backup surface                -> scripts/sc-backup
+  archive   Uniblab: processed/ignored intake report       -> scripts/archive-report
 
 This dispatcher only delegates. It does not merge services or duplicate
 specialist logic.
@@ -36,6 +37,7 @@ command_help() {
         closeout) echo "closeout: Uniblab -> scripts/stage-closeout";;
         carry)    echo "carry: Astro/Cogs -> scripts/carry";;
         backup)   echo "backup: Uniblab -> scripts/sc-backup";;
+        archive)  echo "archive: Uniblab -> scripts/archive-report";;
         *) echo "Unknown command for help: ${1:-}"; usage; exit 2;;
     esac
 }
@@ -100,6 +102,10 @@ case "$cmd" in
     backup)
         require_script scripts/sc-backup
         exec "$ROOT/scripts/sc-backup" "$@"
+        ;;
+    archive)
+        require_script scripts/archive-report
+        exec "$ROOT/scripts/archive-report" "$@"
         ;;
     *)
         echo "sc: unknown command: $cmd" >&2

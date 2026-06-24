@@ -81,6 +81,7 @@ def apply_cogs_item_format(
         if raw_span:
             formatted = _ensure_span(formatted, raw_span)
         formatted = _move_leading_time_to_front(formatted)
+        formatted = _strip_cogs_date_locator_residue(formatted)
         if formatted == original:
             continue
         node["item_text"] = formatted
@@ -121,6 +122,34 @@ def _move_leading_time_to_front(text: str) -> str:
     after = normalized[match.end():].strip()
     remainder = " ".join(part for part in [before, after] if part)
     return f"{token} {remainder}".strip()
+
+
+def _strip_cogs_date_locator_residue(text: str) -> str:
+    """Remove date words that should locate the Cog, not appear in its label."""
+
+    cleaned = text.strip()
+    if not cleaned:
+        return cleaned
+
+    cleaned = re.sub(r"\b\d{4}-\d{2}-\d{2}\b", " ", cleaned)
+    cleaned = re.sub(
+        r"\b(?:today|tonight|tomorrow|this\s+weekend|next\s+weekend|"
+        r"this\s+week|next\s+week|this\s+month|later\s+this\s+month|"
+        r"next\s+month|upcoming\s+month)\b",
+        " ",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"\b(?:next\s+)?(?:mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|"
+        r"thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b\s*$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\b(?:at|on|by|for)\s*$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    return cleaned
 
 
 def _string(value: object) -> str:

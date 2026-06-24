@@ -18,6 +18,42 @@ class Stage106RuntimeTimeContextTests(TestCase):
         self.assertEqual(normalize_cogs_time_text("YOGA 3:30pm"), "YOGA 3:30p")
         self.assertEqual(normalize_cogs_time_text("CRAFT FAIR 8am to 2pm"), "CRAFT FAIR 8a-2p")
 
+    def test_apply_cogs_item_format_removes_date_locator_residue(self):
+        raw_nodes = [{"raw": "10a DENTIST Thursday", "type_hint": "appointment"}]
+        classified = [
+            {
+                "node_type": "cogs/daily",
+                "title": "DENTIST 2026-06-25 at 10am",
+                "item_text": "DENTIST 2026-06-25 at 10am",
+                "date": "2026-06-25",
+                "confidence": "high",
+            }
+        ]
+
+        result, decisions = apply_cogs_item_format(raw_nodes, classified)
+
+        self.assertEqual(result[0]["item_text"], "10a DENTIST")
+        self.assertEqual(result[0]["title"], "10a DENTIST")
+        self.assertEqual(len(decisions), 1)
+
+    def test_apply_cogs_item_format_removes_setting_date_locator(self):
+        raw_nodes = [{"raw": "WALMART Saturday", "type_hint": "setting"}]
+        classified = [
+            {
+                "node_type": "cogs/daily",
+                "title": "WALMART Saturday",
+                "item_text": "WALMART Saturday",
+                "date": "2026-06-27",
+                "confidence": "high",
+            }
+        ]
+
+        result, decisions = apply_cogs_item_format(raw_nodes, classified)
+
+        self.assertEqual(result[0]["item_text"], "WALMART")
+        self.assertEqual(result[0]["title"], "WALMART")
+        self.assertEqual(len(decisions), 1)
+
     def test_apply_cogs_item_format_restores_span_from_raw_text(self):
         raw_nodes = [{"raw": "Craft fair 8am to 2pm tomorrow", "type_hint": "appointment"}]
         classified = [

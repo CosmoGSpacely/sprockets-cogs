@@ -59,6 +59,22 @@ def scan_daily_notes(
     through_date: str | None = None,
 ) -> list[CarryCandidate]:
     """Return open top-level Cogs blocks from daily notes through through_date."""
+    return _scan_daily_notes_for_states(daily_dir, through_date, {" "})
+
+
+def scan_marked_carry_notes(
+    daily_dir: Path = DAILY_DIR,
+    through_date: str | None = None,
+) -> list[CarryCandidate]:
+    """Return manually marked `[>]` Cogs blocks from daily notes through through_date."""
+    return _scan_daily_notes_for_states(daily_dir, through_date, {">"})
+
+
+def _scan_daily_notes_for_states(
+    daily_dir: Path,
+    through_date: str | None,
+    states: set[str],
+) -> list[CarryCandidate]:
     if not daily_dir.exists():
         return []
 
@@ -74,7 +90,7 @@ def scan_daily_notes(
         if date > cutoff:
             continue
         post = frontmatter.load(str(path))
-        for block in parse_cogs_blocks(post.content, states={" "}):
+        for block in parse_cogs_blocks(post.content, states=states):
             candidates.append(CarryCandidate(path=path, date=date, block=block))
     candidates.sort(key=lambda item: (item.date, item.path.name, item.block.start_line))
     return candidates
@@ -293,11 +309,15 @@ def preview_apply_plan_document(plan: dict[str, Any]) -> str:
         action = item["action"]
         item_text = item["item_text"]
         if action == "carry":
-            lines.append(f"[{index}] mark [>] in {source_ref}: {item_text}")
+            marker = "keep [>]" if item["lines"][0].startswith("- [>]") else "mark [>]"
+            lines.append(f"[{index}] {marker} in {source_ref}: {item_text}")
             lines.append(f"    append [ ] to {item['destination_date']}: {item_text}")
+            lines.extend(_preview_preserved_lines(item))
         elif action == "schedule":
-            lines.append(f"[{index}] mark [>] in {source_ref}: {item_text}")
+            marker = "keep [>]" if item["lines"][0].startswith("- [>]") else "mark [>]"
+            lines.append(f"[{index}] {marker} in {source_ref}: {item_text}")
             lines.append(f"    schedule [ ] on {item['destination_date']}: {item_text}")
+            lines.extend(_preview_preserved_lines(item))
         elif action == "drop":
             lines.append(f"[{index}] mark [-] in {source_ref}: {item_text}")
         elif action == "done":
@@ -307,11 +327,20 @@ def preview_apply_plan_document(plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _preview_preserved_lines(item: dict[str, Any]) -> list[str]:
+    preserved = item.get("lines", [])[1:]
+    if not preserved:
+        return []
+    lines = ["    preserve:"]
+    lines.extend(f"      {line}" for line in preserved)
+    return lines
+
+
 def _find_current_block(content: str, item: dict[str, Any]) -> CogsBlock:
     source = item["source"]
     expected_lines = item["lines"]
     start_line = source["line"] - 1
-    for block in parse_cogs_blocks(content, states={" "}):
+    for block in parse_cogs_blocks(content, states={" ", ">"}):
         if block.start_line == start_line and list(block.lines) == expected_lines:
             return block
     raise ValueError(f"source block changed at {Path(source['path']).name}:{source['line']}")
@@ -401,6 +430,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Report open carry candidates. Read-only; no vault writes.",
     )
     parser.add_argument(
+        "--marked-list",
+        action="store_true",
+        help="Report manually marked [>] carry candidates. Read-only; no vault writes.",
+    )
+    parser.add_argument(
         "--through",
         default=None,
         help="YYYY-MM-DD cutoff for scanned daily notes. Defaults to today. Read-only unless used with --apply.",
@@ -409,6 +443,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--plan",
         action="store_true",
         help="Preview a carry-all plan. Read-only unless paired with --out.",
+    )
+    parser.add_argument(
+        "--marked-plan",
+        action="store_true",
+        help="Preview a plan from manually marked [>] carry candidates. Read-only unless paired with --out.",
     )
     parser.add_argument(
         "--to",
@@ -477,6 +516,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     elif args.list:
         candidates = scan_daily_notes(through_date=args.through)
         print_candidates(candidates)
+    elif args.marked_list:
+        candidates = scan_marked_carry_notes(through_date=args.through)
+        print_candidates(candidates)
     elif args.plan:
         candidates = scan_daily_notes(through_date=args.through)
         if args.out:
@@ -485,9 +527,17 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(f"Wrote carry plan: {args.out}")
         else:
             print(preview_plan(build_default_plan(candidates, args.to)))
+    elif args.marked_plan:
+        candidates = scan_marked_carry_notes(through_date=args.through)
+        plan = build_plan_document(candidates, args.to)
+        if args.out:
+            write_plan_document(plan, Path(args.out))
+            print(f"Wrote carry plan: {args.out}")
+        else:
+            print(preview_apply_plan_document(plan))
     else:
         parser.error(
-            "choose --list, --plan, --validate-plan, --preview-plan, "
+            "choose --list, --marked-list, --plan, --marked-plan, --validate-plan, --preview-plan, "
             "--preview-apply, --check-plan, or --apply"
         )
 
