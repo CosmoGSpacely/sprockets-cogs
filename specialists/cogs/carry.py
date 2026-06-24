@@ -537,7 +537,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(preview_apply_plan_document(plan))
     else:
         parser.error(
-            "choose --list, --marked-list, --plan, --marked-plan, --validate-plan, --preview-plan, "
+            "choose --list, --plan, --marked-list, --marked-plan, --validate-plan, --preview-plan, "
             "--preview-apply, --check-plan, or --apply"
         )
 

@@ -20,6 +20,10 @@ Commands:
   closeout  Uniblab: append stage closeout results         -> scripts/stage-closeout
   carry     Astro/Cogs: carry command surface              -> scripts/carry
   backup    Uniblab: runtime backup surface                -> scripts/sc-backup
+  vault-backup
+            Uniblab: vault backup preview                  -> scripts/sc-vault-backup
+  retention Uniblab: archive/trace/backup pressure         -> scripts/retention
+  ops       Uniblab: one-command operations floor          -> scripts/ops
   archive   Uniblab: processed/ignored intake report       -> scripts/archive-report
 
 This dispatcher only delegates. It does not merge services or duplicate
@@ -37,6 +41,9 @@ command_help() {
         closeout) echo "closeout: Uniblab -> scripts/stage-closeout";;
         carry)    echo "carry: Astro/Cogs -> scripts/carry";;
         backup)   echo "backup: Uniblab -> scripts/sc-backup";;
+        vault-backup) echo "vault-backup: Uniblab -> scripts/sc-vault-backup";;
+        retention) echo "retention: Uniblab -> scripts/retention";;
+        ops)      echo "ops: Uniblab -> scripts/ops";;
         archive)  echo "archive: Uniblab -> scripts/archive-report";;
         *) echo "Unknown command for help: ${1:-}"; usage; exit 2;;
     esac
@@ -102,6 +109,18 @@ case "$cmd" in
     backup)
         require_script scripts/sc-backup
         exec "$ROOT/scripts/sc-backup" "$@"
+        ;;
+    vault-backup)
+        require_script scripts/sc-vault-backup
+        exec "$ROOT/scripts/sc-vault-backup" "$@"
+        ;;
+    retention)
+        require_script scripts/retention
+        exec "$ROOT/scripts/retention" "$@"
+        ;;
+    ops)
+        require_script scripts/ops
+        exec "$ROOT/scripts/ops" "$@"
         ;;
     archive)
         require_script scripts/archive-report

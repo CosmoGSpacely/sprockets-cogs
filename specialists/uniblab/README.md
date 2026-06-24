@@ -19,6 +19,9 @@ that proves useful.
 - `job_status.py`
 - `job_supervisor.py`
 - `friction.py`
+- `ops.py`
+- `retention.py`
+- `vault_backup.py`
 - `scripts/sc`
 - `scripts/status`
 - `scripts/job-status`
@@ -28,6 +31,9 @@ that proves useful.
 - `scripts/sc-backup --preview`
 - `scripts/sc-backup --status`
 - `scripts/sc-backup --create`
+- `scripts/sc vault-backup --preview`
+- `scripts/sc retention`
+- `scripts/sc ops`
 
 ## Boundaries
 
@@ -37,6 +43,12 @@ that proves useful.
   duplicate specialist logic or merge independent services.
 - SC backup creation writes only to an explicit or default backup directory; it
   never processes `.input` files or mutates the vault.
+- Vault backup preview is separate from SC runtime backup. Syncthing is treated
+  as sync, not point-in-time backup.
+- Retention reports are read-only. They recommend cleanup but do not delete
+  archive, trace, output, backup, or queue files.
+- Operations summaries may report whether a local env file exists, but they
+  never print secret values.
 - Model warmup and residency policy should be explicit before it becomes
   automated.
 - Friction records are operational JSONL outside the vault; they turn repeated

@@ -95,6 +95,9 @@ scripts/pilot3-telegram-once
 scripts/pilot3-telegram-watch
 scripts/review --count
 scripts/sc-backup --status
+scripts/sc vault-backup --preview
+scripts/sc retention
+scripts/sc ops
 ```
 
 Useful preview/probe commands:
