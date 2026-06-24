@@ -171,6 +171,7 @@ def write_input_file(
     input_dir: Path,
     *,
     overwrite: bool = False,
+    unique: bool = False,
 ) -> InputWriteResult:
     """
     Atomically write an envelope into an input queue.
@@ -182,6 +183,8 @@ def write_input_file(
 
     input_dir.mkdir(parents=True, exist_ok=True)
     final_path = input_dir / input_filename(envelope)
+    if unique and not overwrite:
+        final_path = unique_path(final_path)
     if final_path.exists() and not overwrite:
         raise FileExistsError(f"input file already exists: {final_path}")
 
@@ -190,3 +193,15 @@ def write_input_file(
     temp_path.write_text(rendered, encoding="utf-8")
     temp_path.replace(final_path)
     return InputWriteResult(path=final_path, wrote=True, temporary_path=temp_path)
+
+
+def unique_path(path: Path) -> Path:
+    """Return a non-existing sibling path by appending a numeric suffix."""
+
+    if not path.exists():
+        return path
+    for index in range(2, 1000):
+        candidate = path.with_name(f"{path.stem}-{index}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+    raise FileExistsError(f"could not find unique path for: {path}")

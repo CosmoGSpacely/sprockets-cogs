@@ -24,6 +24,7 @@ Commands:
             Uniblab: vault backup preview                  -> scripts/sc-vault-backup
   retention Uniblab: archive/trace/backup pressure         -> scripts/retention
   ops       Uniblab: one-command operations floor          -> scripts/ops
+  adapters  Orbit: adapter intake console                  -> scripts/adapters
   archive   Uniblab: processed/ignored intake report       -> scripts/archive-report
 
 This dispatcher only delegates. It does not merge services or duplicate
@@ -44,6 +45,7 @@ command_help() {
         vault-backup) echo "vault-backup: Uniblab -> scripts/sc-vault-backup";;
         retention) echo "retention: Uniblab -> scripts/retention";;
         ops)      echo "ops: Uniblab -> scripts/ops";;
+        adapters) echo "adapters: Orbit -> scripts/adapters";;
         archive)  echo "archive: Uniblab -> scripts/archive-report";;
         *) echo "Unknown command for help: ${1:-}"; usage; exit 2;;
     esac
@@ -121,6 +123,10 @@ case "$cmd" in
     ops)
         require_script scripts/ops
         exec "$ROOT/scripts/ops" "$@"
+        ;;
+    adapters)
+        require_script scripts/adapters
+        exec "$ROOT/scripts/adapters" "$@"
         ;;
     archive)
         require_script scripts/archive-report

@@ -752,9 +752,21 @@ def send_processed_ack(session_id: str, nodes: list[NodeBase], response_context:
 
 
 def archive_input(processing_path: Path) -> None:
-    dest = ARCHIVE_DIR / processing_path.name
+    dest = collision_safe_archive_path(ARCHIVE_DIR / processing_path.name)
     shutil.move(str(processing_path), dest)
     log.info("Archived → %s", dest)
+
+
+def collision_safe_archive_path(path: Path) -> Path:
+    """Return an archive path that preserves existing input history."""
+
+    if not path.exists():
+        return path
+    for index in range(2, 1000):
+        candidate = path.with_name(f"{path.stem}-{index}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+    raise FileExistsError(f"could not find archive destination for: {path}")
 
 
 def ensure_runtime_dirs() -> None:

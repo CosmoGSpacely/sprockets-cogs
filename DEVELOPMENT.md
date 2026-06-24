@@ -95,6 +95,7 @@ scripts/sc-backup --status
 scripts/sc vault-backup --preview
 scripts/sc retention
 scripts/sc ops
+scripts/sc adapters status
 ```
 
 Guarded source writers:
@@ -102,6 +103,8 @@ Guarded source writers:
 ```bash
 scripts/pilot3-telegram-once
 scripts/pilot3-telegram-watch
+scripts/sc adapters ingest --source discord --text "Capture this"
+scripts/sc adapters reject --source discord --reason "not allowlisted" --text "..."
 scripts/input-adapter-preview --write --input-dir /path/to/input
 scripts/rich-input-proof --help
 ```

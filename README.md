@@ -98,6 +98,8 @@ scripts/sc-backup --status
 scripts/sc vault-backup --preview
 scripts/sc retention
 scripts/sc ops
+scripts/sc adapters status
+scripts/sc adapters ingest --source discord --text "Capture this"
 ```
 
 Useful preview/probe commands:
@@ -108,6 +110,7 @@ scripts/memory-demo "tractor tire"
 scripts/rich-input-proof --help
 scripts/collections-bridge --help
 scripts/adapter-status
+scripts/adapter-reject --help
 ```
 
 ## Repository Map
