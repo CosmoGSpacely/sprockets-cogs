@@ -44,6 +44,7 @@ class Stage54TelegramAdapterTests(unittest.TestCase):
 
         self.assertEqual(message.update_id, 1001)
         self.assertEqual(message.message_id, 42)
+        self.assertEqual(message.message_date, 1770000000)
         self.assertEqual(message.chat_id, 888)
         self.assertEqual(message.from_user_id, 777)
         self.assertEqual(message.username, "cosmo")
@@ -69,6 +70,11 @@ class Stage54TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(envelope.source_id, "chat-888-message-42")
         self.assertEqual(envelope.idempotency_key, "telegram:888:42")
         self.assertEqual(rendered.content, "Capture from Telegram")
+        self.assertEqual(
+            rendered["metadata"]["source_timestamp"],
+            "2026-02-02T02:40:00+00:00",
+        )
+        self.assertEqual(rendered["metadata"]["telegram_message_date"], "1770000000")
 
     def test_allowlist_requires_configured_user_or_chat(self):
         message = telegram_adapter.parse_telegram_update(sample_update())

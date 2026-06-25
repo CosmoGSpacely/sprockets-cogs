@@ -6,6 +6,7 @@ import shutil
 import time
 import uuid as uuid_lib
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 import frontmatter
@@ -48,6 +49,7 @@ from substrate.slug_utils import slugify
 from specialists.sprockets.specialist import SprocketsSpecialist, SprocketsSpecialistConfig
 import specialists.orbit.adapters.telegram_response as telegram_response
 from specialists.cogs.time_context import apply_bounded_recurrence_context, apply_runtime_date_context
+from specialists.cogs.corrections import apply_correction_command, parse_correction_command
 from specialists.sprockets.vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,
     build_graph,
@@ -75,7 +77,9 @@ OUTPUT_DIR     = Path(os.environ.get("SPROCKETS_COGS_OUTPUT_DIR", str(SC_ROOT / 
 VAULT_DIR      = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(DEFAULT_VAULT_DIR)))
 MEMORY_TRACE_PATH_ENV = "SPROCKETS_COGS_MEMORY_TRACE_PATH"
 MEMORY_TRACE_FILENAME = "memory-parent-traces.jsonl"
+CORRECTION_AUDIT_FILENAME = "cogs-correction-audit.jsonl"
 STRUCTURAL_GUARD_ENV = "SPROCKETS_COGS_STRUCTURAL_GUARD"
+DEFAULT_TIMEZONE = "America/New_York"
 
 DAILY_DIR      = VAULT_DIR / "Cogs"
 REVIEW_DIR     = VAULT_DIR / "review"
@@ -1098,6 +1102,121 @@ def route_openai_fallback_to_review(
         )
     return True
 
+
+def source_datetime_from_frontmatter(metadata: dict) -> datetime:
+    """Return the source timestamp for an adapter input, falling back to now."""
+
+    timestamp = ""
+    direct = metadata.get("source_timestamp")
+    if isinstance(direct, str):
+        timestamp = direct
+    nested = metadata.get("metadata")
+    if not timestamp and isinstance(nested, dict):
+        nested_timestamp = nested.get("source_timestamp")
+        if isinstance(nested_timestamp, str):
+            timestamp = nested_timestamp
+        elif nested.get("telegram_message_date") is not None:
+            try:
+                timestamp = datetime.fromtimestamp(
+                    int(str(nested["telegram_message_date"])),
+                    tz=ZoneInfo("UTC"),
+                ).isoformat()
+            except (TypeError, ValueError, OSError):
+                timestamp = ""
+
+    if timestamp:
+        normalized = timestamp.strip()
+        if normalized.endswith("Z"):
+            normalized = normalized[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=ZoneInfo(DEFAULT_TIMEZONE))
+            return parsed.astimezone(ZoneInfo(DEFAULT_TIMEZONE))
+        except ValueError:
+            log.warning("Ignoring invalid source timestamp: %r", timestamp)
+
+    return datetime.now()
+
+
+def correction_audit_path() -> Path:
+    """Return the current Cogs correction audit JSONL path."""
+
+    return OUTPUT_DIR / CORRECTION_AUDIT_FILENAME
+
+
+def write_correction_audit(
+    *,
+    session_id: str,
+    source_text: str,
+    correction_kind: str,
+    status: str,
+    message: str,
+    source_date: str,
+) -> None:
+    """Append a compact audit record for correction command handling."""
+
+    path = correction_audit_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "session_id": session_id,
+        "source_date": source_date,
+        "correction_kind": correction_kind,
+        "status": status,
+        "message": message,
+        "source_text": source_text.strip(),
+    }
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def handle_correction_input(
+    *,
+    content: str,
+    source_date: str,
+    session_id: str,
+    response_context: ResponseContext,
+) -> bool:
+    """Apply a narrow correction/removal command before ordinary capture."""
+
+    correction = parse_correction_command(content, source_date)
+    if correction is None:
+        return False
+    result = apply_correction_command(correction, DAILY_DIR)
+    write_correction_audit(
+        session_id=session_id,
+        source_text=content,
+        correction_kind=correction.kind,
+        status=result.status,
+        message=result.message,
+        source_date=source_date,
+    )
+    if result.status == "corrected":
+        send_source_response(
+            response_context=response_context,
+            text=f"Corrected: {result.message}",
+        )
+        log.info("Correction applied: %s", result.message)
+    else:
+        write_to_review(
+            {
+                "node_type": "review/proposal",
+                "title": "Cogs correction requires review",
+                "item_text": content.strip(),
+                "date": source_date,
+                "confidence": "low",
+            },
+            f"correction_command_review: {result.message}",
+        )
+        send_source_response(
+            response_context=response_context,
+            text="Correction needs review.",
+            response_type=ResponseType.REVIEW_REQUIRED,
+        )
+        log.warning("Correction routed to review: %s", result.message)
+    return True
+
 # ── Main pipeline ──────────────────────────────────────────────────────────────
 
 def process_input(file_path: Path) -> None:
@@ -1113,8 +1232,17 @@ def process_input(file_path: Path) -> None:
             post.metadata,
             fallback_session_id=session_id,
         )
-        source_now = datetime.now()
+        source_now = source_datetime_from_frontmatter(post.metadata)
         source_date = source_now.strftime("%Y-%m-%d")
+
+        if handle_correction_input(
+            content=content,
+            source_date=source_date,
+            session_id=session_id,
+            response_context=response_context,
+        ):
+            archive_input(processing_path)
+            return
 
         context    = build_context_for_input(content)
         raw_nodes  = extract_nodes(content, now=source_now)

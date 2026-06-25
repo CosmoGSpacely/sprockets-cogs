@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 from typing import Mapping, Any
@@ -32,6 +33,7 @@ class TelegramMessage:
     text: str
     username: str = ""
     chat_type: str = ""
+    message_date: int = 0
 
 
 def _as_int(value: Any, field_name: str) -> int:
@@ -63,6 +65,7 @@ def parse_telegram_update(update: Mapping[str, Any]) -> TelegramMessage:
     return TelegramMessage(
         update_id=_as_int(update.get("update_id"), "update_id"),
         message_id=_as_int(message.get("message_id"), "message_id"),
+        message_date=_as_int(message.get("date"), "message.date"),
         chat_id=_as_int(chat.get("id"), "chat.id"),
         from_user_id=_as_int(sender.get("id"), "from.id"),
         username=str(sender.get("username") or ""),
@@ -116,6 +119,20 @@ def telegram_envelope(message: TelegramMessage) -> InputEnvelope:
     """Convert a normalized Telegram message into the shared input envelope."""
 
     source_id = f"chat-{message.chat_id}-message-{message.message_id}"
+    metadata = {
+        "telegram_update_id": str(message.update_id),
+        "telegram_message_id": str(message.message_id),
+        "telegram_chat_id": str(message.chat_id),
+        "telegram_from_user_id": str(message.from_user_id),
+        "telegram_username": message.username,
+        "telegram_chat_type": message.chat_type,
+    }
+    if message.message_date:
+        metadata["telegram_message_date"] = str(message.message_date)
+        metadata["source_timestamp"] = datetime.fromtimestamp(
+            message.message_date,
+            tz=timezone.utc,
+        ).isoformat()
     return InputEnvelope(
         content=message.text,
         source=TELEGRAM_SOURCE,
@@ -123,14 +140,7 @@ def telegram_envelope(message: TelegramMessage) -> InputEnvelope:
         modality="text",
         source_id=source_id,
         idempotency_key=f"telegram:{message.chat_id}:{message.message_id}",
-        metadata={
-            "telegram_update_id": str(message.update_id),
-            "telegram_message_id": str(message.message_id),
-            "telegram_chat_id": str(message.chat_id),
-            "telegram_from_user_id": str(message.from_user_id),
-            "telegram_username": message.username,
-            "telegram_chat_type": message.chat_type,
-        },
+        metadata=metadata,
     )
 
 

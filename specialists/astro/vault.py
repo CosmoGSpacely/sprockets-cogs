@@ -235,14 +235,72 @@ def correct_cog_locator(
     )
 
 
+def replace_open_cog_text(
+    query: str,
+    replacement_text: str,
+    daily_dir: Path = DEFAULT_DAILY_DIR,
+) -> CorrectionResult:
+    """Replace text in all clearly matched open or carried Cogs."""
+
+    matches = _find_blocks(query, daily_dir, states={" ", ">"})
+    if not matches:
+        return CorrectionResult("review", f"no open Cog matched {query!r}")
+    for source_path, block in matches:
+        content = source_path.read_text()
+        lines = content.splitlines()
+        original = lines[block.start_line]
+        state = block.state
+        lines[block.start_line] = TASK_LINE_RE.sub(
+            f"- [{state}] {replacement_text}",
+            original,
+            count=1,
+        )
+        note = f"  correction: replaced {query!r}"
+        if note not in lines[block.start_line + 1:block.end_line + 2]:
+            lines.insert(block.start_line + 1, note)
+        trailing_newline = "\n" if content.endswith("\n") else ""
+        source_path.write_text("\n".join(lines) + trailing_newline)
+    return CorrectionResult("corrected", f"replaced {query!r} with {replacement_text!r} in {len(matches)} Cog(s)")
+
+
+def mark_blocks_corrected_by_text(path: Path, item_text: str, reason: str) -> int:
+    """Mark open blocks containing item_text as corrected/dropped."""
+
+    if not path.exists():
+        return 0
+    content = path.read_text()
+    blocks = [
+        block
+        for block in parse_cogs_blocks(content, states={" "})
+        if item_text.lower() in block.item_text.lower()
+    ]
+    if not blocks:
+        return 0
+    lines = content.splitlines()
+    offset = 0
+    for block in blocks:
+        line_index = block.start_line + offset
+        lines[line_index] = TASK_LINE_RE.sub("- [-] " + r"\g<text>", lines[line_index], count=1)
+        note = f"  correction: {reason}"
+        lines.insert(line_index + 1, note)
+        offset += 1
+    trailing_newline = "\n" if content.endswith("\n") else ""
+    path.write_text("\n".join(lines) + trailing_newline)
+    return len(blocks)
+
+
 def _find_open_blocks(query: str, daily_dir: Path) -> list[tuple[Path, CogsBlock]]:
+    return _find_blocks(query, daily_dir, states={" "})
+
+
+def _find_blocks(query: str, daily_dir: Path, *, states: set[str]) -> list[tuple[Path, CogsBlock]]:
     normalized = query.lower().strip()
     if not normalized or not daily_dir.exists():
         return []
     matches: list[tuple[Path, CogsBlock]] = []
     for path in sorted(daily_dir.rglob("*.md")):
         content = path.read_text()
-        for block in parse_cogs_blocks(content, states={" "}):
+        for block in parse_cogs_blocks(content, states=states):
             if normalized in block.item_text.lower():
                 matches.append((path, block))
     return matches

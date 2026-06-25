@@ -73,6 +73,13 @@ _NEXT_COUNT_WEEKDAY_RE = re.compile(
     rf"(?P<weekday>{_RECURRENCE_WEEKDAY})\s+at\s+(?P<time>{_TIME_TEXT})\s*$",
     re.IGNORECASE,
 )
+_TIME_FIRST_NEXT_COUNT_WEEKDAY_RE = re.compile(
+    rf"^\s*(?P<label>.+?)\s+(?:is\s+)?(?P<time>{_TIME_TEXT})\s+"
+    rf"(?:the\s+)?next\s+"
+    rf"(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    rf"(?P<weekday>{_RECURRENCE_WEEKDAY})\s*$",
+    re.IGNORECASE,
+)
 _EVERY_WEEKDAY_FOR_RE = re.compile(
     rf"^\s*(?P<label>.+?)\s+every\s+(?P<weekday>{_RECURRENCE_WEEKDAY})\s+"
     rf"for\s+(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
@@ -249,6 +256,7 @@ def expand_bounded_recurrence(
     source = parse_iso_date(processing_date)
     for parser in (
         _expand_multi_weekday_for_weeks,
+        _expand_time_first_next_count_weekday,
         _expand_next_count_weekday,
         _expand_every_weekday_for_weeks,
     ):
@@ -354,6 +362,20 @@ def _upcoming_weekday_on_or_after(source: date, weekday: int) -> date:
 
 def _expand_next_count_weekday(text: str, source: date) -> list[BoundedRecurrenceOccurrence]:
     match = _NEXT_COUNT_WEEKDAY_RE.match(text)
+    if not match:
+        return []
+    count = _duration_count(match.group("count"))
+    weekday = WEEKDAYS[_normalize_recurrence_weekday(match.group("weekday"))]
+    first = _next_weekday_after(source, weekday)
+    item_text = _format_occurrence(match.group("label"), match.group("time"))
+    return [
+        BoundedRecurrenceOccurrence((first + timedelta(weeks=i)).isoformat(), item_text)
+        for i in range(count)
+    ]
+
+
+def _expand_time_first_next_count_weekday(text: str, source: date) -> list[BoundedRecurrenceOccurrence]:
+    match = _TIME_FIRST_NEXT_COUNT_WEEKDAY_RE.match(text)
     if not match:
         return []
     count = _duration_count(match.group("count"))

@@ -6,6 +6,7 @@ from unittest.mock import patch
 import specialists.rosie.loop as agentic_loop
 from specialists.cogs.format import apply_cogs_item_format, normalize_cogs_time_text
 from specialists.cogs.time_context import (
+    expand_bounded_recurrence,
     apply_runtime_date_context,
     resolve_relative_cogs_horizon,
     resolve_relative_date,
@@ -114,6 +115,44 @@ class Stage106RuntimeTimeContextTests(TestCase):
         self.assertEqual(len(decisions), 1)
         self.assertEqual(decisions[0].original_date, "2026-06-09")
         self.assertEqual(decisions[0].resolved_date, "2026-06-13")
+
+    def test_source_datetime_uses_adapter_timestamp_metadata(self):
+        source = agentic_loop.source_datetime_from_frontmatter({
+            "metadata": {
+                "source_timestamp": "2026-06-24T23:09:00-04:00",
+            }
+        })
+
+        self.assertEqual(source.strftime("%Y-%m-%d"), "2026-06-24")
+        self.assertEqual(source.strftime("%H:%M"), "23:09")
+
+    def test_source_datetime_uses_telegram_unix_message_date(self):
+        source = agentic_loop.source_datetime_from_frontmatter({
+            "metadata": {
+                "telegram_message_date": "1782342540",
+            }
+        })
+
+        self.assertEqual(source.strftime("%Y-%m-%d"), "2026-06-24")
+
+    def test_expand_time_first_next_six_saturdays(self):
+        occurrences = expand_bounded_recurrence(
+            "Yoga is 10am the next six Saturdays",
+            "2026-06-24",
+        )
+
+        self.assertEqual(
+            [occurrence.date for occurrence in occurrences],
+            [
+                "2026-06-27",
+                "2026-07-04",
+                "2026-07-11",
+                "2026-07-18",
+                "2026-07-25",
+                "2026-08-01",
+            ],
+        )
+        self.assertEqual({occurrence.item_text for occurrence in occurrences}, {"10a YOGA"})
 
     def test_process_input_writes_tomorrow_to_runtime_relative_day(self):
         with TemporaryDirectory() as tmp:
