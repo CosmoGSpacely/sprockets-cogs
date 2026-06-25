@@ -100,6 +100,8 @@ scripts/sc retention
 scripts/sc ops
 scripts/sc adapters status
 scripts/sc adapters ingest --source discord --text "Capture this"
+scripts/sc carry status
+scripts/sc carry plan --smart --to 2026-06-25 --out carry-plan.json
 ```
 
 Useful preview/probe commands:

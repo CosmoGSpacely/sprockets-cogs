@@ -10,6 +10,8 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +20,7 @@ from typing import Any, Sequence
 import frontmatter
 
 from specialists.astro.vault import CogsBlock, append_cogs_block, mark_block_state, parse_cogs_blocks
+from specialists.cogs.time_context import expand_bounded_recurrence, resolve_relative_cogs_horizon
 
 
 VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(Path.home() / "vault")))
@@ -38,10 +41,23 @@ class CarryDecision:
     destination_date: str = ""
 
 
+@dataclass(frozen=True)
+class CarryStatus:
+    daily_dir: Path
+    open_candidates: int
+    marked_candidates: int
+    oldest_open_date: str
+    oldest_marked_date: str
+
+
 VALID_ACTIONS = {"carry", "cancel", "skip"}
 PLAN_VERSION = 1
 PLAN_ACTIONS = {"carry", "schedule", "drop", "done", "skip"}
 PLAN_ACTIONS_WITH_DESTINATION = {"carry", "schedule"}
+EXPLICIT_DATE_RE = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
+YEAR_RE = re.compile(r"^20\d{2}$")
+MONTH_RE = re.compile(r"^(0[1-9]|1[0-2])$")
+WEEK_RE = re.compile(r"^\d{2}$")
 
 
 def _date_from_daily_note(path: Path) -> str:
@@ -108,6 +124,37 @@ def print_candidates(candidates: list[CarryCandidate]) -> None:
             print(f"    {line}")
 
 
+def build_carry_status(
+    daily_dir: Path = DAILY_DIR,
+    *,
+    through_date: str | None = None,
+) -> CarryStatus:
+    """Return a compact status summary for carry attention."""
+
+    open_candidates = scan_daily_notes(daily_dir, through_date)
+    marked_candidates = scan_marked_carry_notes(daily_dir, through_date)
+    return CarryStatus(
+        daily_dir=daily_dir,
+        open_candidates=len(open_candidates),
+        marked_candidates=len(marked_candidates),
+        oldest_open_date=open_candidates[0].date if open_candidates else "",
+        oldest_marked_date=marked_candidates[0].date if marked_candidates else "",
+    )
+
+
+def format_carry_status(status: CarryStatus) -> str:
+    lines = [
+        "Cogs carry status",
+        "- writes: no",
+        f"- daily_dir: {status.daily_dir}",
+        f"- open candidates: {status.open_candidates}",
+        f"- marked carry candidates: {status.marked_candidates}",
+        f"- oldest open date: {status.oldest_open_date or 'none'}",
+        f"- oldest marked date: {status.oldest_marked_date or 'none'}",
+    ]
+    return "\n".join(lines)
+
+
 def build_default_plan(
     candidates: list[CarryCandidate],
     destination_date: str,
@@ -125,11 +172,20 @@ def _candidate_id(candidate: CarryCandidate) -> str:
     return f"{candidate.date}:{candidate.path.name}:{candidate.block.start_line + 1}:{digest}"
 
 
-def _candidate_to_plan_item(candidate: CarryCandidate, destination_date: str) -> dict[str, Any]:
+def _candidate_to_plan_item(
+    candidate: CarryCandidate,
+    destination_date: str,
+    *,
+    action: str = "carry",
+    rule: str = "carry_default",
+    reason: str = "open item carried to selected destination",
+) -> dict[str, Any]:
     return {
         "id": _candidate_id(candidate),
-        "action": "carry",
+        "action": action,
         "destination_date": destination_date,
+        "rule": rule,
+        "reason": reason,
         "source": {
             "date": candidate.date,
             "path": str(candidate.path),
@@ -157,6 +213,102 @@ def build_plan_document(
     }
 
 
+def build_smart_plan_document(
+    candidates: list[CarryCandidate],
+    destination_date: str,
+    *,
+    reference_date: str | None = None,
+) -> dict[str, Any]:
+    """Build a selective carry plan with deterministic rule reasons."""
+
+    datetime.strptime(destination_date, "%Y-%m-%d")
+    today = reference_date or datetime.now().strftime("%Y-%m-%d")
+    datetime.strptime(today, "%Y-%m-%d")
+    items: list[dict[str, Any]] = []
+    for candidate in candidates:
+        item_text = candidate.block.item_text
+        recurrence = expand_bounded_recurrence(item_text, today)
+        if recurrence:
+            first = recurrence[0]
+            items.append(
+                _candidate_to_plan_item(
+                    candidate,
+                    first.date,
+                    action="schedule",
+                    rule="bounded_recurrence_first_occurrence",
+                    reason=(
+                        f"bounded recurrence expands to {len(recurrence)} occurrence(s); "
+                        "carry plan schedules the first occurrence and keeps full expansion in Rosie"
+                    ),
+                )
+            )
+            items[-1]["item_text"] = first.item_text
+            items[-1]["destination_lines"] = [f"- [ ] {first.item_text}"]
+            items[-1]["recurrence_preview"] = [
+                {"date": occurrence.date, "item_text": occurrence.item_text}
+                for occurrence in recurrence
+            ]
+            continue
+
+        explicit = EXPLICIT_DATE_RE.search(item_text)
+        if explicit and explicit.group(1) > candidate.date:
+            items.append(
+                _candidate_to_plan_item(
+                    candidate,
+                    explicit.group(1),
+                    action="schedule",
+                    rule="explicit_future_date",
+                    reason="item text names a future ISO date",
+                )
+            )
+            continue
+
+        relative = resolve_relative_cogs_horizon(item_text, today)
+        if relative:
+            resolved_date, phrase, horizon = relative
+            action = "schedule" if horizon == "day" else "carry"
+            items.append(
+                _candidate_to_plan_item(
+                    candidate,
+                    resolved_date if horizon == "day" else destination_date,
+                    action=action,
+                    rule=f"relative_{horizon}",
+                    reason=f"resolved '{phrase}' against {today}",
+                )
+            )
+            items[-1]["resolved_horizon"] = horizon
+            continue
+
+        if "?" in item_text or re.search(r"\b(maybe|someday|later)\b", item_text, re.IGNORECASE):
+            items.append(
+                _candidate_to_plan_item(
+                    candidate,
+                    "",
+                    action="skip",
+                    rule="ambiguous_item",
+                    reason="ambiguous carry wording requires human decision",
+                )
+            )
+            continue
+
+        items.append(
+            _candidate_to_plan_item(
+                candidate,
+                destination_date,
+                action="carry",
+                rule="carry_default",
+                reason="open item has no safer deterministic destination",
+            )
+        )
+    return {
+        "version": PLAN_VERSION,
+        "kind": "sprockets-cogs/carry-plan",
+        "default_destination_date": destination_date,
+        "reference_date": today,
+        "items": items,
+    }
+
+
 def write_plan_document(plan: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(plan, indent=2) + "\n")
 
@@ -166,6 +318,78 @@ def load_plan_document(path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError("carry plan must be a JSON object")
     return raw
+
+
+def render_obligation_projection_packet(
+    *,
+    source_path: Path,
+    destination_date: str,
+    item_text: str,
+    reason: str,
+) -> str:
+    """Render a review-first Sprockets obligation projection packet."""
+
+    datetime.strptime(destination_date, "%Y-%m-%d")
+    if not item_text.strip():
+        raise ValueError("item_text cannot be empty")
+    if not reason.strip():
+        raise ValueError("reason cannot be empty")
+    return "\n".join([
+        "---",
+        "packet_type: sprockets-cogs/obligation-projection",
+        "status: pending",
+        f"source_path: {source_path}",
+        f"destination_date: {destination_date}",
+        "---",
+        "",
+        "# Review Cogs Projection",
+        "",
+        f"- Source Sprocket: `{source_path}`",
+        f"- Proposed Cogs date: `{destination_date}`",
+        f"- Proposed item: `{item_text.strip()}`",
+        f"- Reason: {reason.strip()}",
+        "",
+        "## Proposed Command",
+        "",
+        "```json",
+        json.dumps(
+            {
+                "operation": "create_cog",
+                "date": destination_date,
+                "item_text": item_text.strip(),
+                "source_path": str(source_path),
+                "reason": reason.strip(),
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        "```",
+        "",
+    ])
+
+
+def write_obligation_projection_packet(
+    *,
+    source_path: Path,
+    destination_date: str,
+    item_text: str,
+    reason: str,
+    out_path: Path,
+) -> None:
+    """Write a review-first projection packet for Jane/user decision."""
+
+    if not source_path.exists():
+        raise ValueError(f"source Sprocket does not exist: {source_path}")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        render_obligation_projection_packet(
+            source_path=source_path,
+            destination_date=destination_date,
+            item_text=item_text,
+            reason=reason,
+        ),
+        encoding="utf-8",
+    )
 
 
 def validate_plan_document(plan: dict[str, Any]) -> list[str]:
@@ -283,12 +507,15 @@ def preview_plan_document(plan: dict[str, Any]) -> str:
         source = item["source"]
         source_ref = f"{source['date']} {Path(source['path']).name}:{source['line']}"
         action = item["action"]
+        reason = item.get("reason", "")
+        rule = item.get("rule", "")
+        suffix = f" [{rule}: {reason}]" if rule or reason else ""
         if action in PLAN_ACTIONS_WITH_DESTINATION:
             lines.append(
-                f"[{index}] {action:<8} {source_ref} -> {item['destination_date']}: {item['item_text']}"
+                f"[{index}] {action:<8} {source_ref} -> {item['destination_date']}: {item['item_text']}{suffix}"
             )
         else:
-            lines.append(f"[{index}] {action:<8} {source_ref}: {item['item_text']}")
+            lines.append(f"[{index}] {action:<8} {source_ref}: {item['item_text']}{suffix}")
     return "\n".join(lines)
 
 
@@ -308,22 +535,24 @@ def preview_apply_plan_document(plan: dict[str, Any]) -> str:
         source_ref = f"{source['date']} {Path(source['path']).name}:{source['line']}"
         action = item["action"]
         item_text = item["item_text"]
+        reason = item.get("reason", "")
+        reason_suffix = f" ({reason})" if reason else ""
         if action == "carry":
             marker = "keep [>]" if item["lines"][0].startswith("- [>]") else "mark [>]"
-            lines.append(f"[{index}] {marker} in {source_ref}: {item_text}")
+            lines.append(f"[{index}] {marker} in {source_ref}: {item_text}{reason_suffix}")
             lines.append(f"    append [ ] to {item['destination_date']}: {item_text}")
             lines.extend(_preview_preserved_lines(item))
         elif action == "schedule":
             marker = "keep [>]" if item["lines"][0].startswith("- [>]") else "mark [>]"
-            lines.append(f"[{index}] {marker} in {source_ref}: {item_text}")
+            lines.append(f"[{index}] {marker} in {source_ref}: {item_text}{reason_suffix}")
             lines.append(f"    schedule [ ] on {item['destination_date']}: {item_text}")
-            lines.extend(_preview_preserved_lines(item))
+            lines.extend(_preview_preserved_lines({"lines": item.get("destination_lines", item["lines"])}))
         elif action == "drop":
-            lines.append(f"[{index}] mark [-] in {source_ref}: {item_text}")
+            lines.append(f"[{index}] mark [-] in {source_ref}: {item_text}{reason_suffix}")
         elif action == "done":
-            lines.append(f"[{index}] mark [x] in {source_ref}: {item_text}")
+            lines.append(f"[{index}] mark [x] in {source_ref}: {item_text}{reason_suffix}")
         else:
-            lines.append(f"[{index}] skip unchanged {source_ref}: {item_text}")
+            lines.append(f"[{index}] skip unchanged {source_ref}: {item_text}{reason_suffix}")
     return "\n".join(lines)
 
 
@@ -344,6 +573,19 @@ def _find_current_block(content: str, item: dict[str, Any]) -> CogsBlock:
         if block.start_line == start_line and list(block.lines) == expected_lines:
             return block
     raise ValueError(f"source block changed at {Path(source['path']).name}:{source['line']}")
+
+
+def cogs_root_for_source(source_path: Path) -> Path:
+    """Return the Cogs root for a flat or nested daily source note."""
+
+    parent = source_path.parent
+    if (
+        WEEK_RE.match(parent.name)
+        and MONTH_RE.match(parent.parent.name)
+        and YEAR_RE.match(parent.parent.parent.name)
+    ):
+        return parent.parent.parent.parent
+    return parent
 
 
 def apply_plan_document(plan: dict[str, Any]) -> list[str]:
@@ -369,10 +611,11 @@ def apply_plan_document(plan: dict[str, Any]) -> list[str]:
         if action in {"carry", "schedule"}:
             post.content = mark_block_state(content, block, ">")
             source_path.write_text(frontmatter.dumps(post))
+            destination_lines = item.get("destination_lines", item["lines"])
             appended = append_cogs_block(
                 item["destination_date"],
-                tuple(item["lines"]),
-                source_path.parent,
+                tuple(destination_lines),
+                cogs_root_for_source(source_path),
             )
             verb = "appended" if appended else "already existed"
             results.append(
@@ -422,8 +665,53 @@ def preview_plan(decisions: list[CarryDecision]) -> str:
     return "\n".join(lines)
 
 
+def normalize_cli_args(argv: Sequence[str] | None) -> list[str] | None:
+    """Map product-shaped carry subcommands onto the legacy flag parser."""
+
+    raw = list(sys.argv[1:] if argv is None else argv)
+    if not raw:
+        return raw
+    command = raw[0]
+    rest = raw[1:]
+    if command == "status":
+        return ["--status", *rest]
+    if command == "plan":
+        if "--smart" in rest:
+            rest = [item for item in rest if item != "--smart"]
+            return ["--smart-plan", *rest]
+        return ["--plan", *rest]
+    if command == "preview-plan":
+        if not rest:
+            return ["--preview-plan", ""]
+        return ["--preview-plan", rest[0], *rest[1:]]
+    if command == "preview-apply":
+        if not rest:
+            return ["--preview-apply", ""]
+        return ["--preview-apply", rest[0], *rest[1:]]
+    if command == "check-plan":
+        if not rest:
+            return ["--check-plan", ""]
+        return ["--check-plan", rest[0], *rest[1:]]
+    if command == "apply-plan":
+        if not rest:
+            return ["--apply", ""]
+        return ["--apply", rest[0], *rest[1:]]
+    return raw if argv is not None else None
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--daily-dir",
+        type=Path,
+        default=DAILY_DIR,
+        help="Cogs daily directory to scan or write. Defaults to the configured vault Cogs directory.",
+    )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Report carry candidate status. Read-only; no vault writes.",
+    )
     parser.add_argument(
         "--list",
         action="store_true",
@@ -445,6 +733,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Preview a carry-all plan. Read-only unless paired with --out.",
     )
     parser.add_argument(
+        "--smart-plan",
+        action="store_true",
+        help="Preview a selective carry plan with deterministic rule reasons. Read-only unless paired with --out.",
+    )
+    parser.add_argument(
         "--marked-plan",
         action="store_true",
         help="Preview a plan from manually marked [>] carry candidates. Read-only unless paired with --out.",
@@ -453,6 +746,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--to",
         default=datetime.now().strftime("%Y-%m-%d"),
         help="Destination date for --plan carry decisions. Defaults to today. Used for preview/plan generation only.",
+    )
+    parser.add_argument(
+        "--reference-date",
+        default=None,
+        help="YYYY-MM-DD date used to resolve smart-plan relative language. Defaults to today.",
     )
     parser.add_argument(
         "--out",
@@ -484,9 +782,27 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=None,
         help="Apply a JSON carry plan to the vault after validation and source checks. Writes Cogs daily notes.",
     )
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--project-obligation",
+        type=Path,
+        default=None,
+        help="Write a review-first Sprockets obligation projection packet for this source Sprocket.",
+    )
+    parser.add_argument(
+        "--item-text",
+        default="",
+        help="Projected Cogs item text for --project-obligation.",
+    )
+    parser.add_argument(
+        "--reason",
+        default="",
+        help="Projection reason for --project-obligation.",
+    )
+    args = parser.parse_args(normalize_cli_args(argv))
 
-    if args.validate_plan:
+    if args.status:
+        print(format_carry_status(build_carry_status(args.daily_dir, through_date=args.through)))
+    elif args.validate_plan:
         issues = validate_plan_document(load_plan_document(Path(args.validate_plan)))
         if issues:
             print("Carry plan is invalid:")
@@ -513,22 +829,53 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(exc)
             raise SystemExit(1) from exc
         print("\n".join(results) if results else "No carry actions applied.")
+    elif args.project_obligation:
+        if not args.out:
+            parser.error("--project-obligation requires --out")
+        if not args.item_text:
+            parser.error("--project-obligation requires --item-text")
+        if not args.reason:
+            parser.error("--project-obligation requires --reason")
+        try:
+            write_obligation_projection_packet(
+                source_path=args.project_obligation,
+                destination_date=args.to,
+                item_text=args.item_text,
+                reason=args.reason,
+                out_path=Path(args.out),
+            )
+        except ValueError as exc:
+            print(exc)
+            raise SystemExit(1) from exc
+        print(f"Wrote obligation projection packet: {args.out}")
     elif args.list:
-        candidates = scan_daily_notes(through_date=args.through)
+        candidates = scan_daily_notes(args.daily_dir, through_date=args.through)
         print_candidates(candidates)
     elif args.marked_list:
-        candidates = scan_marked_carry_notes(through_date=args.through)
+        candidates = scan_marked_carry_notes(args.daily_dir, through_date=args.through)
         print_candidates(candidates)
     elif args.plan:
-        candidates = scan_daily_notes(through_date=args.through)
+        candidates = scan_daily_notes(args.daily_dir, through_date=args.through)
         if args.out:
             plan = build_plan_document(candidates, args.to)
             write_plan_document(plan, Path(args.out))
             print(f"Wrote carry plan: {args.out}")
         else:
             print(preview_plan(build_default_plan(candidates, args.to)))
+    elif args.smart_plan:
+        candidates = scan_daily_notes(args.daily_dir, through_date=args.through)
+        plan = build_smart_plan_document(
+            candidates,
+            args.to,
+            reference_date=args.reference_date,
+        )
+        if args.out:
+            write_plan_document(plan, Path(args.out))
+            print(f"Wrote smart carry plan: {args.out}")
+        else:
+            print(preview_plan_document(plan))
     elif args.marked_plan:
-        candidates = scan_marked_carry_notes(through_date=args.through)
+        candidates = scan_marked_carry_notes(args.daily_dir, through_date=args.through)
         plan = build_plan_document(candidates, args.to)
         if args.out:
             write_plan_document(plan, Path(args.out))
@@ -537,8 +884,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(preview_apply_plan_document(plan))
     else:
         parser.error(
-            "choose --list, --plan, --marked-list, --marked-plan, --validate-plan, --preview-plan, "
-            "--preview-apply, --check-plan, or --apply"
+            "choose --list, --plan, --status, --smart-plan, --marked-list, --marked-plan, "
+            "--validate-plan, --preview-plan, --preview-apply, --check-plan, --apply, "
+            "or --project-obligation"
         )
 
 
