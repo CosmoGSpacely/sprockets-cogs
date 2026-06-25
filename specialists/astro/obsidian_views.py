@@ -421,8 +421,20 @@ SORT created ASC, file.name ASC
 
 ## Review Boundary
 
-Jane keeps uncertain output review-first. Current decisions still run through
-the guarded review tools until Stage 60 packet decisions are promoted.
+Jane keeps uncertain output review-first. Use Obsidian commands from an open
+review note:
+
+- `Sprockets-Cogs: Jane approve current review`
+- `Sprockets-Cogs: Jane reject current review`
+
+Or use terminal actions:
+
+- `scripts/sc review list`
+- `scripts/sc review show "Title"`
+- `scripts/sc review approve "Title" --yes`
+- `scripts/sc review reject "Title" --reason "..." --yes`
+
+Packets remain an audit/backend surface, not the primary approval UI.
 """
 
 

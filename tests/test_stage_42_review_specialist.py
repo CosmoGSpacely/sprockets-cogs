@@ -572,6 +572,123 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertEqual(preview.rejected_count, 1)
             self.assertIn("unparseable", preview.actions[0].issue)
 
+    def test_direct_action_preview_resolves_unique_title_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            _write_review_file(
+                review_dir / "entity.md",
+                reason="ordinary_entity_authority_guard",
+                raw={
+                    "node_type": "sprockets/entity",
+                    "title": "American bullion",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+
+            preview = specialist.action_preview("American bullion", "approve")
+
+            self.assertTrue(preview.valid)
+            self.assertEqual(preview.matched_files, ("entity.md",))
+            self.assertEqual(preview.effect, "approve")
+            self.assertTrue((review_dir / "entity.md").exists())
+
+    def test_direct_action_refuses_ambiguous_title(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review_dir = Path(tmp)
+            _write_review_file(
+                review_dir / "one.md",
+                reason="confidence: low",
+                raw={"node_type": "sprockets/entity", "title": "Amazon", "confidence": "low"},
+            )
+            _write_review_file(
+                review_dir / "two.md",
+                reason="confidence: low",
+                raw={"node_type": "sprockets/entity", "title": "Amazon", "confidence": "low"},
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(review_dir=review_dir)
+            )
+
+            preview = specialist.action_preview("Amazon", "approve")
+
+            self.assertFalse(preview.valid)
+            self.assertEqual(preview.issue, "target is ambiguous")
+            self.assertEqual(set(preview.matched_files), {"one.md", "two.md"})
+
+    def test_direct_approve_archives_review_and_writes_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            archive_dir = root / "archive"
+            audit_path = root / "audit.jsonl"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "approved.md",
+                reason="ordinary_entity_authority_guard",
+                raw={
+                    "node_type": "sprockets/entity",
+                    "title": "American bullion",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(
+                    review_dir=review_dir,
+                    archive_dir=archive_dir,
+                    audit_path=audit_path,
+                )
+            )
+
+            with patch.object(review_specialist.review, "write_node") as write_node:
+                result = specialist.apply_action("American bullion", "approve", confirm=True)
+
+            self.assertEqual(result.file, "approved.md")
+            write_node.assert_called_once()
+            self.assertFalse((review_dir / "approved.md").exists())
+            self.assertTrue((archive_dir / "approved.md").exists())
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            self.assertEqual(audit["command"], "direct-review-action")
+            self.assertEqual(audit["decision"], "approve")
+            self.assertEqual(audit["approved_files"], ["approved.md"])
+
+    def test_direct_reject_archives_with_reason_and_writes_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            archive_dir = root / "archive"
+            audit_path = root / "audit.jsonl"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "rejected.md",
+                reason="ordinary_entity_authority_guard",
+                raw={
+                    "node_type": "sprockets/entity",
+                    "title": "Amazon",
+                    "confidence": "low",
+                },
+            )
+            specialist = review_specialist.ReviewSpecialist(
+                review_specialist.ReviewSpecialistConfig(
+                    review_dir=review_dir,
+                    archive_dir=archive_dir,
+                    audit_path=audit_path,
+                )
+            )
+
+            with patch.object(review_specialist, "record_review_discard"):
+                result = specialist.apply_action("Amazon", "reject", reason="vendor mention only", confirm=True)
+
+            self.assertEqual(result.file, "rejected.md")
+            self.assertFalse((review_dir / "rejected.md").exists())
+            self.assertTrue((archive_dir / "rejected.md").exists())
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            self.assertEqual(audit["decision"], "reject")
+            self.assertEqual(audit["discarded_files"], ["rejected.md"])
+            self.assertEqual(audit["reason"], "vendor mention only")
+
     def test_main_prints_guarded_apply_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -608,6 +725,45 @@ class Stage42ReviewSpecialistTests(unittest.TestCase):
             self.assertIn("Review specialist guarded apply preview", output)
             self.assertIn("- would approve: 1", output)
             self.assertIn("- vault writes: no", output)
+
+    def test_main_previews_and_confirms_direct_approve(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            _write_review_file(
+                review_dir / "entity.md",
+                reason="ordinary_entity_authority_guard",
+                raw={
+                    "node_type": "sprockets/entity",
+                    "title": "CLI Entity",
+                    "confidence": "low",
+                },
+            )
+            preview_buf = io.StringIO()
+            apply_buf = io.StringIO()
+
+            with redirect_stdout(preview_buf):
+                review_specialist.main(["--review-dir", str(review_dir), "--approve", "CLI Entity"])
+            with patch.object(review_specialist.review, "write_node"), redirect_stdout(apply_buf):
+                review_specialist.main(
+                    [
+                        "--review-dir",
+                        str(review_dir),
+                        "--archive-dir",
+                        str(root / "archive"),
+                        "--audit-path",
+                        str(root / "audit.jsonl"),
+                        "--approve",
+                        "CLI Entity",
+                        "--yes",
+                    ]
+                )
+
+            self.assertIn("direct action preview", preview_buf.getvalue())
+            self.assertIn("- vault writes: no", preview_buf.getvalue())
+            self.assertIn("direct action applied", apply_buf.getvalue())
+            self.assertFalse((review_dir / "entity.md").exists())
 
     def test_packet_apply_requires_explicit_confirmation(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -18,6 +18,7 @@ import specialists.rosie.loop as agentic_loop
 import frontmatter
 import specialists.jane.review as review
 from substrate.models import validate_node
+from specialists.uniblab.friction import record_review_discard
 
 SC_ROOT_ENV = "SPROCKETS_COGS_SC_ROOT"
 DEFAULT_REVIEW_PACKET_PATH = Path(os.environ.get(SC_ROOT_ENV, str(Path.home() / "sc"))) / "output" / "review-packet.md"
@@ -123,6 +124,35 @@ class ReviewPacketApplyResult:
     discarded_files: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class ReviewActionPreview:
+    """Read-only preview for one direct Jane review action."""
+
+    review_dir: Path
+    target: str
+    matched_files: tuple[str, ...]
+    action: str
+    effect: str
+    valid: bool = True
+    issue: str = ""
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class ReviewActionResult:
+    """Result of one confirmed direct Jane review action."""
+
+    review_dir: Path
+    archive_dir: Path
+    audit_path: Path
+    target: str
+    file: str
+    action: str
+    effect: str
+    audit_record: dict[str, Any]
+    reason: str = ""
+
+
 class ReviewSpecialist:
     """Facade for human review reports and packet previews."""
 
@@ -148,6 +178,121 @@ class ReviewSpecialist:
         """Return read-only per-item summaries from the canonical review queue."""
 
         return tuple(review.list_pending(self.config.review_dir))
+
+    def action_preview(self, target: str, action: str, *, reason: str = "") -> ReviewActionPreview:
+        """Preview a direct per-item review action without writing."""
+
+        normalized_action = _normalize_direct_action(action)
+        matches = _resolve_review_target(target, self.config.review_dir)
+        if not matches:
+            return ReviewActionPreview(
+                review_dir=self.config.review_dir,
+                target=target,
+                matched_files=(),
+                action=normalized_action,
+                effect="reject",
+                valid=False,
+                issue="no review item matched target",
+                reason=reason,
+            )
+        if len(matches) > 1:
+            return ReviewActionPreview(
+                review_dir=self.config.review_dir,
+                target=target,
+                matched_files=tuple(path.name for path in matches),
+                action=normalized_action,
+                effect="reject",
+                valid=False,
+                issue="target is ambiguous",
+                reason=reason,
+            )
+        review_path = matches[0]
+        if normalized_action == "approve":
+            issue = _approval_preview_issue(review_path) or _approval_collision_issue(review_path)
+            if issue:
+                return ReviewActionPreview(
+                    review_dir=self.config.review_dir,
+                    target=target,
+                    matched_files=(review_path.name,),
+                    action=normalized_action,
+                    effect="reject",
+                    valid=False,
+                    issue=issue,
+                    reason=reason,
+                )
+        return ReviewActionPreview(
+            review_dir=self.config.review_dir,
+            target=target,
+            matched_files=(review_path.name,),
+            action=normalized_action,
+            effect=normalized_action,
+            reason=reason,
+        )
+
+    def apply_action(
+        self,
+        target: str,
+        action: str,
+        *,
+        reason: str = "",
+        confirm: bool = False,
+    ) -> ReviewActionResult:
+        """Apply one confirmed direct review action through Jane's guarded backend."""
+
+        if not confirm:
+            raise ValueError("direct review action requires explicit confirmation")
+        preview = self.action_preview(target, action, reason=reason)
+        if not preview.valid:
+            raise ValueError(f"direct review action rejected: {preview.issue}")
+        if len(preview.matched_files) != 1:
+            raise ValueError("direct review action requires exactly one matched file")
+        file_name = preview.matched_files[0]
+        review_path = self.config.review_dir / file_name
+        approved_files: tuple[str, ...] = ()
+        discarded_files: tuple[str, ...] = ()
+        if preview.action == "approve":
+            raw = _approval_raw(review_path)
+            node = validate_node(raw)
+            review.write_node(node)
+            approved_files = (file_name,)
+        elif preview.action == "reject":
+            post = frontmatter.load(str(review_path))
+            raw = review._extract_json(post.content) or {}
+            review_reason = review._extract_reason(post.content)
+            record_review_discard(
+                review_file=review_path,
+                reason=f"{review_reason}; operator: {reason}" if reason else review_reason,
+                node_type=str(raw.get("node_type", "?")),
+                title=str(raw.get("title", "?")),
+                item_text=str(raw.get("item_text", "?")),
+            )
+            discarded_files = (file_name,)
+        else:
+            raise ValueError(f"unsupported direct review action: {preview.action}")
+
+        _archive_review_file(review_path, self.config.archive_dir)
+        audit_record = append_review_apply_audit(
+            packet_path=Path(f"direct:{preview.action}:{target}"),
+            review_dir=self.config.review_dir,
+            approved_files=approved_files,
+            discarded_files=discarded_files,
+            audit_path=self.config.audit_path,
+            decision=preview.action,
+            command="direct-review-action",
+            target=target,
+            reason=reason,
+        )
+        return ReviewActionResult(
+            review_dir=self.config.review_dir,
+            archive_dir=self.config.archive_dir,
+            audit_path=self.config.audit_path,
+            target=target,
+            file=file_name,
+            action=preview.action,
+            effect=preview.effect,
+            audit_record=audit_record,
+            reason=reason,
+        )
 
     def packet_preview(self) -> str:
         """Return an Obsidian-readable review packet preview without writing."""
@@ -350,12 +495,46 @@ def _dict_str_int(value: object) -> dict[str, int]:
 
 VALID_REVIEW_DECISIONS = {"approve", "reject", "discard", "edit", "skip"}
 DISCARD_DECISIONS = {"reject", "discard"}
+DIRECT_REVIEW_ACTIONS = {"approve", "reject", "show"}
 PACKET_STATUS_DECISIONS = {
     "pending": "pending",
     "approved": "approve",
     "rejected": "reject",
     "deferred": "skip",
 }
+
+
+def _normalize_direct_action(action: str) -> str:
+    normalized = action.strip().lower()
+    if normalized == "discard":
+        normalized = "reject"
+    if normalized not in DIRECT_REVIEW_ACTIONS:
+        raise ValueError("direct review action must be approve, reject, or show")
+    return normalized
+
+
+def _resolve_review_target(target: str, review_dir: Path) -> tuple[Path, ...]:
+    """Resolve exact review filename or unique title/item_text match."""
+
+    needle = " ".join(target.strip().lower().split())
+    if not needle:
+        return ()
+    exact = review_dir / target
+    if exact.exists() and exact.is_file():
+        return (exact,)
+
+    matches: list[Path] = []
+    for item in review.list_pending(review_dir):
+        path = review_dir / item["file"]
+        fields = [
+            item.get("file", ""),
+            item.get("title", ""),
+            item.get("item_text", ""),
+        ]
+        normalized_fields = {" ".join(str(field).strip().lower().split()) for field in fields}
+        if needle in normalized_fields:
+            matches.append(path)
+    return tuple(matches)
 
 
 def _apply_preview_from_actions(
@@ -494,6 +673,10 @@ def append_review_apply_audit(
     approved_files: tuple[str, ...],
     audit_path: Path,
     discarded_files: tuple[str, ...] = (),
+    decision: str = "approved",
+    command: str = "packet-apply",
+    target: str = "",
+    reason: str = "",
     created_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Append one JSONL record for a successful Jane packet apply."""
@@ -508,7 +691,10 @@ def append_review_apply_audit(
         "created_at": timestamp,
         "packet_path": str(packet_path),
         "review_dir": str(review_dir),
-        "decision": "approved",
+        "decision": decision,
+        "command": command,
+        "target": target,
+        "reason": reason,
         "approved_files": list(approved_files),
         "discarded_files": list(discarded_files),
     }
@@ -564,6 +750,47 @@ def format_review_items(items: Sequence[dict[str, Any]]) -> str:
             ]
         )
     return "\n".join(lines)
+
+
+def format_action_preview(preview: ReviewActionPreview) -> str:
+    """Format a direct review action preview."""
+
+    lines = [
+        "Review specialist direct action preview",
+        f"- review dir: {preview.review_dir}",
+        f"- target: {preview.target}",
+        f"- action: {preview.action}",
+        f"- effect: {preview.effect}",
+        f"- matched files: {len(preview.matched_files)}",
+        f"- valid: {'yes' if preview.valid else 'no'}",
+        "- vault writes: no",
+        "- review queue writes: no",
+    ]
+    lines.extend(f"- match: {file_name}" for file_name in preview.matched_files)
+    if preview.reason:
+        lines.append(f"- reason: {preview.reason}")
+    if preview.issue:
+        lines.append(f"- issue: {preview.issue}")
+    return "\n".join(lines)
+
+
+def format_action_result(result: ReviewActionResult) -> str:
+    """Format a confirmed direct review action result."""
+
+    return "\n".join(
+        [
+            "Review specialist direct action applied",
+            f"- review dir: {result.review_dir}",
+            f"- target: {result.target}",
+            f"- file: {result.file}",
+            f"- action: {result.action}",
+            f"- effect: {result.effect}",
+            f"- review archive: {result.archive_dir}",
+            f"- audit JSONL: {result.audit_path}",
+            "- vault writes: yes" if result.action == "approve" else "- vault writes: no",
+            "- review queue writes: yes",
+        ]
+    )
 
 
 def format_packet_preview(packet: str) -> str:
@@ -887,7 +1114,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--confirm",
         action="store_true",
-        help="Confirm --packet-apply write effects after previewing an approved packet.",
+        help="Confirm write effects after previewing an approved packet or direct action.",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Alias for --confirm for direct action commands.",
+    )
+    parser.add_argument(
+        "--reason",
+        default="",
+        help="Operator reason for direct reject action.",
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--inventory", action="store_true", help="Preview review queue summary without writing.")
@@ -901,6 +1138,9 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--apply-preview", type=Path, metavar="PATH", help="Preview guarded decision effects without applying them.")
     mode.add_argument("--write-packet", action="store_true", help="Regenerate the operational review packet outside the vault. Writes only --packet-path.")
     mode.add_argument("--write-review-packet", action="store_true", help="Regenerate the importable Jane review packet outside the vault. Writes only --packet-path.")
+    mode.add_argument("--show", metavar="TARGET", help="Preview one review item by exact filename or unique title/text match.")
+    mode.add_argument("--approve", metavar="TARGET", help="Approve one review item by exact filename or unique title/text match. Requires --confirm/--yes.")
+    mode.add_argument("--reject", metavar="TARGET", help="Reject one review item by exact filename or unique title/text match. Requires --confirm/--yes.")
     return parser
 
 
@@ -944,6 +1184,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(format_packet_write_result(specialist.write_operational_packet()))
     elif args.write_review_packet:
         print(format_packet_write_result(specialist.write_review_packet()))
+    elif args.show:
+        print(format_action_preview(specialist.action_preview(args.show, "show", reason=args.reason)))
+    elif args.approve:
+        confirmed = args.confirm or args.yes
+        if not confirmed:
+            print(format_action_preview(specialist.action_preview(args.approve, "approve", reason=args.reason)))
+        else:
+            print(format_action_result(specialist.apply_action(args.approve, "approve", reason=args.reason, confirm=True)))
+    elif args.reject:
+        confirmed = args.confirm or args.yes
+        if not confirmed:
+            print(format_action_preview(specialist.action_preview(args.reject, "reject", reason=args.reason)))
+        else:
+            print(format_action_result(specialist.apply_action(args.reject, "reject", reason=args.reason, confirm=True)))
 
 
 if __name__ == "__main__":
