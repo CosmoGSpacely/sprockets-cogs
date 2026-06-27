@@ -112,7 +112,7 @@ class Stage58ObsidianViewsTests(unittest.TestCase):
         self.assertIn('node_type = "cogs/5wow"', cogs_navigation)
         self.assertIn("### 12MF", cogs_navigation)
         self.assertIn('node_type = "cogs/12mf"', cogs_navigation)
-        self.assertIn('month = dateformat(date(today), "yyyy-MM")', cogs_navigation)
+        self.assertIn('string(year) = dateformat(date(today), "yyyy")', cogs_navigation)
         self.assertIn("### Far Horizon", cogs_navigation)
         self.assertIn('string(year) = dateformat(date(today), "yyyy")', cogs_navigation)
 

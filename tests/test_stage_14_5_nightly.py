@@ -192,7 +192,7 @@ class Stage145NightlyCarryTests(unittest.TestCase):
             self.assertIn("created 12mf:", output)
             self.assertIn("Cogs automatic carry handoff", output)
             self.assertTrue((daily_dir / "2026" / "2026-05-5WOW.md").exists())
-            self.assertTrue((daily_dir / "2026" / "2026-05-12MF.md").exists())
+            self.assertTrue((daily_dir / "2026" / "2026-01-12MF.md").exists())
             self.assertIn("- [>] Carry me", old_note.read_text())
             self.assertIn("- [ ] Carry me", vault.daily_note_path("2026-05-04", daily_dir).read_text())
 

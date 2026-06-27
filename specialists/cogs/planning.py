@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -59,6 +60,15 @@ class PlanningCreatePlanItem:
     status: str
     reason: str
     template: str
+
+
+@dataclass(frozen=True)
+class PlanningRefreshPlanItem:
+    kind: str
+    path: Path
+    status: str
+    reason: str
+    template: str = ""
 
 
 def _count_markdown_files(path: Path) -> int:
@@ -231,10 +241,17 @@ def parse_month(month: str) -> date:
     return datetime.strptime(month, "%Y-%m").date().replace(day=1)
 
 
-def five_wow_grid(month: str) -> list[list[str]]:
-    """Return a five-row Mon-Fri window anchored to the month start week."""
+def _five_wow_start(month: str) -> date:
+    """Return the first Monday whose workweek has a weekday in the month."""
     first = parse_month(month)
-    start = first - timedelta(days=first.weekday())
+    if first.weekday() < 5:
+        return first - timedelta(days=first.weekday())
+    return first + timedelta(days=7 - first.weekday())
+
+
+def five_wow_grid(month: str) -> list[list[str]]:
+    """Return the first five workweeks having weekdays in the named month."""
+    start = _five_wow_start(month)
     rows: list[list[str]] = []
     for week in range(5):
         row: list[str] = []
@@ -263,11 +280,25 @@ def calendar_grid(month: str) -> list[list[str]]:
     return rows
 
 
+def calendar_grid_with_spillover(month: str) -> list[list[date]]:
+    """Return full Mon-Sun calendar rows including prior/following month days."""
+    first = parse_month(month)
+    start = first - timedelta(days=first.weekday())
+    rows: list[list[date]] = []
+    current = start
+    while True:
+        row = [current + timedelta(days=offset) for offset in range(7)]
+        rows.append(row)
+        current = row[-1] + timedelta(days=1)
+        if current.month != first.month and current > first:
+            break
+    return rows
+
+
 def five_wow_rows(month: str) -> list[tuple[int, str, str]]:
     """Return vertical 5WOW weekday rows: window week, day label, ISO date."""
-    first = parse_month(month)
     rows: list[tuple[int, str, str]] = []
-    start = first - timedelta(days=first.weekday())
+    start = _five_wow_start(month)
     for week in range(5):
         for weekday in range(5):
             day = start + timedelta(days=week * 7 + weekday)
@@ -296,10 +327,10 @@ def format_month_preview(month: str) -> str:
 
 
 def _calendar_table(month: str) -> list[str]:
-    lines = ["| Week | Mon | Tue | Wed | Thu | Fri | Sat | Sun |", "|---|---|---|---|---|---|---|---|"]
-    for index, row in enumerate(calendar_grid(month), start=1):
-        cells = " | ".join(row)
-        lines.append(f"| {index} | {cells} |")
+    lines = ["| M | T | W | Th | F | S | Su |", "|---|---|---|---|---|---|---|"]
+    for row in calendar_grid_with_spillover(month):
+        cells = [f"{day.day:02d}<br><br>" for day in row]
+        lines.append("| " + " | ".join(cells) + " |")
     return lines
 
 
@@ -334,28 +365,29 @@ def render_weekly_note_template(date_iso: str) -> str:
         _frontmatter("cogs/weekly", "week", f"{iso_year}-W{iso_week:02d}"),
         f"# Week {iso_week:02d} - {start:%b %Y}",
         "",
-        "## CARRY",
-        "",
-        "## This Week",
-        "",
+        "| Date | Setting | Cogs | Date |",
+        "|---|---|---|---|",
     ]
     for index, label in enumerate(FULL_WEEKDAYS):
         day = start + timedelta(days=index)
-        lines.append(f"### {label} {day:%Y-%m-%d}")
-        lines.append("")
+        left_rail = f"{day.day:02d} {label}"
+        lines.append(f"| {left_rail} |  | <br><br><br> | {day.day:02d} |")
+    lines.extend(["", "## CARRY", ""])
     return "\n".join(lines).rstrip() + "\n"
 
 
 def _five_wow_vertical_table(month: str) -> list[str]:
-    lines = ["| Week | Day | Date | Cogs | Notes |", "|---|---|---|---|---|"]
-    for week, day_label, date_iso in five_wow_rows(month):
-        lines.append(f"| {week} | {day_label} | {date_iso} |  |  |")
+    lines = ["| Date | Setting | Cogs | Date |", "|---|---|---|---|"]
+    for _, day_label, date_iso in five_wow_rows(month):
+        day = datetime.strptime(date_iso, "%Y-%m-%d").date()
+        left_rail = f"{day.day:02d} {day_label}"
+        lines.append(f"| {left_rail} |  |  | {day.day:02d} |")
     return lines
 
 
 def forward_12_month_rows(month: str) -> list[tuple[int, str]]:
-    """Return 12MF buckets from the anchor month through the next 11."""
-    first = parse_month(month)
+    """Return annual 12MF buckets from January through December."""
+    first = parse_month(month).replace(month=1)
     rows: list[tuple[int, str]] = []
     for offset in range(12):
         month_index = first.month - 1 + offset
@@ -373,35 +405,26 @@ def _forward_12_month_table(month: str) -> list[str]:
 
 
 def render_monthly_note_template(month: str) -> str:
-    first = parse_month(month)
     lines = [
         _frontmatter("cogs/monthly", "month", month),
         f"# {month}",
-        "",
-        "## Calendar",
         "",
         *_calendar_table(month),
         "",
         "## CARRY",
         "",
-        "## Dates",
+        "## KEY",
         "",
+        "- `~~` setting span",
+        "- `xx` unavailable/out",
+        "- boxed date: important anchor",
     ]
-    _, days_in_month = calendar.monthrange(first.year, first.month)
-    for day_number in range(1, days_in_month + 1):
-        day = date(first.year, first.month, day_number)
-        lines.append(f"### {day:%a %Y-%m-%d}")
-        lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
 def render_five_wow_note_template(month: str) -> str:
     lines = [
         _frontmatter("cogs/5wow", "month", month),
-        f"# {month} 5WOW",
-        "",
-        "<!-- Window surface: five Monday-Friday weeks. Cogs shown here remain appearances of dated Cogs. -->",
-        "",
         *_five_wow_vertical_table(month),
         "",
     ]
@@ -409,11 +432,12 @@ def render_five_wow_note_template(month: str) -> str:
 
 
 def render_12mf_note_template(month: str) -> str:
+    year = parse_month(month).year
     lines = [
-        _frontmatter("cogs/12mf", "month", month),
-        f"# {month} 12MF",
+        _frontmatter("cogs/12mf", "year", str(year)),
+        f"# {year} 12MF",
         "",
-        "<!-- Window surface: twelve-month forward look from the anchor month. -->",
+        "<!-- Annual source surface for birthdays, anniversaries, and long-range anchors. -->",
         "",
         *_forward_12_month_table(month),
         "",
@@ -536,6 +560,215 @@ def create_planning_notes(
     return _create_plan_items(plan)
 
 
+def _table_cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _has_task_lines(content: str) -> bool:
+    return any(line.lstrip().startswith("- [") for line in content.splitlines())
+
+
+def _old_weekly_is_empty(content: str) -> bool:
+    if "node_type: cogs/weekly" not in content or "## Carry In" not in content or "## Weekdays" not in content:
+        return False
+    if _has_task_lines(content):
+        return False
+    between = content.split("## Carry In", 1)[1].split("## Weekdays", 1)[0]
+    return not between.strip()
+
+
+def _old_monthly_is_empty(content: str) -> bool:
+    if "node_type: cogs/monthly" not in content or "## Calendar" not in content or "## 5WOW" not in content:
+        return False
+    if _has_task_lines(content):
+        return False
+    if "## Carry In" in content and "## Dates" in content:
+        carry = content.split("## Carry In", 1)[1].split("## Dates", 1)[0]
+        if carry.strip():
+            return False
+    for line in content.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = _table_cells(line)
+        if len(cells) == 5 and cells[0].isdigit() and len(cells[2]) == 10:
+            if cells[3] or cells[4]:
+                return False
+    return True
+
+
+def _calendar_monthly_is_empty(content: str) -> bool:
+    """Recognize a generated calendar month with no marks or carried content."""
+    if "node_type: cogs/monthly" not in content or "| M | T | W | Th | F | S | Su |" not in content:
+        return False
+    if _has_task_lines(content):
+        return False
+    if "## CARRY" in content and "## KEY" in content:
+        carry = content.split("## CARRY", 1)[1].split("## KEY", 1)[0]
+        if carry.strip():
+            return False
+    allowed_cell = re.compile(r"^(?:[A-Z][a-z]{2} )?\d{2}(?:<br>){1,2}$")
+    rows = 0
+    for line in content.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = _table_cells(line)
+        if len(cells) != 7 or cells[0] in {"M", "---"}:
+            continue
+        rows += 1
+        if any(not allowed_cell.fullmatch(cell) for cell in cells):
+            return False
+    return rows > 0
+
+
+def _old_5wow_is_empty(content: str) -> bool:
+    if "node_type: cogs/5wow" not in content or "| Week | Day | Date | Cogs | Notes |" not in content:
+        return False
+    if _has_task_lines(content):
+        return False
+    for line in content.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = _table_cells(line)
+        if len(cells) == 5 and cells[0].isdigit() and len(cells[2]) == 10:
+            if cells[3] or cells[4]:
+                return False
+    return True
+
+
+def _rail_5wow_is_empty(content: str) -> bool:
+    """Recognize an empty Stage 134 rail surface, including the buggy link form."""
+    if "node_type: cogs/5wow" not in content or "| Date | Setting | Cogs | Date |" not in content:
+        return False
+    if _has_task_lines(content):
+        return False
+    if "[[" in content:
+        return True
+    rows = 0
+    for line in content.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = _table_cells(line)
+        if len(cells) != 4 or cells[0] in {"Date", "---"}:
+            continue
+        rows += 1
+        if cells[1] or cells[2]:
+            return False
+    return rows > 0
+
+
+def _old_rolling_12mf_is_empty(content: str) -> bool:
+    if "node_type: cogs/12mf" not in content or "month:" not in content or "| + | Month | Cogs | Notes |" not in content:
+        return False
+    if _has_task_lines(content):
+        return False
+    for line in content.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = _table_cells(line)
+        if len(cells) == 4 and cells[0].isdigit() and len(cells[1]) == 7:
+            if cells[2] or cells[3]:
+                return False
+    return True
+
+
+def _refresh_status_for_existing(item: PlanningCreatePlanItem) -> PlanningRefreshPlanItem:
+    if not item.path.exists():
+        return PlanningRefreshPlanItem(item.kind, item.path, "missing", "target does not exist", item.template)
+    content = item.path.read_text()
+    if content == item.template:
+        return PlanningRefreshPlanItem(item.kind, item.path, "preserve", "already uses current generated shape")
+    refreshable = (
+        (item.kind == "weekly" and _old_weekly_is_empty(content))
+        or (item.kind == "monthly" and (_old_monthly_is_empty(content) or _calendar_monthly_is_empty(content)))
+        or (item.kind == "5wow" and (_old_5wow_is_empty(content) or _rail_5wow_is_empty(content)))
+        or (item.kind == "12mf" and _old_rolling_12mf_is_empty(content))
+    )
+    if refreshable:
+        return PlanningRefreshPlanItem(item.kind, item.path, "refresh", "empty generated old-shape planning surface", item.template)
+    return PlanningRefreshPlanItem(item.kind, item.path, "preserve", "not an empty generated old-shape planning surface")
+
+
+def build_empty_surface_refresh_plan(
+    cogs_dir: Path,
+    reference_date: str | None = None,
+    *,
+    weekly_weeks: int = 12,
+    month_count: int = 2,
+) -> list[PlanningRefreshPlanItem]:
+    """Build a guarded refresh plan for empty generated planning surfaces."""
+    ref = datetime.strptime(reference_date or date.today().isoformat(), "%Y-%m-%d").date()
+    by_path: dict[Path, PlanningRefreshPlanItem] = {}
+
+    for offset in range(weekly_weeks + 1):
+        day = ref + timedelta(days=offset * 7)
+        item = _plan_item("weekly", weekly_path(day.isoformat(), cogs_dir), render_weekly_note_template(day.isoformat()))
+        by_path[item.path] = _refresh_status_for_existing(item)
+
+    for offset in range(month_count + 1):
+        month_start = _add_months(ref.replace(day=1), offset)
+        month = month_start.strftime("%Y-%m")
+        month_iso = month_start.isoformat()
+        for item in (
+            _plan_item("monthly", monthly_path(month_iso, cogs_dir), render_monthly_note_template(month)),
+            _plan_item("5wow", five_wow_path(month_iso, cogs_dir), render_five_wow_note_template(month)),
+            _plan_item("12mf", forward12_path(month_iso, cogs_dir), render_12mf_note_template(month)),
+        ):
+            by_path[item.path] = _refresh_status_for_existing(item)
+
+    for obsolete in sorted(cogs_dir.rglob("????-??-12MF.md")):
+        if obsolete.name.endswith("-01-12MF.md"):
+            continue
+        content = obsolete.read_text()
+        if _old_rolling_12mf_is_empty(content):
+            by_path[obsolete] = PlanningRefreshPlanItem(
+                "12mf",
+                obsolete,
+                "remove-obsolete",
+                "empty rolling 12MF superseded by annual January 12MF",
+            )
+        else:
+            by_path[obsolete] = PlanningRefreshPlanItem(
+                "12mf",
+                obsolete,
+                "preserve",
+                "obsolete rolling 12MF has content or unrecognized shape",
+            )
+
+    return sorted(by_path.values(), key=lambda item: (str(item.path), item.kind))
+
+
+def format_empty_surface_refresh_plan(cogs_dir: Path = DEFAULT_COGS_DIR, reference_date: str | None = None) -> str:
+    plan = build_empty_surface_refresh_plan(cogs_dir, reference_date)
+    counts: dict[str, int] = {}
+    for item in plan:
+        counts[item.status] = counts.get(item.status, 0) + 1
+    summary = ", ".join(f"{status}: {count}" for status, count in sorted(counts.items()))
+    lines = [
+        f"Empty planning-surface refresh preview for {reference_date or date.today().isoformat()}",
+        f"Cogs dir: {cogs_dir}",
+        f"Summary: {summary}",
+    ]
+    for item in plan:
+        lines.append(f"- {item.status:<15} {item.kind:<7} {item.path} ({item.reason})")
+    lines.append("No files written.")
+    return "\n".join(lines)
+
+
+def refresh_empty_planning_surfaces(cogs_dir: Path, reference_date: str | None = None) -> list[str]:
+    """Refresh only empty generated old-shape planning surfaces."""
+    results: list[str] = []
+    for item in build_empty_surface_refresh_plan(cogs_dir, reference_date):
+        if item.status == "refresh":
+            item.path.write_text(item.template)
+            results.append(f"refreshed {item.kind}: {item.path}")
+        elif item.status == "remove-obsolete":
+            item.path.unlink()
+            results.append(f"removed obsolete {item.kind}: {item.path}")
+        else:
+            results.append(f"{item.status} {item.kind}: {item.path}")
+    return results
+
+
 def ensure_current_planning_notes(cogs_dir: Path, reference_date: str | None = None) -> list[str]:
     """Ensure weekly, monthly, and annual notes exist for the reference date."""
     ref = reference_date or date.today().isoformat()
@@ -602,6 +835,13 @@ def build_horizon_create_plan(
             forward12_path(month_start.isoformat(), cogs_dir),
             render_12mf_note_template(month),
         )
+
+    next_year_start = date(ref.year + 1, 1, 1)
+    by_path[forward12_path(next_year_start.isoformat(), cogs_dir)] = _plan_item(
+        "12mf",
+        forward12_path(next_year_start.isoformat(), cogs_dir),
+        render_12mf_note_template(next_year_start.strftime("%Y-%m")),
+    )
 
     for year in sorted({ref.year, _add_months(ref.replace(day=1), 11).year}):
         year_start = date(year, 1, 1)
@@ -684,6 +924,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Create near-future day/week/5WOW/month/12MF/year notes for manual carry landing surfaces.",
     )
     parser.add_argument(
+        "--refresh-empty-surfaces-plan",
+        action="store_true",
+        help="Preview guarded refresh of empty old-shape planning surfaces. Read-only.",
+    )
+    parser.add_argument(
+        "--refresh-empty-surfaces",
+        action="store_true",
+        help="Refresh only empty generated old-shape planning surfaces and remove empty obsolete rolling 12MF files.",
+    )
+    parser.add_argument(
         "--kind",
         choices=("daily", "weekly", "monthly", "5wow", "12mf", "annual", "all"),
         default="all",
@@ -745,11 +995,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.ensure_horizon:
         print("\n".join(ensure_planning_horizon(Path(args.cogs_dir), args.template_value)))
         return
+    if args.refresh_empty_surfaces_plan:
+        print(format_empty_surface_refresh_plan(Path(args.cogs_dir), args.template_value))
+        return
+    if args.refresh_empty_surfaces:
+        print("\n".join(refresh_empty_planning_surfaces(Path(args.cogs_dir), args.template_value)))
+        return
 
     parser.error(
         "choose --names, --daily-rename-plan, --daily-rename-apply, --inventory, --month, --template, "
         "--directory-migration-plan, --directory-migration-apply, --preview-create, --create, --ensure-current, "
-        "or --ensure-horizon"
+        "--ensure-horizon, --refresh-empty-surfaces-plan, or --refresh-empty-surfaces"
     )
 
 

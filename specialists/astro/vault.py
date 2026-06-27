@@ -145,6 +145,9 @@ def _append_under_heading(content: str, heading: str, line: str) -> str:
         return f"{base}\n\n{heading}\n{line}\n"
 
     insert_at = heading_index + 1
+    if insert_at >= len(lines) or lines[insert_at] != "":
+        lines.insert(insert_at, "")
+        insert_at += 1
     while insert_at < len(lines) and lines[insert_at] == "":
         insert_at += 1
     lines.insert(insert_at, line)

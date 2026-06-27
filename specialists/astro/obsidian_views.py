@@ -186,9 +186,9 @@ LIMIT 1
 ### 12MF
 
 ```dataview
-TABLE WITHOUT ID file.link AS "12MF", month AS Month
+TABLE WITHOUT ID file.link AS "12MF", year AS Year
 FROM "Cogs"
-WHERE node_type = "cogs/12mf" AND month = dateformat(date(today), "yyyy-MM")
+WHERE node_type = "cogs/12mf" AND string(year) = dateformat(date(today), "yyyy")
 LIMIT 1
 ```
 
@@ -361,9 +361,9 @@ LIMIT 1
 ### 12MF
 
 ```dataview
-TABLE WITHOUT ID file.link AS "12MF", month AS Month
+TABLE WITHOUT ID file.link AS "12MF", year AS Year
 FROM "Cogs"
-WHERE node_type = "cogs/12mf" AND month = dateformat(date(today), "yyyy-MM")
+WHERE node_type = "cogs/12mf" AND string(year) = dateformat(date(today), "yyyy")
 LIMIT 1
 ```
 
@@ -382,7 +382,8 @@ LIMIT 1
 
 - Daily notes are nested under `Cogs/YYYY/MM/WW/`.
 - Weekly notes are nested under `Cogs/YYYY/MM/`.
-- Monthly, 5WOW, and 12MF notes are nested under `Cogs/YYYY/`.
+- Monthly and 5WOW notes are nested under `Cogs/YYYY/`.
+- 12MF notes are annual January source surfaces nested under `Cogs/YYYY/`.
 - Annual notes live at `Cogs/YYYY.md`.
 
 ## Recent Daily Notes

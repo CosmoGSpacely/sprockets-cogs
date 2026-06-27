@@ -97,7 +97,8 @@ def five_wow_path(date_iso: str, cogs_dir: Path) -> Path:
 
 
 def forward12_filename(date_iso: str) -> str:
-    return f"{parse_date_iso(date_iso):%Y-%m}-12MF.md"
+    dt = parse_date_iso(date_iso)
+    return f"{dt:%Y}-01-12MF.md"
 
 
 def forward12_path(date_iso: str, cogs_dir: Path) -> Path:
