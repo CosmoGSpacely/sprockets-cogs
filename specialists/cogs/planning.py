@@ -598,7 +598,8 @@ def _old_monthly_is_empty(content: str) -> bool:
 
 def _calendar_monthly_is_empty(content: str) -> bool:
     """Recognize a generated calendar month with no marks or carried content."""
-    if "node_type: cogs/monthly" not in content or "| M | T | W | Th | F | S | Su |" not in content:
+    has_header = "| M | T | W | Th | F | S | Su |" in content or "cogs-monthly-marker" in content
+    if "node_type: cogs/monthly" not in content or not has_header:
         return False
     if _has_task_lines(content):
         return False
@@ -612,7 +613,7 @@ def _calendar_monthly_is_empty(content: str) -> bool:
         if not line.startswith("|"):
             continue
         cells = _table_cells(line)
-        if len(cells) != 7 or cells[0] in {"M", "---"}:
+        if len(cells) != 7 or cells[0] in {"M", "---"} or "cogs-monthly-marker" in cells[0]:
             continue
         rows += 1
         if any(not allowed_cell.fullmatch(cell) for cell in cells):
@@ -637,7 +638,8 @@ def _old_5wow_is_empty(content: str) -> bool:
 
 def _rail_5wow_is_empty(content: str) -> bool:
     """Recognize an empty Stage 134 rail surface, including the buggy link form."""
-    if "node_type: cogs/5wow" not in content or "| Date | Setting | Cogs | Date |" not in content:
+    has_header = "| Date | Setting | Cogs | Date |" in content or "cogs-5wow-marker" in content
+    if "node_type: cogs/5wow" not in content or not has_header:
         return False
     if _has_task_lines(content):
         return False
@@ -648,10 +650,28 @@ def _rail_5wow_is_empty(content: str) -> bool:
         if not line.startswith("|"):
             continue
         cells = _table_cells(line)
-        if len(cells) != 4 or cells[0] in {"Date", "---"}:
+        if len(cells) != 4 or cells[0] in {"Date", "---"} or "cogs-5wow-marker" in cells[0]:
             continue
         rows += 1
         if cells[1] or cells[2]:
+            return False
+    return rows > 0
+
+
+def _rail_weekly_is_empty(content: str) -> bool:
+    """Recognize an empty generated Week rail, including the failed marker form."""
+    has_header = "| Date | Setting | Cogs | Date |" in content or "cogs-weekly-marker" in content
+    if "node_type: cogs/weekly" not in content or not has_header or _has_task_lines(content):
+        return False
+    rows = 0
+    for line in content.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = _table_cells(line)
+        if len(cells) != 4 or cells[0] in {"Date", "---"} or "cogs-weekly-marker" in cells[0]:
+            continue
+        rows += 1
+        if cells[1] or cells[2] not in {"", "<br><br>", "<br><br><br>"}:
             return False
     return rows > 0
 
@@ -678,7 +698,7 @@ def _refresh_status_for_existing(item: PlanningCreatePlanItem) -> PlanningRefres
     if content == item.template:
         return PlanningRefreshPlanItem(item.kind, item.path, "preserve", "already uses current generated shape")
     refreshable = (
-        (item.kind == "weekly" and _old_weekly_is_empty(content))
+        (item.kind == "weekly" and (_old_weekly_is_empty(content) or _rail_weekly_is_empty(content)))
         or (item.kind == "monthly" and (_old_monthly_is_empty(content) or _calendar_monthly_is_empty(content)))
         or (item.kind == "5wow" and (_old_5wow_is_empty(content) or _rail_5wow_is_empty(content)))
         or (item.kind == "12mf" and _old_rolling_12mf_is_empty(content))
