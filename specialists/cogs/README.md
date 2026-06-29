@@ -38,11 +38,22 @@ scripts/sc carry plan --smart --to 2026-06-25 --out carry-plan.json
 scripts/sc carry preview-plan carry-plan.json
 scripts/sc carry preview-apply carry-plan.json
 scripts/sc carry apply-plan carry-plan.json
+scripts/sc carry current /path/to/Vault/Cogs/note.md --line 12
+scripts/sc carry appearances /path/to/Vault/Cogs/note.md --line 12
 ```
 
 Smart carry plans stay deterministic. They add rule/reason fields, schedule
 obvious future-dated items, preview bounded recurrence, and skip ambiguous
 wording instead of letting a model move Cogs.
+
+`carry current` is the guarded desktop/Obsidian path for one selected item. It
+marks the source `[>]` and carries Day to next Day, Week to next Week `CARRY`,
+or Month to next Month `CARRY`. The one-based line number is checked against
+the current source text before any destination is written.
+
+Successful current-line carry records the old and new Markdown locators in
+`Vault/.graph/cog-appearances.json` under one stable Cog ID. The read-only
+`appearances` command reports that set without changing the vault.
 
 Sprockets obligation projection is review-first: Cogs can write a projection
 packet for Jane/user approval, but it does not write the projected Cog directly.

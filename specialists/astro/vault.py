@@ -108,6 +108,19 @@ def append_weekly_carry_item_text(
     return _append_planning_carry_item(path, render_weekly_note_template(date_iso), item_text)
 
 
+def append_weekly_carry_block(
+    date_iso: str,
+    block_lines: tuple[str, ...] | list[str],
+    cogs_dir: Path = DEFAULT_VAULT_DIR / "Cogs",
+) -> bool:
+    """Append a complete item block to a weekly CARRY section."""
+
+    from specialists.cogs.planning import render_weekly_note_template
+
+    path = weekly_path(date_iso, cogs_dir)
+    return _append_planning_carry_block(path, render_weekly_note_template(date_iso), block_lines)
+
+
 def append_monthly_carry_item_text(
     date_iso: str,
     item_text: str,
@@ -121,7 +134,38 @@ def append_monthly_carry_item_text(
     return _append_planning_carry_item(path, render_monthly_note_template(date_iso[:7]), item_text)
 
 
+def append_monthly_carry_block(
+    date_iso: str,
+    block_lines: tuple[str, ...] | list[str],
+    cogs_dir: Path = DEFAULT_VAULT_DIR / "Cogs",
+) -> bool:
+    """Append a complete item block to a monthly CARRY section."""
+
+    from specialists.cogs.planning import render_monthly_note_template
+
+    path = monthly_path(date_iso, cogs_dir)
+    return _append_planning_carry_block(
+        path,
+        render_monthly_note_template(date_iso[:7]),
+        block_lines,
+    )
+
+
 def _append_planning_carry_item(path: Path, template: str, item_text: str) -> bool:
+    return _append_planning_carry_block(path, template, [f"- [ ] {item_text}"])
+
+
+def _append_planning_carry_block(
+    path: Path,
+    template: str,
+    block_lines: tuple[str, ...] | list[str],
+) -> bool:
+    if not block_lines:
+        raise ValueError("block_lines cannot be empty")
+    first_match = TASK_LINE_RE.match(block_lines[0])
+    if not first_match:
+        raise ValueError("first block line must be a Cogs task line")
+    item_text = first_match.group("text").strip()
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         path.write_text(template)
@@ -131,7 +175,9 @@ def _append_planning_carry_item(path: Path, template: str, item_text: str) -> bo
         return False
 
     heading = "## CARRY" if "## CARRY" in content or "## Carry In" not in content else "## Carry In"
-    updated = _append_under_heading(content, heading, f"- [ ] {item_text}")
+    normalized = list(block_lines)
+    normalized[0] = TASK_LINE_RE.sub(r"- [ ] \g<text>", normalized[0], count=1)
+    updated = _append_under_heading(content, heading, "\n".join(normalized).rstrip())
     path.write_text(updated)
     return True
 

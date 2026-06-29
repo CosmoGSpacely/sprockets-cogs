@@ -12,15 +12,31 @@ import json
 import os
 import re
 import sys
+import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Sequence
 
 import frontmatter
 
-from specialists.astro.vault import CogsBlock, append_cogs_block, mark_block_state, parse_cogs_blocks
+from specialists.astro.vault import (
+    CogsBlock,
+    append_cogs_block,
+    append_monthly_carry_block,
+    append_weekly_carry_block,
+    daily_note_path,
+    mark_block_state,
+    parse_cogs_blocks,
+)
+from specialists.cogs.naming import monthly_path, weekly_path
 from specialists.cogs.time_context import expand_bounded_recurrence, resolve_relative_cogs_horizon
+from substrate.cog_appearance_registry import (
+    CogAppearance,
+    CogAppearanceRegistry,
+    load_registry,
+    save_registry,
+)
 
 
 VAULT_DIR = Path(os.environ.get("SPROCKETS_COGS_VAULT_DIR", str(Path.home() / "vault")))
@@ -58,6 +74,8 @@ EXPLICIT_DATE_RE = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
 YEAR_RE = re.compile(r"^20\d{2}$")
 MONTH_RE = re.compile(r"^(0[1-9]|1[0-2])$")
 WEEK_RE = re.compile(r"^\d{2}$")
+WEEKLY_STEM_RE = re.compile(r"^(?P<year>20\d{2})-W(?P<week>\d{2})$")
+MONTHLY_STEM_RE = re.compile(r"^(?P<year>20\d{2})-(?P<month>0[1-9]|1[0-2])$")
 
 
 def _date_from_daily_note(path: Path) -> str:
@@ -588,6 +606,241 @@ def cogs_root_for_source(source_path: Path) -> Path:
     return parent
 
 
+def _cogs_root_containing(source_path: Path) -> Path:
+    for parent in (source_path.parent, *source_path.parents):
+        if parent.name == "Cogs":
+            return parent
+    raise ValueError(f"source is not inside a Cogs directory: {source_path}")
+
+
+def _next_month(value: date) -> date:
+    if value.month == 12:
+        return value.replace(year=value.year + 1, month=1, day=1)
+    return value.replace(month=value.month + 1, day=1)
+
+
+def _appearance_text_hash(item_text: str) -> str:
+    return hashlib.sha256(item_text.strip().encode("utf-8")).hexdigest()[:16]
+
+
+def _vault_relative(path: Path, cogs_dir: Path) -> str:
+    return str(Path("Cogs") / path.resolve().relative_to(cogs_dir.resolve()))
+
+
+def _surface_period(path: Path) -> tuple[str, str]:
+    if weekly := WEEKLY_STEM_RE.match(path.stem):
+        return "week", f"{weekly.group('year')}-W{weekly.group('week')}"
+    if monthly := MONTHLY_STEM_RE.match(path.stem):
+        return "month", f"{monthly.group('year')}-{monthly.group('month')}"
+    return "day", _date_from_daily_note(path)
+
+
+def _registered_cog_id(
+    registry: CogAppearanceRegistry,
+    *,
+    path: str,
+    line: int,
+    text_hash: str,
+) -> str:
+    exact = [
+        item
+        for item in registry.by_path(path)
+        if item.line == line and item.text_hash == text_hash
+    ]
+    if len(exact) == 1:
+        return exact[0].cog_id
+    hash_matches = [
+        item for item in registry.by_path(path) if item.text_hash == text_hash
+    ]
+    if len(hash_matches) == 1:
+        return hash_matches[0].cog_id
+    if len(hash_matches) > 1:
+        raise ValueError(
+            f"appearance registry has {len(hash_matches)} matching items in {path}; "
+            "carry refused until the ambiguous locators are repaired"
+        )
+    return f"cog-{uuid.uuid4().hex}"
+
+
+def _find_task_line(path: Path, item_text: str) -> int:
+    matches = [
+        block.start_line + 1
+        for block in parse_cogs_blocks(path.read_text(encoding="utf-8"), states={" "})
+        if block.item_text.strip() == item_text.strip()
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"expected one open destination item in {path}, found {len(matches)}"
+        )
+    return matches[0]
+
+
+def _record_carry_appearances(
+    *,
+    cogs_dir: Path,
+    source_path: Path,
+    source_line: int,
+    destination_path: Path,
+    destination_line: int,
+    item_text: str,
+    cog_id: str,
+) -> int:
+    vault_dir = cogs_dir.parent
+    registry = load_registry(vault_dir)
+    text_hash = _appearance_text_hash(item_text)
+    source_surface, source_period = _surface_period(source_path)
+    destination_surface, destination_period = _surface_period(destination_path)
+    registry.upsert(
+        CogAppearance(
+            cog_id=cog_id,
+            surface=source_surface,
+            period=source_period,
+            path=_vault_relative(source_path, cogs_dir),
+            line=source_line,
+            text_hash=text_hash,
+            marker="[>]",
+            state="carried",
+        )
+    )
+    registry.upsert(
+        CogAppearance(
+            cog_id=cog_id,
+            surface=destination_surface,
+            period=destination_period,
+            path=_vault_relative(destination_path, cogs_dir),
+            line=destination_line,
+            text_hash=text_hash,
+            marker="[ ]",
+            state="open",
+        )
+    )
+    save_registry(vault_dir, registry)
+    return len(registry.by_cog(cog_id))
+
+
+def carry_current_line(source_path: Path, line_number: int) -> str:
+    """Carry one open/current task to the next source-appropriate surface.
+
+    ``line_number`` is one-based and refers to the complete Markdown file, as
+    reported by an editor. The source text is preserved; only its task marker is
+    changed.
+    """
+
+    source_path = source_path.resolve()
+    if not source_path.is_file():
+        raise ValueError(f"source note does not exist: {source_path}")
+    cogs_dir = _cogs_root_containing(source_path)
+    raw = source_path.read_text(encoding="utf-8")
+    target_index = line_number - 1
+    block = next(
+        (
+            item
+            for item in parse_cogs_blocks(raw, states={" ", ">"})
+            if item.start_line <= target_index <= item.end_line
+        ),
+        None,
+    )
+    if block is None:
+        raise ValueError(f"line {line_number} is not an open or carried Cogs item")
+    registry = load_registry(cogs_dir.parent)
+    source_relative = _vault_relative(source_path, cogs_dir)
+    text_hash = _appearance_text_hash(block.item_text)
+    cog_id = _registered_cog_id(
+        registry,
+        path=source_relative,
+        line=block.start_line + 1,
+        text_hash=text_hash,
+    )
+
+    daily_date = ""
+    try:
+        daily_date = _date_from_daily_note(source_path)
+    except Exception:
+        pass
+
+    if daily_date:
+        destination = (datetime.strptime(daily_date, "%Y-%m-%d").date() + timedelta(days=1)).isoformat()
+        appended = append_cogs_block(destination, block.lines, cogs_dir)
+        destination_path = daily_note_path(destination, cogs_dir)
+        destination_label = destination
+    elif weekly := WEEKLY_STEM_RE.match(source_path.stem):
+        monday = datetime.strptime(
+            f"{weekly.group('year')}-W{weekly.group('week')}-1", "%G-W%V-%u"
+        ).date()
+        destination = (monday + timedelta(days=7)).isoformat()
+        appended = append_weekly_carry_block(destination, block.lines, cogs_dir)
+        destination_path = weekly_path(destination, cogs_dir)
+        destination_label = f"{(monday + timedelta(days=7)).isocalendar().year}-W{(monday + timedelta(days=7)).isocalendar().week:02d} CARRY"
+    elif monthly := MONTHLY_STEM_RE.match(source_path.stem):
+        current = date(int(monthly.group("year")), int(monthly.group("month")), 1)
+        destination_month = _next_month(current)
+        appended = append_monthly_carry_block(destination_month.isoformat(), block.lines, cogs_dir)
+        destination_path = monthly_path(destination_month.isoformat(), cogs_dir)
+        destination_label = f"{destination_month:%Y-%m} CARRY"
+    else:
+        raise ValueError(
+            "current-line carry supports Day, Week, and Month source notes; "
+            f"unsupported source: {source_path.name}"
+        )
+
+    if block.state != ">":
+        source_path.write_text(mark_block_state(raw, block, ">"), encoding="utf-8")
+    destination_line = _find_task_line(destination_path, block.item_text)
+    appearance_count = _record_carry_appearances(
+        cogs_dir=cogs_dir,
+        source_path=source_path,
+        source_line=block.start_line + 1,
+        destination_path=destination_path,
+        destination_line=destination_line,
+        item_text=block.item_text,
+        cog_id=cog_id,
+    )
+    verb = "appended" if appended else "already existed"
+    return (
+        f"carried {source_path.name}:{line_number} -> {destination_label} "
+        f"({verb}; {appearance_count} registered appearances; {cog_id}): {block.item_text}"
+    )
+
+
+def appearance_summary_for_line(source_path: Path, line_number: int) -> str:
+    """Report registered appearances for one current Markdown task."""
+
+    source_path = source_path.resolve()
+    if not source_path.is_file():
+        raise ValueError(f"source note does not exist: {source_path}")
+    cogs_dir = _cogs_root_containing(source_path)
+    block = next(
+        (
+            item
+            for item in parse_cogs_blocks(
+                source_path.read_text(encoding="utf-8"),
+                states={" ", ">", "x", "-"},
+            )
+            if item.start_line <= line_number - 1 <= item.end_line
+        ),
+        None,
+    )
+    if block is None:
+        raise ValueError(f"line {line_number} is not a Cogs item")
+    registry = load_registry(cogs_dir.parent)
+    path = _vault_relative(source_path, cogs_dir)
+    cog_id = _registered_cog_id(
+        registry,
+        path=path,
+        line=block.start_line + 1,
+        text_hash=_appearance_text_hash(block.item_text),
+    )
+    appearances = registry.by_cog(cog_id)
+    if not appearances:
+        return f"No registered appearances for {source_path.name}:{line_number}."
+    lines = [f"{len(appearances)} registered appearance(s) for {cog_id}"]
+    lines.extend(
+        f"- {item.state}: {item.surface} {item.period} {item.path}:{item.line or '?'}"
+        for item in appearances
+    )
+    return "\n".join(lines)
+
+
 def apply_plan_document(plan: dict[str, Any]) -> list[str]:
     """Apply a validated carry plan to the vault."""
     issues = check_plan_sources(plan)
@@ -696,11 +949,33 @@ def normalize_cli_args(argv: Sequence[str] | None) -> list[str] | None:
         if not rest:
             return ["--apply", ""]
         return ["--apply", rest[0], *rest[1:]]
+    if command == "current":
+        return ["--current", *rest]
+    if command == "appearances":
+        return ["--appearances", *rest]
     return raw if argv is not None else None
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--current",
+        type=Path,
+        default=None,
+        help="Carry one Cogs task from this source note to its next Day, Week, or Month surface.",
+    )
+    parser.add_argument(
+        "--line",
+        type=int,
+        default=None,
+        help="One-based editor line for --current.",
+    )
+    parser.add_argument(
+        "--appearances",
+        type=Path,
+        default=None,
+        help="Report registered appearances for a Cogs task in this source note.",
+    )
     parser.add_argument(
         "--daily-dir",
         type=Path,
@@ -800,7 +1075,23 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     args = parser.parse_args(normalize_cli_args(argv))
 
-    if args.status:
+    if args.appearances:
+        if args.line is None or args.line < 1:
+            parser.error("--appearances requires --line with a positive one-based line number")
+        try:
+            print(appearance_summary_for_line(args.appearances, args.line))
+        except ValueError as exc:
+            print(exc)
+            raise SystemExit(1) from exc
+    elif args.current:
+        if args.line is None or args.line < 1:
+            parser.error("--current requires --line with a positive one-based line number")
+        try:
+            print(carry_current_line(args.current, args.line))
+        except ValueError as exc:
+            print(exc)
+            raise SystemExit(1) from exc
+    elif args.status:
         print(format_carry_status(build_carry_status(args.daily_dir, through_date=args.through)))
     elif args.validate_plan:
         issues = validate_plan_document(load_plan_document(Path(args.validate_plan)))
@@ -886,7 +1177,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         parser.error(
             "choose --list, --plan, --status, --smart-plan, --marked-list, --marked-plan, "
             "--validate-plan, --preview-plan, --preview-apply, --check-plan, --apply, "
-            "or --project-obligation"
+            "--current, --appearances, or --project-obligation"
         )
 
 

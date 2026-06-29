@@ -879,8 +879,52 @@ def ensure_planning_horizon(cogs_dir: Path, reference_date: str | None = None) -
     return _create_plan_items(build_horizon_create_plan(cogs_dir, reference_date))
 
 
+def ensure_current_surface(kind: str, cogs_dir: Path, reference_date: str | None = None) -> Path:
+    """Ensure and return one canonical current planning surface."""
+
+    ref = datetime.strptime(reference_date or date.today().isoformat(), "%Y-%m-%d").date()
+    month = ref.strftime("%Y-%m")
+    items = {
+        "day": _plan_item(
+            "daily",
+            nested_daily_path(ref.isoformat(), cogs_dir),
+            render_daily_note_template(ref.isoformat()),
+        ),
+        "week": _plan_item(
+            "weekly",
+            weekly_path(ref.isoformat(), cogs_dir),
+            render_weekly_note_template(ref.isoformat()),
+        ),
+        "5wow": _plan_item(
+            "5wow",
+            five_wow_path(ref.isoformat(), cogs_dir),
+            render_five_wow_note_template(month),
+        ),
+        "month": _plan_item(
+            "monthly",
+            monthly_path(ref.isoformat(), cogs_dir),
+            render_monthly_note_template(month),
+        ),
+        "12mf": _plan_item(
+            "12mf",
+            forward12_path(ref.isoformat(), cogs_dir),
+            render_12mf_note_template(month),
+        ),
+    }
+    if kind not in items:
+        raise ValueError(f"unsupported planning surface: {kind}")
+    item = items[kind]
+    _create_plan_items([item])
+    return item.path
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--ensure-surface",
+        choices=("day", "week", "5wow", "month", "12mf"),
+        help="Ensure one current canonical surface and print its vault-relative path.",
+    )
     parser.add_argument(
         "--names",
         metavar="YYYY-MM-DD",
@@ -980,6 +1024,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.names:
         print(format_planning_names(args.names))
         return
+    if args.ensure_surface:
+        path = ensure_current_surface(
+            args.ensure_surface,
+            Path(args.cogs_dir),
+            args.template_value,
+        )
+        print(Path("Cogs") / path.relative_to(Path(args.cogs_dir)))
+        return
     if args.daily_rename_plan:
         print(format_daily_rename_plan(Path(args.daily_dir)))
         return
@@ -1025,7 +1077,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.error(
         "choose --names, --daily-rename-plan, --daily-rename-apply, --inventory, --month, --template, "
         "--directory-migration-plan, --directory-migration-apply, --preview-create, --create, --ensure-current, "
-        "--ensure-horizon, --refresh-empty-surfaces-plan, or --refresh-empty-surfaces"
+        "--ensure-horizon, --ensure-surface, --refresh-empty-surfaces-plan, or --refresh-empty-surfaces"
     )
 
 

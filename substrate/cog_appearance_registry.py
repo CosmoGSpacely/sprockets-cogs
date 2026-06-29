@@ -24,6 +24,8 @@ class CogAppearance(BaseModel):
     surface: CogAppearanceSurface
     period: str
     path: str
+    line: int | None = None
+    text_hash: str | None = None
     marker: str = "[ ]"
     state: CogAppearanceState = "open"
 
@@ -37,6 +39,23 @@ class CogAppearance(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("field cannot be empty")
+        return value
+
+    @field_validator("line")
+    @classmethod
+    def require_positive_line(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise ValueError("line must be positive")
+        return value
+
+    @field_validator("text_hash")
+    @classmethod
+    def normalize_optional_text_hash(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("text_hash cannot be empty")
         return value
 
 
