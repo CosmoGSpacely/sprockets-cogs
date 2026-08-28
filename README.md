@@ -107,7 +107,6 @@ scripts/sc carry plan --smart --to 2026-06-25 --out carry-plan.json
 Useful preview/probe commands:
 
 ```bash
-scripts/specialist-route
 scripts/memory-demo "tractor tire"
 scripts/rich-input-proof --help
 scripts/collections-bridge --help

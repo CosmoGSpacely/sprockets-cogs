@@ -90,7 +90,6 @@ scripts/pilot3-status
 scripts/adapter-status
 scripts/review --count
 scripts/memory-demo "tractor tire"
-scripts/specialist-route
 scripts/sc-backup --status
 scripts/sc vault-backup --preview
 scripts/sc retention

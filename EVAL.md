@@ -27,7 +27,6 @@ Use probes when changing a boundary:
 ```bash
 scripts/pilot3-status
 scripts/pilot3-telegram-once
-scripts/specialist-route
 scripts/memory-demo "tractor tire"
 scripts/rich-input-proof --help
 scripts/collections-bridge --help

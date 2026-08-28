@@ -56,7 +56,6 @@ RUDI owns retrieval and reasoning previews:
 
 ```bash
 scripts/memory-demo "Tom tractor tires"
-scripts/specialist-route
 ```
 
 This helps explain what the system knows without granting memory direct write

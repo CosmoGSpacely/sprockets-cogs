@@ -12,10 +12,6 @@ belongs here; cross-boundary contracts belong in `substrate/`.
 for docs, tests, and status displays, and it names the package-owned
 implementation files.
 
-`specialists.routing` is the cross-specialist read-only route probe used by
-`scripts/specialist-route`. It exists here, rather than at repository root, so
-all-specialist routing remains tied to the specialist boundary it exercises.
-
 `specialists.orbit.adapters` contains Orbit's source-adapter implementations.
 Adapters feed Rosie by writing `.input` files; they do not write to the vault or
 approve review packets.
