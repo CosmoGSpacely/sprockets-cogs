@@ -1,0 +1,15 @@
+{
+  "fixture_id": "empty-greeting",
+  "category": "edge",
+  "description": "Conversational input carrying no capturable item.",
+  "source": "/home/cosmo/sc/archive/telegram-telegram783798616120.input",
+  "content": "Hello",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 0
+    },
+    "nodes": []
+  },
+  "notes": "Real captured input. The correct behavior is to produce nothing, not to invent a note or a greeting task. Because precision is scored against actual output, any fabricated node here costs the model directly - this is the only fixture where the score is driven entirely by restraint."
+}

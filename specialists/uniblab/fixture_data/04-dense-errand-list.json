@@ -1,0 +1,41 @@
+{
+  "fixture_id": "dense-errand-list",
+  "category": "dense",
+  "description": "Real multi-line errand list with store names, coupons, and a mixed chore.",
+  "source": "/home/cosmo/sc/archive/pilot-input-2026-05-23.input",
+  "content": "To do today:\nKOHLS: pick up order, 10 off $25 coupon\nRelocate turtle\nGIANT: steaks sale\nHARBOR FREIGHT: 20 off one item coupon\nCheck and charge Dale battery",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 5
+    },
+    "nodes": [
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["kohls"],
+        "date": "2026-06-12"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["turtle"],
+        "date": "2026-06-12"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["giant"],
+        "date": "2026-06-12"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["harbor freight"],
+        "date": "2026-06-12"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["dale"],
+        "date": "2026-06-12"
+      }
+    ]
+  },
+  "notes": "'To do today' pins every item to 2026-06-12. Five distinct errands; dropping or merging any of them is the failure this fixture watches for. Store names are entities but the actionable framing keeps them cogs/daily."
+}

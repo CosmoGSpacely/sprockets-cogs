@@ -41,12 +41,16 @@ class ChatClient(Protocol):
         ...
 
 
+DEFAULT_CONTEXT_MAX_CHARS = 2000
+
+
 @dataclass(frozen=True)
 class ExtractClassifierConfig:
     """Runtime knobs for the capture extractor/classifier role."""
 
     model: str = CAPTURE_MODEL
     temperature: float = 0.1
+    context_max_chars: int = DEFAULT_CONTEXT_MAX_CHARS
 
 
 def week_workdays(ref: datetime) -> str:
@@ -58,7 +62,7 @@ def week_workdays(ref: datetime) -> str:
     )
 
 
-def truncate_context(context: str, max_chars: int = 2000) -> str:
+def truncate_context(context: str, max_chars: int = DEFAULT_CONTEXT_MAX_CHARS) -> str:
     """Keep classifier context bounded to the existing prompt budget."""
 
     if len(context) <= max_chars:
@@ -125,7 +129,7 @@ class ExtractClassifier:
         user_msg = (
             f"Today: {today}\n"
             f"This week's workdays: {week_workdays(today_dt)}\n\n"
-            f"{truncate_context(context)}\n\n"
+            f"{truncate_context(context, self.config.context_max_chars)}\n\n"
             f"Extracted:\n{json.dumps(raw_nodes, indent=2)}\n\n"
         )
         if error_context:

@@ -1,0 +1,26 @@
+{
+  "fixture_id": "multi-day-setting-holiday",
+  "category": "hard",
+  "description": "Two-span multi-day setting plus an out-of-range holiday, with a transcription error in the source.",
+  "source": "/home/cosmo/sc/archive/telegram-telegram783798616153.input",
+  "content": "Full loom all next week and the following week until Thursday, Holiday on 7/3",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 10
+    },
+    "nodes": [
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-15"},
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-16"},
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-17"},
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-18"},
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-19"},
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-22"},
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-23"},
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-24"},
+      {"node_type": "cogs/daily", "must_include": [], "date": "2026-06-25"},
+      {"node_type": "cogs/daily", "must_include": ["holiday"], "date": "2026-07-03"}
+    ]
+  },
+  "notes": "This is the designated known-hard fixture. Three separate difficulties stack: (1) 'all next week' must expand to Mon-Fri 06-15..06-19 using the supplied workday anchors; (2) 'the following week until Thursday' must expand to 06-22..06-25, a week the prompt supplies no anchors for; (3) 'Holiday on 7/3' falls outside both spans entirely. must_include is empty on the setting nodes because the source contains a speech-to-text error ('Full loom' for 'FullBloom', corrected by the user in the very next capture), so asserting the label text would grade transcription rather than date expansion."
+}

@@ -1,0 +1,31 @@
+{
+  "fixture_id": "recurrence-three-saturdays",
+  "category": "multi-day",
+  "description": "Bounded recurrence that must expand into one dated node per occurrence.",
+  "source": "/home/cosmo/sc/archive/manual-stage121-04-yoga-recurrence.input",
+  "content": "YOGA next 3 Saturdays at 10a",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 3
+    },
+    "nodes": [
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["yoga"],
+        "date": "2026-06-13"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["yoga"],
+        "date": "2026-06-20"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["yoga"],
+        "date": "2026-06-27"
+      }
+    ]
+  },
+  "notes": "Recurrence expansion is the same mechanic as multi-day settings but with an explicit count. The three Saturdays following Friday 2026-06-12 are 06-13, 06-20, 06-27."
+}

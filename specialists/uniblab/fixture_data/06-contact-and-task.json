@@ -1,0 +1,29 @@
+{
+  "fixture_id": "contact-and-task",
+  "category": "contact",
+  "description": "Named person triggers the paired sprockets/task plus cogs/daily rule and a contact node.",
+  "source": "/home/cosmo/sc/archive/telegram-telegram783798616131.input",
+  "content": "Text Jon about truck",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 2
+    },
+    "nodes": [
+      {
+        "node_type": "sprockets/task",
+        "must_include": ["jon"]
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["jon"],
+        "date": "2026-06-12"
+      },
+      {
+        "node_type": "sprockets/contact",
+        "must_include": ["jon"]
+      }
+    ]
+  },
+  "notes": "CLASSIFY_SYSTEM: 'Named person or ongoing effort -> TWO nodes: sprockets/task + cogs/daily'. EXTRACT_EXAMPLES also split a named person into a separate contact item. This fixture is the clearest test of whether that pairing rule is actually followed."
+}

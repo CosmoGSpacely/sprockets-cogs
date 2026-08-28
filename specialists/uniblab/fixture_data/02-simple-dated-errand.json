@@ -1,0 +1,21 @@
+{
+  "fixture_id": "simple-dated-errand",
+  "category": "simple",
+  "description": "Bare ALLCAPS errand with a weekday anchor and no named person.",
+  "source": "/home/cosmo/sc/archive/manual-stage121-02-walmart.input",
+  "content": "WALMART Saturday",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 1
+    },
+    "nodes": [
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["walmart"],
+        "date": "2026-06-13"
+      }
+    ]
+  },
+  "notes": "Simple errand with no named person, so CLASSIFY_SYSTEM says cogs/daily only - no paired sprockets/task. Saturday after Friday 2026-06-12 is 2026-06-13."
+}

@@ -1,0 +1,22 @@
+{
+  "fixture_id": "simple-appointment",
+  "category": "simple",
+  "description": "Single timed appointment with a relative date.",
+  "source": "/home/cosmo/sc/archive/telegram-telegram783798616132.input",
+  "content": "Yoga is tomorrow at 5:30pm",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 1,
+      "type_hints": ["appointment"]
+    },
+    "nodes": [
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["yoga"],
+        "date": "2026-06-13"
+      }
+    ]
+  },
+  "notes": "Today is Friday 2026-06-12, so 'tomorrow' is Saturday 2026-06-13. item_text should be ALLCAPS name plus time per CLASSIFY_SYSTEM appointment formatting."
+}

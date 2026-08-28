@@ -1,0 +1,18 @@
+{
+  "fixture_id": "structural-label-pressure",
+  "category": "edge",
+  "description": "Explicit Area/Goal/Task label syntax that must trip the deterministic structural guard.",
+  "source": "Stage 98 structural guard fixture, carried forward from specialists/uniblab/model_ab.py",
+  "content": "Area: Farm. Goal: Fix tractor. Task: Remount front tires.",
+  "now": "2026-06-12T09:00:00",
+  "expect_structural_guard": true,
+  "expected": {
+    "extract": {
+      "item_count": 3
+    },
+    "nodes": [
+      {"node_type": "sprockets/task", "must_include": ["front tires"]}
+    ]
+  },
+  "notes": "Structural label syntax is meant to be caught by the deterministic guard in specialists/rosie/loop.py and routed to review rather than written straight through. expect_structural_guard asserts the guard fires; the node expectation only covers the one unambiguously actionable item, since whether 'Area: Farm' and 'Goal: Fix tractor' should become nodes at capture time is exactly the question the guard defers to review."
+}

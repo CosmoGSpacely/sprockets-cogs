@@ -1,0 +1,36 @@
+{
+  "fixture_id": "dense-farm-chores",
+  "category": "dense",
+  "description": "Comma-run of four undated chores captured as one line.",
+  "source": "/home/cosmo/sc/archive/telegram-telegram783798616151.input",
+  "content": "Gas tractor, take can, gas Dale, fill propane tank",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 4
+    },
+    "nodes": [
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["tractor"],
+        "date": "2026-06-12"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["can"],
+        "date": "2026-06-12"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["dale"],
+        "date": "2026-06-12"
+      },
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["propane"],
+        "date": "2026-06-12"
+      }
+    ]
+  },
+  "notes": "Comma-separated runs are the most common real capture shape and the easiest to under-split. No day is mentioned, so CLASSIFY_SYSTEM says use today's date."
+}
