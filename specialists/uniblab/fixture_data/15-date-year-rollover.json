@@ -10,10 +10,10 @@
       "item_count": 3
     },
     "nodes": [
-      {"node_type": "cogs/daily", "must_include": ["dentist"], "date": "2027-01-05"},
+      {"node_type": "cogs/daily", "must_include": ["dentist"], "date": "2027-01-12"},
       {"node_type": "cogs/daily", "must_include": ["propane"], "date": "2027-01-03"},
       {"node_type": "cogs/daily", "must_include": ["inspection"], "date": "2027-01-08"}
     ]
   },
-  "notes": "Anchored to Tuesday 2026-12-29 so every answer crosses both a month and a year boundary. 'Next Tuesday' from a Tuesday is the ambiguous one and is fixed by doctrine to the following week, 2027-01-05, not today. 'The 3rd' has already passed in the current month so it resolves forward to 2027-01-03. 'A week from Friday' is the Friday after this week's Friday 2027-01-01, so 2027-01-08. This is the fixture most likely to be fixed by the section A date-math tool call rather than by any prompt edit: slice 5a produced dates in 2020 from a 2026 anchor, which is arithmetic failure, not comprehension failure. The only fixture not anchored to 2026-06-12."
+  "notes": "Anchored to Tuesday 2026-12-29 so every answer crosses both a month and a year boundary. 'Next Tuesday' from a Tuesday resolves to 2027-01-12: doctrine set 2026-08-28 is that 'next X' means the SECOND occurrence after today, so the bare weekday gives 2027-01-05 and the 'next' qualifier adds another week. Updated from 2027-01-05 in Stage 141 slice 3b; the original expectation encoded the pre-doctrine reading. 'The 3rd' has already passed in the current month so it resolves forward to 2027-01-03. 'A week from Friday' is the Friday after this week's Friday 2027-01-01, so 2027-01-08. This is the fixture most likely to be fixed by the section A date-math tool call rather than by any prompt edit: slice 5a produced dates in 2020 from a 2026 anchor, which is arithmetic failure, not comprehension failure. The only fixture not anchored to 2026-06-12."
 }

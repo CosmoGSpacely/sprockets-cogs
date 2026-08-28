@@ -203,11 +203,21 @@ def resolve_relative_cogs_horizon(text: str, processing_date: str) -> tuple[str,
 
     next_match = _NEXT_WEEKDAY_RE.search(lowered)
     if next_match:
+        # "next Saturday" is the SECOND Saturday after today, not the first.
+        # Doctrine set by the product owner 2026-08-28 and applied uniformly to
+        # every weekday: the bare weekday means the next occurrence, and the
+        # "next" qualifier adds a further week. Before this, both resolved
+        # identically and the qualifier was silently discarded (finding 48),
+        # which booked the user a week early.
         weekday = WEEKDAYS[_normalize_weekday(next_match.group(1))]
         days = (weekday - source.weekday()) % 7
         if days == 0:
             days = 7
-        return (source + timedelta(days=days)).isoformat(), f"next {next_match.group(1).lower()}", "day"
+        return (
+            (source + timedelta(days=days, weeks=1)).isoformat(),
+            f"next {next_match.group(1).lower()}",
+            "day",
+        )
 
     bare_match = _BARE_WEEKDAY_RE.search(lowered)
     if bare_match:

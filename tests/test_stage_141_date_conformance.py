@@ -56,9 +56,13 @@ class PhraseResolutionTests(unittest.TestCase):
         self.assert_resolves("monday", "2026-06-15")
         self.assert_resolves("thursday", "2026-06-18")
 
-    def test_next_prefix_matches_bare_weekday(self):
-        self.assert_resolves("next monday", "2026-06-15")
-        self.assert_resolves("next friday", "2026-06-19")
+    def test_next_prefix_adds_a_week_to_the_bare_weekday(self):
+        """Finding 48: "next X" is the second occurrence, so it is always the
+        bare weekday plus seven days."""
+
+        self.assert_resolves("monday", "2026-06-15")
+        self.assert_resolves("next monday", "2026-06-22")
+        self.assert_resolves("next friday", "2026-06-26")
 
     def test_relative_offset(self):
         self.assert_resolves("in two days", "2026-06-14")
@@ -70,7 +74,7 @@ class PhraseResolutionTests(unittest.TestCase):
         """Stage 139 slice 5a produced 2020 dates from a 2026 anchor; the
         deterministic path crosses the boundary correctly."""
 
-        self.assert_resolves("next tuesday", "2027-01-05", anchor=YEAR_END)
+        self.assert_resolves("next tuesday", "2027-01-12", anchor=YEAR_END)
         self.assert_resolves("tomorrow", "2026-12-30", anchor=YEAR_END)
 
     def test_weekend_days_resolve(self):
@@ -100,21 +104,17 @@ class KnownGapsTests(unittest.TestCase):
 
         self.assertIsNone(resolve_relative_cogs_horizon("yesterday", FRIDAY))
 
-    def test_this_and_next_weekday_are_indistinguishable(self):
-        """Pins the current wrong behavior. Delete when NextWeekdayTests pass."""
-
-        this_sat = resolve_relative_cogs_horizon("this saturday", FRIDAY)
-        next_sat = resolve_relative_cogs_horizon("next saturday", FRIDAY)
-        self.assertEqual(this_sat[0], next_sat[0])
-
 
 class NextWeekdayTests(unittest.TestCase):
     """Doctrine settled by the product owner 2026-08-28: "next Saturday" means
-    the **second** Saturday after today, not the first.
+    the **second** Saturday after today, not the first. Applied uniformly to
+    every weekday (decision 2026-08-28), so "next X" is always the bare
+    weekday plus seven days.
 
-    So from Friday 2026-06-12: "this saturday" is 06-13, "next saturday" is
-    06-20. The resolver currently returns 06-13 for both, which silently books
-    the user a week early - the same failure shape as finding 43.
+    So from Friday 2026-06-12: "saturday" is 06-13, "next saturday" is 06-20,
+    and "next monday" is 06-22 rather than 06-15. Before the fix both forms
+    resolved identically and the qualifier was discarded, booking the user a
+    week early.
 
     Scope note: this governs the singular phrase. "next 3 Saturdays" is a
     counted recurrence handled elsewhere, and Stage 132D fixed its first
@@ -122,12 +122,10 @@ class NextWeekdayTests(unittest.TestCase):
     singular must not move the counted form.
     """
 
-    @unittest.expectedFailure
     def test_next_weekday_is_the_second_occurrence(self):
         result = resolve_relative_cogs_horizon("next saturday", FRIDAY)
         self.assertEqual(result[0], "2026-06-20")
 
-    @unittest.expectedFailure
     def test_next_weekday_across_year_boundary(self):
         """From Tuesday 2026-12-29: this friday 2027-01-01, next friday
         2027-01-08."""
