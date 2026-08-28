@@ -22,6 +22,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
+from specialists.cogs.format import apply_cogs_item_format
+from specialists.cogs.time_context import (
+    apply_bounded_recurrence_context,
+    apply_runtime_date_context,
+)
 from specialists.rosie.extractor_classifier import (
     DEFAULT_CONTEXT_MAX_CHARS,
     CallStats,
@@ -48,10 +53,21 @@ class HarnessConfig:
     presence_penalty: float | None = None
     top_k: int | None = None
     top_p: float | None = None
+    full_pipeline: bool = True
+    """Score the live post-classify chain, not raw classify output.
+
+    `loop.py` runs `apply_runtime_date_context`, `apply_bounded_recurrence_
+    context`, and `apply_cogs_item_format` after classify. Stages 138 and 139
+    scored raw classify output and so measured a path the product never runs
+    (Stage 139 finding 34). Set False to reproduce the old numbers or to
+    measure the size of the gap.
+    """
 
     @property
     def label(self) -> str:
         parts = [self.model]
+        if not self.full_pipeline:
+            parts.append("rawclassify")
         if self.context_max_chars != DEFAULT_CONTEXT_MAX_CHARS:
             parts.append(f"cap{self.context_max_chars}")
         if not self.use_examples:
@@ -95,6 +111,8 @@ class FixtureResult:
     invalid_nodes: int = 0
     low_confidence_nodes: int = 0
     structural_guard_reasons: tuple[str, ...] = ()
+    pipeline_steps: tuple[str, ...] = ()
+    """Live post-classify steps that changed something on this fixture."""
     expect_structural_guard: bool = False
     error: str = ""
     call_stats: tuple[CallStats, ...] = ()
@@ -191,6 +209,115 @@ def _describe_node(node: dict[str, Any]) -> str:
     return f"{node.get('node_type', '?')}[{title}]@{node.get('date', '?')}"
 
 
+#: The post-classify chain in `specialists/rosie/loop.py`, in order.
+#:
+#: The harness reaches into specialist internals rather than driving capture
+#: through `loop.py` (deferred as D099), which is what let it silently score a
+#: path the product does not run for two whole stages. This tuple plus the
+#: drift test in `tests/test_stage_139_full_pipeline.py` is the guard that
+#: buys that shortcut: if `loop.py` gains, drops, or reorders a step, the test
+#: fails and names this list.
+#: Every post-classify call `loop.py` makes, in source order.
+LIVE_POST_CLASSIFY_STEPS = (
+    "apply_runtime_date_context",
+    "apply_bounded_recurrence_context",
+    "apply_cogs_item_format",
+    "route_structural_guard_to_review",
+    "route_ordinary_entity_authority_to_review",
+    "route_recurrence_to_review",
+    "apply_explicit_hierarchy_hints",
+    "ensure_hierarchy_tasks",
+    "log_memory_parent_trace",
+    "write_memory_parent_trace",
+    "ensure_memory_hierarchy_tasks",
+    "apply_memory_parent_title",
+    "ensure_cogs_companions",
+)
+
+#: The steps the harness runs, in live order. Pure functions of
+#: (raw_nodes, classified): no vault, no memory, no writes.
+MODELED_STEPS = (
+    "apply_runtime_date_context",
+    "apply_bounded_recurrence_context",
+    "apply_cogs_item_format",
+    "apply_explicit_hierarchy_hints",
+    "ensure_hierarchy_tasks",
+    "ensure_cogs_companions",
+)
+
+#: Steps the harness cannot run, and why. The harness is read-only by
+#: contract; these either write review packets and trace files or need live
+#: vault and memory state. Fixture scores therefore still describe a partial
+#: path - a smaller gap than Stages 138-139 had, but not zero. Anything
+#: claimed about hierarchy parents or review routing must account for this.
+UNMODELED_STEPS = {
+    "route_structural_guard_to_review": "writes a review proposal packet",
+    "route_ordinary_entity_authority_to_review": "writes a review packet",
+    "route_recurrence_to_review": "writes a review packet",
+    "log_memory_parent_trace": "logging only, no node transformation",
+    "write_memory_parent_trace": "writes a trace file",
+    "ensure_memory_hierarchy_tasks": "needs live RUDI memory retrieval",
+    "apply_memory_parent_title": "needs live RUDI memory retrieval",
+}
+
+
+def apply_live_post_classify(
+    raw_nodes: Sequence[dict[str, Any]],
+    classified_nodes: Sequence[dict[str, Any]],
+    source_date: str,
+) -> tuple[list[dict[str, Any]], tuple[str, ...]]:
+    """Run the live post-classify chain, in `loop.py`'s order.
+
+    Returns the transformed nodes and the names of the steps that actually
+    changed something, so a score movement can be attributed to a step rather
+    than guessed at.
+    """
+
+    nodes = list(classified_nodes)
+    applied: list[str] = []
+
+    nodes, date_decisions = apply_runtime_date_context(raw_nodes, nodes, source_date)
+    if date_decisions:
+        applied.append("apply_runtime_date_context")
+
+    nodes, recurrence_decisions = apply_bounded_recurrence_context(
+        raw_nodes, nodes, source_date
+    )
+    if recurrence_decisions:
+        applied.append("apply_bounded_recurrence_context")
+
+    nodes, format_decisions = apply_cogs_item_format(raw_nodes, nodes)
+    if format_decisions:
+        applied.append("apply_cogs_item_format")
+
+    # The three review-routing steps sit here in loop.py and are skipped:
+    # they write packets, and the harness is read-only. See UNMODELED_STEPS.
+    from specialists.rosie.loop import (
+        apply_explicit_hierarchy_hints,
+        ensure_cogs_companions,
+        ensure_hierarchy_tasks,
+    )
+
+    before = [dict(node) for node in nodes]
+    nodes = apply_explicit_hierarchy_hints(list(raw_nodes), nodes)
+    if nodes != before:
+        applied.append("apply_explicit_hierarchy_hints")
+
+    before = [dict(node) for node in nodes]
+    nodes = ensure_hierarchy_tasks(list(raw_nodes), nodes)
+    if nodes != before:
+        applied.append("ensure_hierarchy_tasks")
+
+    # The two memory-parent steps sit here in loop.py and are skipped: they
+    # need live RUDI retrieval. See UNMODELED_STEPS.
+    before = [dict(node) for node in nodes]
+    nodes = ensure_cogs_companions(nodes)
+    if nodes != before:
+        applied.append("ensure_cogs_companions")
+
+    return nodes, tuple(applied)
+
+
 def grade_nodes(
     fixture: CaptureFixture,
     classified_nodes: Sequence[dict[str, Any]],
@@ -281,6 +408,11 @@ def run_fixture(
             use_examples=config.use_examples,
             now=fixture.now,
         )
+        pipeline_steps: tuple[str, ...] = ()
+        if config.full_pipeline:
+            classified_nodes, pipeline_steps = apply_live_post_classify(
+                raw_nodes, classified_nodes, fixture.now.strftime("%Y-%m-%d")
+            )
         elapsed = time.monotonic() - start
         matched, missing, extra = grade_nodes(fixture, classified_nodes)
         # Graded count excludes nodes absorbed by allowed_extra, so a
@@ -305,6 +437,7 @@ def run_fixture(
             low_confidence_nodes=sum(
                 1 for node in classified_nodes if node.get("confidence") == "low"
             ),
+            pipeline_steps=pipeline_steps,
             structural_guard_reasons=_structural_guard_reasons(
                 fixture.content, raw_nodes, classified_nodes
             ),
@@ -434,6 +567,7 @@ def results_to_dict(results: Sequence[FixtureResult]) -> dict[str, Any]:
                 "invalid_nodes": result.invalid_nodes,
                 "low_confidence_nodes": result.low_confidence_nodes,
                 "structural_guard_reasons": list(result.structural_guard_reasons),
+                "pipeline_steps": list(result.pipeline_steps),
                 "guard_ok": result.guard_ok,
                 "elapsed_seconds": round(result.elapsed_seconds, 3),
                 "error": result.error,
@@ -537,6 +671,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="classifier context cap to test; repeat to compare caps",
     )
     parser.add_argument(
+        "--raw-classify",
+        action="store_true",
+        help=(
+            "also score raw classify output, without the live post-classify "
+            "chain, to measure the gap against the full pipeline"
+        ),
+    )
+    parser.add_argument(
         "--no-examples",
         action="store_true",
         help="also run each model with few-shot examples disabled",
@@ -602,6 +744,7 @@ def configs_from_args(args: argparse.Namespace) -> tuple[HarnessConfig, ...]:
     top_ks = tuple(getattr(args, "top_ks", None) or (None,))
     top_ps = tuple(getattr(args, "top_ps", None) or (None,))
     example_modes = (True, False) if args.no_examples else (True,)
+    pipeline_modes = (True, False) if getattr(args, "raw_classify", False) else (True,)
 
     return tuple(
         HarnessConfig(
@@ -613,8 +756,10 @@ def configs_from_args(args: argparse.Namespace) -> tuple[HarnessConfig, ...]:
             presence_penalty=presence_penalty,
             top_k=top_k,
             top_p=top_p,
+            full_pipeline=full_pipeline,
         )
         for model in models
+        for full_pipeline in pipeline_modes
         for cap in caps
         for use_examples in example_modes
         for temperature in temperatures

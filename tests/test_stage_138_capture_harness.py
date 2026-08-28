@@ -365,8 +365,12 @@ class AllowedExtraTests(unittest.TestCase):
         }
 
     def _run(self, nodes):
+        # full_pipeline=False on purpose: these test allowed_extra grading
+        # semantics against exactly the scripted nodes. With the live chain on,
+        # ensure_cogs_companions auto-adds a cogs/daily for each task and the
+        # assertions would be measuring that instead.
         return capture_harness.run_fixture(
-            capture_harness.HarnessConfig(model="m"),
+            capture_harness.HarnessConfig(model="m", full_pipeline=False),
             self._fixture_with_allowed(),
             classifier_factory=lambda config: ScriptedClassifier(nodes),
         )
