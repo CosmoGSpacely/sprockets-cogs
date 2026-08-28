@@ -44,6 +44,13 @@ _BARE_WEEKDAY_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_WEEKS_FROM_WEEKDAY_RE = re.compile(
+    r"\b(?P<count>a|an|one|two|three|four)\s+weeks?\s+from\s+(?P<weekday>"
+    r"mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|"
+    r"fri(?:day)?|sat(?:urday)?|sun(?:day)?"
+    r")\b",
+    re.IGNORECASE,
+)
 _DURATION_RE = re.compile(
     r"\bin\s+(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
     r"(?P<unit>days?|weeks?|months?)\b",
@@ -179,6 +186,20 @@ def resolve_relative_cogs_horizon(text: str, processing_date: str) -> tuple[str,
         if unit.startswith("week"):
             return (source + timedelta(weeks=count)).isoformat(), duration_match.group(0), "day"
         return _add_months(source, count).isoformat(), duration_match.group(0), "month"
+
+    # Must precede the weekday branches below. Both of those match the bare
+    # weekday inside "a week from Friday" and silently discard the offset,
+    # which turned a one-day model miss into a seven-day error (finding 43).
+    weeks_from = _WEEKS_FROM_WEEKDAY_RE.search(lowered)
+    if weeks_from:
+        weekday = WEEKDAYS[_normalize_weekday(weeks_from.group("weekday"))]
+        count = _NUMBER_WORDS.get(weeks_from.group("count").lower(), 1)
+        days = (weekday - source.weekday()) % 7
+        return (
+            (source + timedelta(days=days, weeks=count)).isoformat(),
+            weeks_from.group(0),
+            "day",
+        )
 
     next_match = _NEXT_WEEKDAY_RE.search(lowered)
     if next_match:

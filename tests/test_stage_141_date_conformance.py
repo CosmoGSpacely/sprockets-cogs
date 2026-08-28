@@ -144,7 +144,6 @@ class NextWeekdayTests(unittest.TestCase):
 
 
 class WeekOffsetTests(unittest.TestCase):
-    @unittest.expectedFailure
     def test_a_week_from_friday(self):
         """Stage 139 finding 43. Matches the bare weekday and ignores the
         offset, turning a one-day model miss into a seven-day error."""
@@ -152,10 +151,24 @@ class WeekOffsetTests(unittest.TestCase):
         result = resolve_relative_cogs_horizon("a week from Friday", FRIDAY)
         self.assertEqual(result[0], "2026-06-19")
 
-    @unittest.expectedFailure
     def test_a_week_from_friday_across_year_boundary(self):
         result = resolve_relative_cogs_horizon("a week from Friday", YEAR_END)
         self.assertEqual(result[0], "2027-01-08")
+
+    def test_multi_week_offset(self):
+        self.assertEqual(
+            resolve_relative_cogs_horizon("two weeks from Monday", FRIDAY)[0],
+            "2026-06-29",
+        )
+
+    def test_offset_survives_a_trailing_time(self):
+        """Real captures carry a time; the offset must still win over the
+        bare weekday that follows it."""
+
+        self.assertEqual(
+            resolve_relative_cogs_horizon("a week from friday at 3pm", FRIDAY)[0],
+            "2026-06-19",
+        )
 
 
 class PositionalAlignmentTests(unittest.TestCase):
