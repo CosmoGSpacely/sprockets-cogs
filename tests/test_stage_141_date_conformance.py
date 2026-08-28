@@ -207,7 +207,6 @@ class PositionalAlignmentTests(unittest.TestCase):
         self.assertEqual(out[0]["date"], "2026-06-18")
         self.assertEqual(len(decisions), 1)
 
-    @unittest.expectedFailure
     def test_does_not_move_an_unrelated_node(self):
         """The feed errand has no date phrase and must not be moved."""
 
@@ -216,7 +215,6 @@ class PositionalAlignmentTests(unittest.TestCase):
         feed = next(n for n in out if "feed" in n["title"].lower())
         self.assertEqual(feed["date"], FRIDAY)
 
-    @unittest.expectedFailure
     def test_resolves_the_node_that_owns_the_phrase(self):
         """"thursday" belongs to the dentist item, wherever it sits."""
 
@@ -225,19 +223,26 @@ class PositionalAlignmentTests(unittest.TestCase):
         dentist = next(n for n in out if "DENTIST" in n["title"])
         self.assertEqual(dentist["date"], "2026-06-18")
 
-    def test_misalignment_is_present_today(self):
-        """Pins the current wrong behavior so the fix is visibly a change.
-
-        Delete this test when the two expectedFailure cases above go green.
-        """
+    def test_two_nodes_from_one_raw_item_both_match_it(self):
+        """The named-person rule emits a task and a daily from one raw item.
+        Both must resolve against that item, not against their neighbours."""
 
         raw, classified = self._misaligned()
-        out, decisions = apply_runtime_date_context(raw, classified, FRIDAY)
-        feed = next(n for n in out if "feed" in n["title"].lower())
-        dentist = next(n for n in out if "DENTIST" in n["title"])
-        self.assertEqual(feed["date"], "2026-06-18", "feed wrongly moved")
-        self.assertEqual(dentist["date"], "2026-06-11", "dentist left unfixed")
-        self.assertEqual([d.index for d in decisions], [2])
+        out, _ = apply_runtime_date_context(raw, classified, FRIDAY)
+        frank = [n for n in out if "Frank" in n["title"]]
+        self.assertEqual(len(frank), 2)
+        self.assertTrue(all(n["date"] == FRIDAY for n in frank))
+
+    def test_unmatched_node_falls_back_to_its_own_text(self):
+        """No raw item matches, so the node's own text is the only evidence.
+        Guessing at a raw item here is what finding 42 was."""
+
+        raw = [{"raw": "something else entirely", "type_hint": "task"}]
+        out, decisions = apply_runtime_date_context(
+            raw, [_daily("YOGA tomorrow", "2026-06-09")], FRIDAY
+        )
+        self.assertEqual(out[0]["date"], "2026-06-13")
+        self.assertEqual(decisions[0].phrase, "tomorrow")
 
 
 class EmbeddedDateTests(unittest.TestCase):

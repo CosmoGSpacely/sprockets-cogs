@@ -228,6 +228,65 @@ def resolve_relative_cogs_horizon(text: str, processing_date: str) -> tuple[str,
     return None
 
 
+_MATCH_STOPWORDS = {
+    "a", "an", "and", "at", "for", "from", "in", "of", "on", "re", "the", "to",
+    "with", "is", "it", "my", "need", "about", "up",
+}
+
+#: Below this, an overlap is coincidence rather than evidence of shared origin.
+_MATCH_MIN_SCORE = 0.15
+
+
+def _match_words(text: str) -> set[str]:
+    return {
+        word for word in re.findall(r"[a-z0-9:]+", text.lower())
+        if word not in _MATCH_STOPWORDS
+    }
+
+
+def _match_raw_index(
+    node: Mapping[str, object],
+    raw_nodes: Sequence[Mapping[str, object]],
+) -> int | None:
+    """Find the raw item a classified node came from, by content not position.
+
+    `classify_nodes` does not emit one node per raw item: the named-person rule
+    yields two, and a multi-day setting yields one per workday. Pairing by index
+    therefore reads the wrong item's text as soon as either rule fires, which
+    moved a date onto an unrelated node (Stage 139 finding 42).
+
+    Returns None when nothing matches well enough, or when the best two
+    candidates tie - both mean "no evidence", and using the node's own text
+    alone is safer than guessing between them.
+    """
+
+    node_words = _match_words(
+        f"{_string(node.get('title'))} {_string(node.get('item_text'))}"
+    )
+    if not node_words:
+        return None
+
+    scored: list[tuple[float, int]] = []
+    for index, raw in enumerate(raw_nodes):
+        raw_words = _match_words(_string(raw.get("raw")))
+        if not raw_words:
+            continue
+        overlap = node_words & raw_words
+        if not overlap:
+            continue
+        scored.append((len(overlap) / len(node_words | raw_words), index))
+
+    if not scored:
+        return None
+    scored.sort(key=lambda pair: (-pair[0], pair[1]))
+    best_score, best_index = scored[0]
+    if best_score < _MATCH_MIN_SCORE:
+        return None
+    if len(scored) > 1 and scored[1][0] == best_score:
+        return None
+    return best_index
+
+
 def apply_runtime_date_context(
     raw_nodes: Sequence[Mapping[str, object]],
     classified: Sequence[Mapping[str, object]],
@@ -246,8 +305,9 @@ def apply_runtime_date_context(
     for index, node in enumerate(result):
         if node.get("node_type") != "cogs/daily":
             continue
+        raw_index = _match_raw_index(node, raw_nodes)
         texts = [
-            _string(raw_nodes[index].get("raw")) if index < len(raw_nodes) else "",
+            _string(raw_nodes[raw_index].get("raw")) if raw_index is not None else "",
             _string(node.get("item_text")),
             _string(node.get("title")),
         ]
@@ -312,8 +372,9 @@ def apply_bounded_recurrence_context(
         if node.get("node_type") != "cogs/daily":
             result.append(dict(node))
             continue
+        raw_index = _match_raw_index(node, raw_nodes)
         texts = [
-            _string(raw_nodes[index].get("raw")) if index < len(raw_nodes) else "",
+            _string(raw_nodes[raw_index].get("raw")) if raw_index is not None else "",
             _string(node.get("item_text")),
             _string(node.get("title")),
         ]
