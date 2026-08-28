@@ -7,7 +7,7 @@ import specialists.rosie.loop as agentic_loop
 import specialists.cogs.carry as carry
 import specialists.astro.vault as vault
 from specialists.cogs.ordering import ordering_needs_review, sort_cogs_items
-from specialists.cogs.time_context import (
+from substrate.time_context import (
     apply_bounded_recurrence_context,
     expand_bounded_recurrence,
 )

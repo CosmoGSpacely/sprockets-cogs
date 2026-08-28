@@ -9,7 +9,7 @@ from specialists.cogs.corrections import (
     apply_correction_command,
     parse_correction_command,
 )
-from specialists.cogs.time_context import apply_bounded_recurrence_context
+from substrate.time_context import apply_bounded_recurrence_context
 
 
 class Stage132InputCorrectionTimeTests(unittest.TestCase):

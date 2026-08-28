@@ -8,6 +8,12 @@ scheduled jobs, preview harnesses, or library-backed facades. This folder is the
 public map and implementation home for those boundaries. Specialist-owned logic
 belongs here; cross-boundary contracts belong in `substrate/`.
 
+`substrate.time_context` and `substrate.format` hold date computation and Cogs
+item formatting. They live in `substrate/` rather than under a specialist
+because they are pure functions imported by Rosie, Cogs, and the capture
+harness alike; a module three specialists depend on is a contract, not
+specialist-owned logic. Temporal *policy* stays with Cogs.
+
 `specialists.catalog` is the importable version of this map. It is safe to use
 for docs, tests, and status displays, and it names the package-owned
 implementation files.

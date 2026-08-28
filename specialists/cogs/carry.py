@@ -30,7 +30,7 @@ from specialists.astro.vault import (
     parse_cogs_blocks,
 )
 from specialists.cogs.naming import monthly_path, weekly_path
-from specialists.cogs.time_context import expand_bounded_recurrence, resolve_relative_cogs_horizon
+from substrate.time_context import expand_bounded_recurrence, resolve_relative_cogs_horizon
 from substrate.cog_appearance_registry import (
     CogAppearance,
     CogAppearanceRegistry,

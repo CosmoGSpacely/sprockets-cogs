@@ -116,8 +116,6 @@ SPECIALISTS: tuple[SpecialistDefinition, ...] = (
             "specialists/cogs/specialist.py",
             "specialists/cogs/planning.py",
             "specialists/cogs/naming.py",
-            "specialists/cogs/format.py",
-            "specialists/cogs/time_context.py",
             "specialists/cogs/carry.py",
             "specialists/cogs/nightly.py",
         ),
@@ -172,6 +170,8 @@ SPECIALISTS: tuple[SpecialistDefinition, ...] = (
             "specialists/sprockets/specialist.py",
             "specialists/sprockets/vault_graph.py",
             "substrate/models.py",
+            "substrate/time_context.py",
+            "substrate/format.py",
         ),
         commands=(
             "scripts/sprockets-specialist",

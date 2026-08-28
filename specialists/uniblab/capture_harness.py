@@ -22,8 +22,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from specialists.cogs.format import apply_cogs_item_format
-from specialists.cogs.time_context import (
+from substrate.format import apply_cogs_item_format
+from substrate.time_context import (
     apply_bounded_recurrence_context,
     apply_runtime_date_context,
 )

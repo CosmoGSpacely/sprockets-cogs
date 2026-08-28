@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import unittest
 
-from specialists.cogs.time_context import (
+from substrate.time_context import (
     apply_runtime_date_context,
     resolve_relative_cogs_horizon,
 )

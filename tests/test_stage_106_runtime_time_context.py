@@ -4,8 +4,8 @@ from unittest import TestCase
 from unittest.mock import patch
 
 import specialists.rosie.loop as agentic_loop
-from specialists.cogs.format import apply_cogs_item_format, normalize_cogs_time_text
-from specialists.cogs.time_context import (
+from substrate.format import apply_cogs_item_format, normalize_cogs_time_text
+from substrate.time_context import (
     expand_bounded_recurrence,
     apply_runtime_date_context,
     resolve_relative_cogs_horizon,

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Mapping, Sequence
 
-from specialists.cogs.format import normalize_cogs_time_text
+from substrate.format import normalize_cogs_time_text
 
 
 WEEKDAYS = {

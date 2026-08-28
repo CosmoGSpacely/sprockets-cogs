@@ -17,7 +17,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 import specialists.rosie.classifier_context as classifier_context
-from specialists.cogs.format import apply_cogs_item_format
+from substrate.format import apply_cogs_item_format
 from specialists.rudi.entity_state import get_entities_by_tier, upsert_entity
 from specialists.rosie.extractor_classifier import ExtractClassifier, ExtractClassifierConfig
 from graph.mutations import MutationCommand
@@ -48,7 +48,7 @@ from specialists.rudi.response_routing import (
 from substrate.slug_utils import slugify
 from specialists.sprockets.specialist import SprocketsSpecialist, SprocketsSpecialistConfig
 import specialists.orbit.adapters.telegram_response as telegram_response
-from specialists.cogs.time_context import apply_bounded_recurrence_context, apply_runtime_date_context
+from substrate.time_context import apply_bounded_recurrence_context, apply_runtime_date_context
 from specialists.cogs.corrections import apply_correction_command, parse_correction_command
 from specialists.sprockets.vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,

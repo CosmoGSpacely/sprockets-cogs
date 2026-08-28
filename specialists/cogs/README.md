@@ -17,14 +17,23 @@ horizon materialization.
 - `specialist.py`
 - `planning.py`
 - `naming.py`
-- `format.py`
-- `time_context.py`
 - `carry.py`
 - `nightly.py`
 - `scripts/cogs-specialist`
 - `scripts/cogs-planning`
 - `scripts/carry`
 - `scripts/nightly`
+
+## Date Computation Lives In Substrate
+
+`substrate/time_context.py` and `substrate/format.py` moved out of this package
+in Stage 141. They are pure functions of their arguments - no vault, no memory,
+no writes - and Rosie, Cogs, and the capture harness all import them, so they
+are cross-boundary contracts rather than specialist-owned logic.
+
+Cogs still owns temporal *policy*: horizon, carry, planning consequences, and
+conflict. What a resolved date means for the user is a Cogs decision; computing
+the date is not.
 
 ## Carry Surface
 
