@@ -44,6 +44,10 @@ class HarnessConfig:
     context_max_chars: int = DEFAULT_CONTEXT_MAX_CHARS
     use_examples: bool = True
     temperature: float = 0.1
+    repeat_penalty: float | None = None
+    presence_penalty: float | None = None
+    top_k: int | None = None
+    top_p: float | None = None
 
     @property
     def label(self) -> str:
@@ -54,6 +58,15 @@ class HarnessConfig:
             parts.append("noexamples")
         if self.temperature != 0.1:
             parts.append(f"t{self.temperature}")
+        for name, prefix in (
+            ("repeat_penalty", "rp"),
+            ("presence_penalty", "pp"),
+            ("top_k", "k"),
+            ("top_p", "p"),
+        ):
+            value = getattr(self, name)
+            if value is not None:
+                parts.append(f"{prefix}{value}")
         return "/".join(parts)
 
 
@@ -239,6 +252,10 @@ def run_fixture(
                     model=config.model,
                     temperature=config.temperature,
                     context_max_chars=config.context_max_chars,
+                    repeat_penalty=config.repeat_penalty,
+                    presence_penalty=config.presence_penalty,
+                    top_k=config.top_k,
+                    top_p=config.top_p,
                 )
             )
         raw_nodes = classifier.extract_nodes(fixture.content, now=fixture.now)
@@ -527,25 +544,64 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="runs per config, for variance checks",
     )
+    parser.add_argument(
+        "--temperature",
+        action="append",
+        type=float,
+        dest="temperatures",
+        help="temperature to test; repeat to compare",
+    )
+    for name in ("repeat-penalty", "presence-penalty", "top-p"):
+        parser.add_argument(
+            f"--{name}",
+            action="append",
+            type=float,
+            dest=name.replace("-", "_") + "s",
+            help=f"{name} to test; repeat to compare. Unset leaves it to the model.",
+        )
+    parser.add_argument(
+        "--top-k",
+        action="append",
+        type=int,
+        dest="top_ks",
+        help="top_k to test; repeat to compare. Unset leaves it to the model.",
+    )
     parser.add_argument("--json", action="store_true", help="print JSON report")
     return parser
 
 
 def configs_from_args(args: argparse.Namespace) -> tuple[HarnessConfig, ...]:
+    """Build the config grid. Unset axes stay at one value, so the grid stays small."""
+
     models = tuple(args.models or (ExtractClassifierConfig().model,))
     caps = tuple(args.context_caps or (DEFAULT_CONTEXT_MAX_CHARS,))
-    configs = [
-        HarnessConfig(model=model, context_max_chars=cap)
+    temperatures = tuple(getattr(args, "temperatures", None) or (0.1,))
+    repeat_penalties = tuple(getattr(args, "repeat_penaltys", None) or (None,))
+    presence_penalties = tuple(getattr(args, "presence_penaltys", None) or (None,))
+    top_ks = tuple(getattr(args, "top_ks", None) or (None,))
+    top_ps = tuple(getattr(args, "top_ps", None) or (None,))
+    example_modes = (True, False) if args.no_examples else (True,)
+
+    return tuple(
+        HarnessConfig(
+            model=model,
+            context_max_chars=cap,
+            use_examples=use_examples,
+            temperature=temperature,
+            repeat_penalty=repeat_penalty,
+            presence_penalty=presence_penalty,
+            top_k=top_k,
+            top_p=top_p,
+        )
         for model in models
         for cap in caps
-    ]
-    if args.no_examples:
-        configs.extend(
-            HarnessConfig(model=model, context_max_chars=cap, use_examples=False)
-            for model in models
-            for cap in caps
-        )
-    return tuple(configs)
+        for use_examples in example_modes
+        for temperature in temperatures
+        for repeat_penalty in repeat_penalties
+        for presence_penalty in presence_penalties
+        for top_k in top_ks
+        for top_p in top_ps
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> None:

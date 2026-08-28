@@ -159,6 +159,91 @@ class BuildersMatchLiveCallsTests(unittest.TestCase):
         )
 
 
+class SamplingOptionTests(unittest.TestCase):
+    """Slice 4: sampling knobs travel through request options, not Modelfiles.
+
+    Request options override Modelfile PARAMETER values, so this is the only
+    layer that reliably wins (Stage 138, config-truth layer 3).
+    """
+
+    def test_default_options_are_unchanged(self):
+        """Nothing new may be sent unless explicitly set."""
+
+        self.assertEqual(
+            ExtractClassifierConfig(model="m").chat_options(), {"temperature": 0.1}
+        )
+
+    def test_set_knobs_are_included(self):
+        options = ExtractClassifierConfig(
+            model="m", repeat_penalty=1.0, top_k=20
+        ).chat_options()
+
+        self.assertEqual(options, {"temperature": 0.1, "repeat_penalty": 1.0, "top_k": 20})
+
+    def test_zero_is_sent_not_treated_as_unset(self):
+        options = ExtractClassifierConfig(model="m", presence_penalty=0.0).chat_options()
+
+        self.assertIn("presence_penalty", options)
+        self.assertEqual(options["presence_penalty"], 0.0)
+
+    def test_options_reach_the_chat_call(self):
+        sent = {}
+
+        def fake_chat(**call):
+            sent.update(call)
+
+            class Response:
+                class message:
+                    content = '{"nodes": []}'
+
+            return Response()
+
+        ExtractClassifier(
+            ExtractClassifierConfig(model="m", repeat_penalty=1.15, temperature=0.0),
+            chat_client=fake_chat,
+        ).classify_nodes(RAW, "ctx", now=REF)
+
+        self.assertEqual(
+            sent["options"], {"temperature": 0.0, "repeat_penalty": 1.15}
+        )
+
+    def test_harness_config_labels_sampling_axes(self):
+        from specialists.uniblab.capture_harness import HarnessConfig
+
+        self.assertEqual(
+            HarnessConfig(model="m", repeat_penalty=1.0).label, "m/rp1.0"
+        )
+        self.assertEqual(
+            HarnessConfig(model="m", temperature=0.0).label, "m/t0.0"
+        )
+
+    def test_config_grid_defaults_to_one_config(self):
+        from specialists.uniblab import capture_harness
+
+        args = capture_harness.build_parser().parse_args(["--model", "m"])
+        configs = capture_harness.configs_from_args(args)
+
+        self.assertEqual(len(configs), 1)
+        self.assertIsNone(configs[0].repeat_penalty)
+
+    def test_config_grid_expands_over_sampling_axes(self):
+        from specialists.uniblab import capture_harness
+
+        args = capture_harness.build_parser().parse_args(
+            [
+                "--model", "m",
+                "--repeat-penalty", "1.0",
+                "--repeat-penalty", "1.15",
+                "--temperature", "0.0",
+            ]
+        )
+        configs = capture_harness.configs_from_args(args)
+
+        self.assertEqual(len(configs), 2)
+        self.assertEqual({c.repeat_penalty for c in configs}, {1.0, 1.15})
+        self.assertEqual({c.temperature for c in configs}, {0.0})
+
+
 class DefaultModelTests(unittest.TestCase):
     def test_capture_default_names_the_deployed_model(self):
         """The code default previously claimed Qwen while production ran Gemma."""

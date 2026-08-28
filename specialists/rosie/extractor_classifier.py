@@ -102,6 +102,23 @@ class ExtractClassifierConfig:
     model: str = CAPTURE_MODEL
     temperature: float = 0.1
     context_max_chars: int = DEFAULT_CONTEXT_MAX_CHARS
+    # Sampling knobs. None means "do not send it", so the model's own resolved
+    # parameters apply and default behavior is unchanged. Request options
+    # override Modelfile PARAMETER values, so anything set here wins.
+    repeat_penalty: float | None = None
+    presence_penalty: float | None = None
+    top_k: int | None = None
+    top_p: float | None = None
+
+    def chat_options(self) -> dict[str, Any]:
+        """Build the options dict for a chat call, omitting unset knobs."""
+
+        options: dict[str, Any] = {"temperature": self.temperature}
+        for name in ("repeat_penalty", "presence_penalty", "top_k", "top_p"):
+            value = getattr(self, name)
+            if value is not None:
+                options[name] = value
+        return options
 
 
 def week_workdays(ref: datetime) -> str:
@@ -215,7 +232,7 @@ class ExtractClassifier:
             model=self.config.model,
             messages=messages,
             format=EXTRACT_SCHEMA,
-            options={"temperature": self.config.temperature},
+            options=self.config.chat_options(),
             think=False,
         )
         self._record("extract", messages, response)
@@ -255,7 +272,7 @@ class ExtractClassifier:
             model=self.config.model,
             messages=messages,
             format=CLASSIFY_SCHEMA,
-            options={"temperature": self.config.temperature},
+            options=self.config.chat_options(),
             think=False,
         )
         self._record("classify", messages, response)
