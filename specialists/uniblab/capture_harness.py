@@ -24,6 +24,7 @@ from typing import Any, Callable, Sequence
 
 from specialists.rosie.extractor_classifier import (
     DEFAULT_CONTEXT_MAX_CHARS,
+    CallStats,
     ExtractClassifier,
     ExtractClassifierConfig,
 )
@@ -78,6 +79,23 @@ class FixtureResult:
     structural_guard_reasons: tuple[str, ...] = ()
     expect_structural_guard: bool = False
     error: str = ""
+    call_stats: tuple[CallStats, ...] = ()
+
+    @property
+    def prompt_tokens(self) -> int:
+        """Total prompt tokens across both model calls."""
+
+        return sum(stat.prompt_tokens or 0 for stat in self.call_stats)
+
+    @property
+    def completion_tokens(self) -> int:
+        return sum(stat.completion_tokens or 0 for stat in self.call_stats)
+
+    @property
+    def peak_prompt_tokens(self) -> int:
+        """Largest single-call prompt, i.e. the real context-window pressure."""
+
+        return max((stat.prompt_tokens or 0 for stat in self.call_stats), default=0)
 
     @property
     def recall(self) -> float:
@@ -114,6 +132,34 @@ class FixtureResult:
             and self.invalid_nodes == 0
             and self.guard_ok
         )
+
+
+_NUM_CTX_CACHE: dict[str, int | None] = {}
+
+
+def model_num_ctx(model: str) -> int | None:
+    """Resolved context window for a model tag, or None if unavailable.
+
+    Reads the parameters Ollama actually resolved, not the Modelfile text on
+    disk, so an inherited num_ctx is reported correctly.
+    """
+
+    if model in _NUM_CTX_CACHE:
+        return _NUM_CTX_CACHE[model]
+    value: int | None = None
+    try:
+        import ollama
+
+        parameters = ollama.show(model).get("parameters") or ""
+        for line in parameters.splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[0] == "num_ctx":
+                value = int(parts[1])
+                break
+    except Exception:
+        value = None
+    _NUM_CTX_CACHE[model] = value
+    return value
 
 
 def _describe_expected(expected) -> str:
@@ -226,6 +272,7 @@ def run_fixture(
                 fixture.content, raw_nodes, classified_nodes
             ),
             expect_structural_guard=fixture.expect_structural_guard,
+            call_stats=tuple(getattr(classifier, "call_stats", ())),
         )
     except Exception as exc:
         return FixtureResult(
@@ -285,7 +332,16 @@ def summarize(results: Sequence[FixtureResult]) -> dict[str, dict[str, Any]]:
                 "guard_mismatches": 0,
                 "errors": 0,
                 "elapsed_seconds": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "peak_prompt_tokens": 0,
+                "model": result.config_label.split("/")[0],
             },
+        )
+        item["prompt_tokens"] += result.prompt_tokens
+        item["completion_tokens"] += result.completion_tokens
+        item["peak_prompt_tokens"] = max(
+            item["peak_prompt_tokens"], result.peak_prompt_tokens
         )
         item["runs"] += 1
         item["passed"] += 1 if result.passed else 0
@@ -308,6 +364,11 @@ def summarize(results: Sequence[FixtureResult]) -> dict[str, dict[str, Any]]:
         item["f1"] = round(2 * item["recall"] * item["precision"] / total, 3) if total else 0.0
         item["pass_rate"] = round(item["passed"] / item["runs"], 3) if item["runs"] else 0.0
         item["elapsed_seconds"] = round(item["elapsed_seconds"], 1)
+        num_ctx = model_num_ctx(item["model"])
+        item["num_ctx"] = num_ctx
+        item["peak_context_utilization"] = (
+            round(item["peak_prompt_tokens"] / num_ctx, 4) if num_ctx else None
+        )
     return summary
 
 
@@ -338,6 +399,26 @@ def results_to_dict(results: Sequence[FixtureResult]) -> dict[str, Any]:
                 "guard_ok": result.guard_ok,
                 "elapsed_seconds": round(result.elapsed_seconds, 3),
                 "error": result.error,
+                "prompt_tokens": result.prompt_tokens,
+                "completion_tokens": result.completion_tokens,
+                "peak_prompt_tokens": result.peak_prompt_tokens,
+                "calls": [
+                    {
+                        "call": stat.call,
+                        "prompt_chars": stat.prompt_chars,
+                        "prompt_tokens": stat.prompt_tokens,
+                        "completion_tokens": stat.completion_tokens,
+                        "chars_per_token": (
+                            round(stat.chars_per_token, 2)
+                            if stat.chars_per_token
+                            else None
+                        ),
+                        "eval_seconds": (
+                            round(stat.eval_seconds, 3) if stat.eval_seconds else None
+                        ),
+                    }
+                    for stat in result.call_stats
+                ],
                 "raw_nodes": result.raw_nodes,
                 "classified_nodes": result.classified_nodes,
             }
@@ -367,6 +448,14 @@ def format_results(results: Sequence[FixtureResult]) -> str:
             f"guard_miss={item['guard_mismatches']} errors={item['errors']} "
             f"seconds={item['elapsed_seconds']}"
         )
+        utilization = item.get("peak_context_utilization")
+        lines.append(
+            f"    tokens: prompt={item['prompt_tokens']} "
+            f"completion={item['completion_tokens']} "
+            f"peak_prompt={item['peak_prompt_tokens']} "
+            f"num_ctx={item.get('num_ctx')} "
+            f"peak_use={f'{utilization:.2%}' if utilization else 'n/a'}"
+        )
     lines.append("")
     lines.append("Fixture results")
     for result in results:
@@ -384,6 +473,7 @@ def format_results(results: Sequence[FixtureResult]) -> str:
             f"- [{status}] {result.config_label} / {result.fixture_id}: "
             f"matched={result.matched}/{result.expected_count} "
             f"actual={result.actual_count} f1={result.f1:.2f} "
+            f"tok={result.prompt_tokens}+{result.completion_tokens} "
             f"extracted={result.extracted_count}"
             f"{f'/{result.expected_item_count}' if result.expected_item_count is not None else ''}"
             f" {result.elapsed_seconds:.1f}s{detail}"

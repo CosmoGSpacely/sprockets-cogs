@@ -7,6 +7,7 @@ from pathlib import Path
 import specialists.uniblab.capture_harness as capture_harness
 from specialists.rosie.extractor_classifier import (
     DEFAULT_CONTEXT_MAX_CHARS,
+    CallStats,
     ExtractClassifier,
     ExtractClassifierConfig,
     truncate_context,
@@ -336,6 +337,156 @@ class ReportTests(unittest.TestCase):
         )
 
         self.assertEqual(len(results), 3)
+
+
+class TokenInstrumentationTests(unittest.TestCase):
+    """Slice 2: real tokenizer counts, not character estimates."""
+
+    def _chat_client(self, prompt_tokens=120, completion_tokens=30):
+        def fake_chat(**kwargs):
+            class Response:
+                class message:
+                    # Non-empty items so the classify call is actually reached;
+                    # classify_nodes short-circuits on an empty extraction.
+                    content = '{"items": [{"raw": "a", "type_hint": "task"}], "nodes": []}'
+
+            Response.prompt_eval_count = prompt_tokens
+            Response.eval_count = completion_tokens
+            Response.total_duration = 2_000_000_000
+            Response.load_duration = 500_000_000
+            Response.prompt_eval_duration = 400_000_000
+            Response.eval_duration = 1_100_000_000
+            return Response()
+
+        return fake_chat
+
+    def test_classify_call_records_token_counts(self):
+        classifier = ExtractClassifier(
+            ExtractClassifierConfig(model="m"),
+            chat_client=self._chat_client(),
+        )
+
+        classifier.classify_nodes(
+            [{"raw": "a", "type_hint": "task"}],
+            "some context",
+            now=datetime(2026, 6, 12, 9, 0),
+        )
+
+        self.assertEqual(len(classifier.call_stats), 1)
+        stats = classifier.call_stats[0]
+        self.assertEqual(stats.call, "classify")
+        self.assertEqual(stats.prompt_tokens, 120)
+        self.assertEqual(stats.completion_tokens, 30)
+        self.assertGreater(stats.prompt_chars, 0)
+
+    def test_extract_call_is_recorded_too(self):
+        classifier = ExtractClassifier(
+            ExtractClassifierConfig(model="m"),
+            chat_client=self._chat_client(),
+        )
+
+        classifier.extract_nodes("Call Mom", now=datetime(2026, 6, 12, 9, 0))
+
+        self.assertEqual([s.call for s in classifier.call_stats], ["extract"])
+
+    def test_durations_convert_nanoseconds_to_seconds(self):
+        classifier = ExtractClassifier(
+            ExtractClassifierConfig(model="m"),
+            chat_client=self._chat_client(),
+        )
+
+        classifier.extract_nodes("Call Mom", now=datetime(2026, 6, 12, 9, 0))
+        stats = classifier.call_stats[0]
+
+        self.assertAlmostEqual(stats.total_seconds, 2.0)
+        self.assertAlmostEqual(stats.eval_seconds, 1.1)
+
+    def test_chars_per_token_is_measured_not_assumed(self):
+        stats = CallStats(
+            call="classify", model="m", prompt_chars=400, prompt_tokens=100
+        )
+
+        self.assertEqual(stats.chars_per_token, 4.0)
+
+    def test_missing_token_fields_degrade_gracefully(self):
+        def bare_chat(**kwargs):
+            class Response:
+                class message:
+                    content = '{"nodes": []}'
+
+            return Response()
+
+        classifier = ExtractClassifier(
+            ExtractClassifierConfig(model="m"), chat_client=bare_chat
+        )
+        classifier.classify_nodes(
+            [{"raw": "a", "type_hint": "task"}],
+            "ctx",
+            now=datetime(2026, 6, 12, 9, 0),
+        )
+
+        stats = classifier.call_stats[0]
+        self.assertIsNone(stats.prompt_tokens)
+        self.assertIsNone(stats.chars_per_token)
+        self.assertGreater(stats.prompt_chars, 0)
+
+    def test_harness_aggregates_tokens_across_both_calls(self):
+        def factory(config):
+            return ExtractClassifier(
+                ExtractClassifierConfig(model=config.model),
+                chat_client=self._chat_client(prompt_tokens=200, completion_tokens=50),
+            )
+
+        result = capture_harness.run_fixture(
+            capture_harness.HarnessConfig(model="m"),
+            _fixture(expected_nodes=()),
+            classifier_factory=factory,
+        )
+
+        self.assertEqual(len(result.call_stats), 2)
+        self.assertEqual(result.prompt_tokens, 400)
+        self.assertEqual(result.completion_tokens, 100)
+        self.assertEqual(result.peak_prompt_tokens, 200)
+
+    def test_json_report_carries_per_call_token_detail(self):
+        def factory(config):
+            return ExtractClassifier(
+                ExtractClassifierConfig(model=config.model),
+                chat_client=self._chat_client(),
+            )
+
+        results = capture_harness.run_harness(
+            (capture_harness.HarnessConfig(model="m"),),
+            (_fixture(expected_nodes=()),),
+            classifier_factory=factory,
+        )
+        entry = capture_harness.results_to_dict(results)["results"][0]
+
+        self.assertEqual([c["call"] for c in entry["calls"]], ["extract", "classify"])
+        self.assertEqual(entry["calls"][0]["prompt_tokens"], 120)
+        self.assertIsNotNone(entry["calls"][0]["chars_per_token"])
+
+    def test_context_utilization_uses_resolved_num_ctx(self):
+        capture_harness._NUM_CTX_CACHE["fake-model"] = 16384
+
+        def factory(config):
+            return ExtractClassifier(
+                ExtractClassifierConfig(model=config.model),
+                chat_client=self._chat_client(prompt_tokens=1638),
+            )
+
+        try:
+            results = capture_harness.run_harness(
+                (capture_harness.HarnessConfig(model="fake-model"),),
+                (_fixture(expected_nodes=()),),
+                classifier_factory=factory,
+            )
+            summary = capture_harness.summarize(results)["fake-model"]
+        finally:
+            capture_harness._NUM_CTX_CACHE.pop("fake-model", None)
+
+        self.assertEqual(summary["num_ctx"], 16384)
+        self.assertAlmostEqual(summary["peak_context_utilization"], 0.0999, places=3)
 
 
 class LoaderTests(unittest.TestCase):

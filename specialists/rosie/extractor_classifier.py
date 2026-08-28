@@ -43,6 +43,57 @@ class ChatClient(Protocol):
 
 DEFAULT_CONTEXT_MAX_CHARS = 2000
 
+_NS_PER_SECOND = 1_000_000_000
+
+
+@dataclass(frozen=True)
+class CallStats:
+    """Measured cost of one model call.
+
+    Token counts come from the model's own tokenizer via Ollama's
+    `prompt_eval_count` / `eval_count`, not from a character estimate.
+    """
+
+    call: str
+    model: str
+    prompt_chars: int
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_seconds: float | None = None
+    load_seconds: float | None = None
+    prompt_eval_seconds: float | None = None
+    eval_seconds: float | None = None
+
+    @property
+    def chars_per_token(self) -> float | None:
+        """Measured ratio for this project's real prompts."""
+
+        if not self.prompt_tokens:
+            return None
+        return self.prompt_chars / self.prompt_tokens
+
+
+def _seconds(value: Any) -> float | None:
+    if not isinstance(value, (int, float)):
+        return None
+    return value / _NS_PER_SECOND
+
+
+def _call_stats(call: str, model: str, messages: list[dict], response: Any) -> CallStats:
+    """Build CallStats from a chat response, tolerating clients that omit fields."""
+
+    return CallStats(
+        call=call,
+        model=model,
+        prompt_chars=sum(len(str(message.get("content", ""))) for message in messages),
+        prompt_tokens=getattr(response, "prompt_eval_count", None),
+        completion_tokens=getattr(response, "eval_count", None),
+        total_seconds=_seconds(getattr(response, "total_duration", None)),
+        load_seconds=_seconds(getattr(response, "load_duration", None)),
+        prompt_eval_seconds=_seconds(getattr(response, "prompt_eval_duration", None)),
+        eval_seconds=_seconds(getattr(response, "eval_duration", None)),
+    )
+
 
 @dataclass(frozen=True)
 class ExtractClassifierConfig:
@@ -80,6 +131,21 @@ class ExtractClassifier:
     ) -> None:
         self.config = config or ExtractClassifierConfig()
         self.chat_client = chat_client or ollama.chat
+        self.call_stats: list[CallStats] = []
+
+    def _record(self, call: str, messages: list[dict], response: Any) -> None:
+        """Record and log the measured cost of one model call."""
+
+        stats = _call_stats(call, self.config.model, messages, response)
+        self.call_stats.append(stats)
+        log.info(
+            "%s tokens: prompt=%s completion=%s chars=%d ratio=%s",
+            call,
+            stats.prompt_tokens,
+            stats.completion_tokens,
+            stats.prompt_chars,
+            f"{stats.chars_per_token:.2f}" if stats.chars_per_token else "n/a",
+        )
 
     def extract_nodes(self, content: str, now: datetime | None = None) -> list[dict]:
         """Extract raw items from input text."""
@@ -101,6 +167,7 @@ class ExtractClassifier:
             options={"temperature": self.config.temperature},
             think=False,
         )
+        self._record("extract", messages, response)
         raw = response.message.content
         log.debug("extract_nodes raw: %s", raw)
         try:
@@ -149,6 +216,7 @@ class ExtractClassifier:
             options={"temperature": self.config.temperature},
             think=False,
         )
+        self._record("classify", messages, response)
         raw = response.message.content
         log.debug("classify_nodes raw: %s", raw)
         try:
