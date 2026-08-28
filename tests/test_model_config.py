@@ -14,8 +14,8 @@ class ModelConfigTests(TestCase):
         with patch.dict(os.environ, {}, clear=True):
             reloaded = importlib.reload(agentic_loop)
 
-        self.assertEqual(reloaded.DEFAULT_MODEL, "qwen3.5:9b-32k-cosmo")
-        self.assertEqual(reloaded.MODEL, "qwen3.5:9b-32k-cosmo")
+        self.assertEqual(reloaded.DEFAULT_MODEL, "gemma4:12b-32k-cosmo")
+        self.assertEqual(reloaded.MODEL, "gemma4:12b-32k-cosmo")
 
     def test_model_can_be_overridden_by_environment(self):
         with patch.dict(os.environ, {"SPROCKETS_COGS_MODEL": "test-model:64k"}):

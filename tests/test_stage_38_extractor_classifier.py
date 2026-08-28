@@ -54,7 +54,7 @@ class Stage38ExtractorClassifierTests(unittest.TestCase):
             os.environ.pop("SPROCKETS_COGS_MODEL", None)
             reloaded = importlib.reload(ec)
 
-            self.assertEqual(reloaded.CAPTURE_MODEL, "qwen3.5:9b-32k-cosmo")
+            self.assertEqual(reloaded.CAPTURE_MODEL, "gemma4:12b-32k-cosmo")
         finally:
             os.environ.clear()
             os.environ.update(original_env)

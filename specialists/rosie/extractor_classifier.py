@@ -25,7 +25,7 @@ from specialists.rosie.prompts import (
 )
 
 
-DEFAULT_CAPTURE_MODEL = "qwen3.5:9b-32k-cosmo"
+DEFAULT_CAPTURE_MODEL = "gemma4:12b-32k-cosmo"
 CAPTURE_MODEL = os.environ.get(
     "SPROCKETS_COGS_EXTRACTOR_MODEL",
     os.environ.get("SPROCKETS_COGS_MODEL", DEFAULT_CAPTURE_MODEL),
@@ -121,6 +121,65 @@ def truncate_context(context: str, max_chars: int = DEFAULT_CONTEXT_MAX_CHARS) -
     return context[:max_chars] + "\n[... truncated]"
 
 
+def date_anchor(ref: datetime) -> str:
+    """Shared date block for both model calls.
+
+    Both calls must state today's date and the week's workday anchors. They
+    previously assembled this separately, and drifted: the extract call lost
+    the `Today:` line while classify kept it, so the model resolved relative
+    dates by guessing from the workday list (Stage 138 finding 12). Keeping one
+    definition is what stops that recurring.
+    """
+
+    return (
+        f"Today: {ref.strftime('%Y-%m-%d (%A)')}\n"
+        f"This week's workdays: {week_workdays(ref)}"
+    )
+
+
+def build_extract_messages(content: str, ref: datetime) -> list[dict]:
+    """Assemble the exact message list for the extract call."""
+
+    return [
+        {"role": "system", "content": EXTRACT_SYSTEM},
+        *EXTRACT_EXAMPLES,
+        {
+            "role": "user",
+            "content": (
+                f"{date_anchor(ref)}\n\n"
+                f"Extract all items from this text:\n\n{content}"
+            ),
+        },
+    ]
+
+
+def build_classify_messages(
+    raw_nodes: list[dict],
+    context: str,
+    ref: datetime,
+    *,
+    error_context: str = "",
+    use_examples: bool = True,
+    context_max_chars: int = DEFAULT_CONTEXT_MAX_CHARS,
+) -> list[dict]:
+    """Assemble the exact message list for the classify call."""
+
+    user_msg = (
+        f"{date_anchor(ref)}\n\n"
+        f"{truncate_context(context, context_max_chars)}\n\n"
+        f"Extracted:\n{json.dumps(raw_nodes, indent=2)}\n\n"
+    )
+    if error_context:
+        user_msg += f"Fix these issues from the previous attempt:\n{error_context}\n\n"
+    user_msg += "Classify each item."
+
+    return [
+        {"role": "system", "content": CLASSIFY_SYSTEM},
+        *(CLASSIFY_EXAMPLES if use_examples else []),
+        {"role": "user", "content": user_msg},
+    ]
+
+
 class ExtractClassifier:
     """Facade for the local model extraction/classification chain."""
 
@@ -151,16 +210,7 @@ class ExtractClassifier:
         """Extract raw items from input text."""
 
         ref = now or datetime.now()
-        extract_msg = (
-            f"Today: {ref.strftime('%Y-%m-%d (%A)')}\n"
-            f"This week's workdays: {week_workdays(ref)}\n\n"
-            f"Extract all items from this text:\n\n{content}"
-        )
-        messages = [
-            {"role": "system", "content": EXTRACT_SYSTEM},
-            *EXTRACT_EXAMPLES,
-            {"role": "user", "content": extract_msg},
-        ]
+        messages = build_extract_messages(content, ref)
         response = self.chat_client(
             model=self.config.model,
             messages=messages,
@@ -192,24 +242,15 @@ class ExtractClassifier:
 
         if not raw_nodes:
             return []
-        today_dt = now or datetime.now()
-        today = today_dt.strftime("%Y-%m-%d (%A)")
-        user_msg = (
-            f"Today: {today}\n"
-            f"This week's workdays: {week_workdays(today_dt)}\n\n"
-            f"{truncate_context(context, self.config.context_max_chars)}\n\n"
-            f"Extracted:\n{json.dumps(raw_nodes, indent=2)}\n\n"
+        ref = now or datetime.now()
+        messages = build_classify_messages(
+            raw_nodes,
+            context,
+            ref,
+            error_context=error_context,
+            use_examples=use_examples,
+            context_max_chars=self.config.context_max_chars,
         )
-        if error_context:
-            user_msg += f"Fix these issues from the previous attempt:\n{error_context}\n\n"
-        user_msg += "Classify each item."
-
-        examples = CLASSIFY_EXAMPLES if use_examples else []
-        messages = [
-            {"role": "system", "content": CLASSIFY_SYSTEM},
-            *examples,
-            {"role": "user", "content": user_msg},
-        ]
         response = self.chat_client(
             model=self.config.model,
             messages=messages,
