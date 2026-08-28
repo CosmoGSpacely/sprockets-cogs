@@ -21,8 +21,8 @@ Never drop a day, date, or time from the input. Keep it in the raw field so
 classification can date the item.
 
 Multi-day settings: if a setting spans multiple days ("all week", "Mon-Fri"),
-extract one item per day using the workdays list in the message. Embed the date
-in the raw field: e.g. {"raw": "WFH 2026-04-20", "type_hint": "setting"}.
+extract one item per day and name the day: e.g. {"raw": "WFH Monday",
+"type_hint": "setting"}. Do not compute dates yourself.
 
 Output format: {"items": [{"raw": "...", "type_hint": "..."}]}
 """
@@ -81,7 +81,7 @@ EXTRACT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": '{"items": [{"raw": "WFH 2026-04-21", "type_hint": "setting"}, {"raw": "WFH 2026-04-22", "type_hint": "setting"}, {"raw": "WFH 2026-04-23", "type_hint": "setting"}, {"raw": "WFH 2026-04-24", "type_hint": "setting"}, {"raw": "WFH 2026-04-25", "type_hint": "setting"}, {"raw": "team standup Tuesday at 9am", "type_hint": "appointment"}]}'
+        "content": '{"items": [{"raw": "WFH Monday", "type_hint": "setting"}, {"raw": "WFH Tuesday", "type_hint": "setting"}, {"raw": "WFH Wednesday", "type_hint": "setting"}, {"raw": "WFH Thursday", "type_hint": "setting"}, {"raw": "WFH Friday", "type_hint": "setting"}, {"raw": "team standup Tuesday at 9am", "type_hint": "appointment"}]}'
     },
     {
         "role": "user",
