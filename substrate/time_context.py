@@ -51,6 +51,9 @@ _WEEKS_FROM_WEEKDAY_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+#: An explicit YYYY-MM-DD already in the text. More specific than any weekday
+#: word beside it, so it suppresses the weekday branches (finding 56).
+_EXPLICIT_ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _DURATION_RE = re.compile(
     r"\bin\s+(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
     r"(?P<unit>days?|weeks?|months?)\b",
@@ -186,6 +189,19 @@ def resolve_relative_cogs_horizon(text: str, processing_date: str) -> tuple[str,
         if unit.startswith("week"):
             return (source + timedelta(weeks=count)).isoformat(), duration_match.group(0), "day"
         return _add_months(source, count).isoformat(), duration_match.group(0), "month"
+
+    # A weekday word is generic - "Saturday" recurs every week - while an
+    # explicit date names one day. When extract emits both, as it does for
+    # multi-day settings ("YOGA Saturday 2026-06-21"), the weekday branches
+    # below would match the word and discard the date, collapsing every
+    # occurrence onto the same day (finding 56). Decline instead: the node
+    # already carries the explicit date, and declining leaves it alone.
+    #
+    # Deliberately does not suppress the anchor-relative branches above.
+    # "today" and "tomorrow" are specific to the processing date and are a
+    # stronger signal than a date the model computed.
+    if _EXPLICIT_ISO_DATE_RE.search(lowered):
+        return None
 
     # Must precede the weekday branches below. Both of those match the bare
     # weekday inside "a week from Friday" and silently discard the offset,

@@ -169,6 +169,55 @@ class WeekOffsetTests(unittest.TestCase):
         )
 
 
+class ExplicitDatePrecedenceTests(unittest.TestCase):
+    """Finding 56 - a weekday word must not beat an explicit date beside it.
+
+    Extract emits both for multi-day settings ("YOGA Saturday 2026-06-21").
+    The weekday branches matched the word and discarded the date, collapsing
+    every occurrence in a series onto one day.
+    """
+
+    def test_explicit_date_suppresses_the_weekday_branches(self):
+        self.assertIsNone(
+            resolve_relative_cogs_horizon("YOGA Saturday 2026-06-21 at 10a", FRIDAY)
+        )
+        self.assertIsNone(
+            resolve_relative_cogs_horizon("WFH Monday 2026-06-15", FRIDAY)
+        )
+
+    def test_a_series_no_longer_collapses_onto_one_day(self):
+        """The whole point: three occurrences must stay three dates."""
+
+        raw = [
+            {"raw": f"YOGA Saturday {d} at 10a", "type_hint": "appointment"}
+            for d in ("2026-06-13", "2026-06-20", "2026-06-27")
+        ]
+        nodes = [_daily("YOGA 10a", d) for d in ("2026-06-13", "2026-06-20", "2026-06-27")]
+        out, decisions = apply_runtime_date_context(raw, nodes, FRIDAY)
+        self.assertEqual(
+            [n["date"] for n in out], ["2026-06-13", "2026-06-20", "2026-06-27"]
+        )
+        self.assertEqual(decisions, [])
+
+    def test_weekday_alone_still_resolves(self):
+        """Suppression must be limited to the both-signals case."""
+
+        self.assertEqual(
+            resolve_relative_cogs_horizon("YOGA Saturday at 10a", FRIDAY)[0],
+            "2026-06-13",
+        )
+        self.assertEqual(
+            resolve_relative_cogs_horizon("WFH Monday", FRIDAY)[0], "2026-06-15"
+        )
+
+    def test_anchor_relative_words_are_not_suppressed(self):
+        """"tomorrow" is specific to the processing date and outranks a date
+        the model computed; only the generic weekday words step aside."""
+
+        result = resolve_relative_cogs_horizon("meeting tomorrow 2026-06-20", FRIDAY)
+        self.assertEqual(result[0], "2026-06-13")
+
+
 class PositionalAlignmentTests(unittest.TestCase):
     """Stage 139 finding 42 - the highest-severity defect carried into 141."""
 
