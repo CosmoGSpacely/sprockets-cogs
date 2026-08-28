@@ -190,19 +190,6 @@ def resolve_relative_cogs_horizon(text: str, processing_date: str) -> tuple[str,
             return (source + timedelta(weeks=count)).isoformat(), duration_match.group(0), "day"
         return _add_months(source, count).isoformat(), duration_match.group(0), "month"
 
-    # A weekday word is generic - "Saturday" recurs every week - while an
-    # explicit date names one day. When extract emits both, as it does for
-    # multi-day settings ("YOGA Saturday 2026-06-21"), the weekday branches
-    # below would match the word and discard the date, collapsing every
-    # occurrence onto the same day (finding 56). Decline instead: the node
-    # already carries the explicit date, and declining leaves it alone.
-    #
-    # Deliberately does not suppress the anchor-relative branches above.
-    # "today" and "tomorrow" are specific to the processing date and are a
-    # stronger signal than a date the model computed.
-    if _EXPLICIT_ISO_DATE_RE.search(lowered):
-        return None
-
     # Must precede the weekday branches below. Both of those match the bare
     # weekday inside "a week from Friday" and silently discard the offset,
     # which turned a one-day model miss into a seven-day error (finding 43).
@@ -234,6 +221,24 @@ def resolve_relative_cogs_horizon(text: str, processing_date: str) -> tuple[str,
             f"next {next_match.group(1).lower()}",
             "day",
         )
+
+    # Only the BARE weekday steps aside for an explicit date. Extract emits
+    # both signals together in two different shapes and they need opposite
+    # precedence (finding 56, corrected in 3e-fix):
+    #
+    #   "YOGA Saturday 2026-06-21"        bare word + date -> the date wins,
+    #       because "Saturday" is generic and matching it collapses every
+    #       occurrence in a series onto one day.
+    #   "Dentist next Tuesday (2027-01-05)"  qualified phrase + date -> the
+    #       phrase wins, because it carries meaning the date cannot ("next"
+    #       is the second occurrence) and the parenthetical is the model
+    #       showing its arithmetic, which is what the resolver exists to
+    #       correct.
+    #
+    # Placing the guard here rather than above the qualified branches is the
+    # whole distinction; putting it earlier cost four fixtures.
+    if _EXPLICIT_ISO_DATE_RE.search(lowered):
+        return None
 
     bare_match = _BARE_WEEKDAY_RE.search(lowered)
     if bare_match:

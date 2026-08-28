@@ -199,6 +199,25 @@ class ExplicitDatePrecedenceTests(unittest.TestCase):
         )
         self.assertEqual(decisions, [])
 
+    def test_qualified_phrases_outrank_an_explicit_date(self):
+        """The distinction that cost four fixtures in the first 3e attempt.
+
+        Extract appends its arithmetic parenthetically - "next Tuesday
+        (2027-01-05)". Suppressing on any explicit date made the resolver
+        defer to exactly the arithmetic it exists to correct. A qualified
+        phrase carries meaning the date cannot, so it wins.
+        """
+
+        result = resolve_relative_cogs_horizon(
+            "Dentist next Tuesday (2027-01-05)", YEAR_END
+        )
+        self.assertEqual(result[0], "2027-01-12")
+
+        result = resolve_relative_cogs_horizon(
+            "Inspection is a week from Friday (2027-01-09)", YEAR_END
+        )
+        self.assertEqual(result[0], "2027-01-08")
+
     def test_weekday_alone_still_resolves(self):
         """Suppression must be limited to the both-signals case."""
 
