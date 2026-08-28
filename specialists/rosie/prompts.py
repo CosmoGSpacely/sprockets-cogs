@@ -10,8 +10,15 @@ type_hint values:
   setting     — context keyword, no time (WFH, ONSITE, HOLIDAY)
   task        — actionable, no time anchor
   contact     — a person
-  entity      — org, place, or thing
+  entity      — org, place, or thing mentioned only for reference
   note        — reference or idea, no action
+
+A store or place name paired with a day or time is an errand, not an entity.
+"WALMART Saturday" → {"raw": "WALMART Saturday", "type_hint": "task"}
+Use entity only when nothing is being done at the place.
+
+Never drop a day, date, or time from the input. Keep it in the raw field so
+classification can date the item.
 
 Multi-day settings: if a setting spans multiple days ("all week", "Mon-Fri"),
 extract one item per day using the workdays list in the message. Embed the date
@@ -118,9 +125,12 @@ item_text formatting for cogs/daily:
   todo        → mixed case            e.g. "Pick up prescription at CVS"
 
 Tasks:
+  Listed under a project, goal, or area heading → sprockets/task ONLY.
+    e.g. "Garage Work Project Tasks:" or "Area: Farm. Goal: Fix tractor."
+    Project work is standing work. Do not also put it on a day.
   Named person or ongoing effort → TWO nodes: sprockets/task + cogs/daily (mixed case).
-  Simple errand, no named person  → cogs/daily only (mixed case).
-  For both: use the mentioned day if given, otherwise today's date.
+  Simple errand or chore, no named person → cogs/daily only (mixed case).
+  For any cogs/daily: use the mentioned day if given, otherwise today's date.
 
 Multi-day settings: a setting that spans multiple days ("all week", "Mon–Fri") yields one
 cogs/daily per workday. "WFH all week" → five WFH nodes, one per workday Mon–Fri of the
