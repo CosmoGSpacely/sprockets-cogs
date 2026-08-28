@@ -1,0 +1,18 @@
+{
+  "fixture_id": "large-context-crowding",
+  "category": "context",
+  "description": "A realistic full day's note plus a deep hierarchy list, large enough that the context cap actually binds.",
+  "source": "Composed for Stage 139 deliverable B6. Stage 138 finding 8: without this the cap experiment measures nothing.",
+  "content": "Also need to swap the trailer wiring harness before the inspection.",
+  "now": "2026-06-12T09:00:00",
+  "context": "Already in today's note:\n- DENTIST 8am (cogs/daily, 2026-06-12)\n- Pick up order at KOHLS (cogs/daily, 2026-06-12)\n- Relocate turtle (cogs/daily, 2026-06-12)\n- GIANT: steaks sale (cogs/daily, 2026-06-12)\n- HARBOR FREIGHT: 20 off one item coupon (cogs/daily, 2026-06-12)\n- Check and charge Dale battery (cogs/daily, 2026-06-12)\n- Call Frank about the Acme contract (cogs/daily, 2026-06-12)\n- WFH (cogs/daily, 2026-06-12)\n- Drop the recycling (cogs/daily, 2026-06-12)\n- Patch holes in rear wall (sprockets/task)\n- Install bin shelves (sprockets/task)\n- Repair alcove light circuit (sprockets/task)\n- Install new alcove light (sprockets/task)\n- Install ladder racks (sprockets/task)\n- Tear out old workbench (sprockets/task)\n- Design new workbench (sprockets/task)\n- Order replacement filters (sprockets/task)\n- Remount front tires (sprockets/task)\n- Fix tractor hydraulics (sprockets/task)\n- Reseed the lower pasture (sprockets/task)\n- Service the generator (sprockets/task)\n- Clean the gutters (sprockets/task)\n- Replace the mailbox post (sprockets/task)\n- Winterize the outside spigots (sprockets/task)\n- Sharpen the mower blades (sprockets/task)\nKnown hierarchy parents: General, Farm, Sprockets-Cogs Builder, Garage Work, Household Maintenance, Vehicle Maintenance, Pasture and Fencing, Equipment Service, Reading List, Finance and Bills, Travel Planning, Home Network\n",
+  "expected": {
+    "extract": {
+      "item_count": 1
+    },
+    "nodes": [
+      {"node_type": "sprockets/task", "must_include": ["wiring harness"], "parent_hint": "Vehicle Maintenance"}
+    ]
+  },
+  "notes": "Deliberately one tiny input against a large context, so anything that goes wrong is attributable to context handling rather than to parsing the capture. Three failure modes are in scope and all are graded by the exact-match pass: restating items already present in the note, dropping the new item because the context crowded it out, and losing the parent when the known-parents list gets long. This is the first fixture where 'Vehicle Maintenance' is both a known parent and the obviously correct one, so parent_hint is asserted positively here rather than as an empty-string restraint check. Also the only fixture with a context block big enough for context_max_chars to bind at all: 1370 characters against every other fixture's 95. It does not bind at the current 2000 default - the cap experiment in slice 6 has to sweep below 1370 to produce a number, and this fixture is the only reason such a sweep measures anything."
+}

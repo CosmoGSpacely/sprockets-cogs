@@ -1,0 +1,22 @@
+{
+  "fixture_id": "stt-garbled-proper-noun",
+  "category": "stt",
+  "description": "Speech-to-text has mangled a proper noun; correct behavior is to keep it verbatim at low confidence, not to guess a real word.",
+  "source": "Composed. The 'FullBloom' -> 'full loom' class of error is observed in real dictated captures.",
+  "content": "order the replacement filters from full loom before friday",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 1
+    },
+    "nodes": [
+      {
+        "node_type": "cogs/daily",
+        "must_include": ["full loom"],
+        "date": "2026-06-12",
+        "confidence": "low"
+      }
+    ]
+  },
+  "notes": "The vendor name arrived garbled. Three behaviors are wrong here and this fixture fails on each: silently dropping the item, 'correcting' it to a plausible real word, and asserting high confidence on a token the model cannot resolve. The required behavior is preserve-and-flag - carry 'full loom' through verbatim so a human can fix it in review, and mark the node low confidence so review actually surfaces it. This is the one fixture where a low-confidence answer is the correct answer, which makes it the direct counterweight to the CLASSIFY_SYSTEM pressure to always produce a confident node. must_include holds the garbled form on purpose: matching it proves the text was preserved rather than repaired."
+}

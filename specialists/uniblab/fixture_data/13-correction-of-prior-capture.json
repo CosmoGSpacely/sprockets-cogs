@@ -1,0 +1,17 @@
+{
+  "fixture_id": "correction-of-prior-capture",
+  "category": "mutation",
+  "description": "User corrects a previously captured date range; the capture path must not silently write a second conflicting item.",
+  "source": "Composed from the Stage 139 deliverable B7 mutation case.",
+  "content": "Remove the vacation August 4-11, it's actually September 4-11",
+  "now": "2026-06-12T09:00:00",
+  "context": "Already in today's note: (none)\nKnown hierarchy parents: General, Farm, Sprockets-Cogs Builder\nRecent nodes: Vacation August 4-11 (cogs/setting, 2026-08-04)\n",
+  "expect_structural_guard": true,
+  "expected": {
+    "extract": {
+      "item_count": 1
+    },
+    "nodes": []
+  },
+  "notes": "This is a mutation of existing graph state, not a new capture. Deleting or rewriting an existing node is exactly the class of action CLAUDE.md holds review-first - 'the model proposes; code validates and writes' - so the correct outcome is that nothing is written straight through and the input is routed to review. The fixture asserts zero nodes and expects the structural guard to fire. It is expected to FAIL on arrival: there is no mutation-intent detection in specialists/rosie/loop.py today, and the likely live behavior is a brand new September node with the stale August node left in place, which is the silent-divergence failure. Recording that as a scored red is the point; the fix is a separate slice and probably a separate stage."
+}

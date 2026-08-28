@@ -28,6 +28,12 @@ class ExpectedNode:
     node_type: str
     must_include: tuple[str, ...] = ()
     date: str = ""
+    parent_hint: str | None = None
+    """Expected hierarchy parent. `None` does not grade the field at all;
+    `""` asserts the node carries no parent, which is how a fixture states
+    that inventing or borrowing a parent is the failure being watched for."""
+
+    confidence: str = ""
 
     def matches(self, node: dict[str, Any]) -> bool:
         """True when an actual classified node satisfies this expectation."""
@@ -35,6 +41,11 @@ class ExpectedNode:
         if node.get("node_type") != self.node_type:
             return False
         if self.date and node.get("date") != self.date:
+            return False
+        if self.parent_hint is not None:
+            if (node.get("parent_hint") or "") != self.parent_hint:
+                return False
+        if self.confidence and node.get("confidence") != self.confidence:
             return False
         haystack = " ".join(
             str(node.get(key, "")) for key in ("title", "item_text")
@@ -70,6 +81,22 @@ class CaptureFixture:
     notes: str = ""
 
 
+def _expected_node(node: dict[str, Any]) -> ExpectedNode:
+    """Build one ExpectedNode from fixture JSON.
+
+    `parent_hint` is absent-vs-empty sensitive: a missing key leaves the field
+    ungraded, an empty string asserts the node must carry no parent.
+    """
+
+    return ExpectedNode(
+        node_type=node["node_type"],
+        must_include=tuple(node.get("must_include", ())),
+        date=node.get("date", ""),
+        parent_hint=node.get("parent_hint"),
+        confidence=node.get("confidence", ""),
+    )
+
+
 def fixture_paths(fixture_dir: Path = FIXTURE_DIR) -> list[Path]:
     return sorted(fixture_dir.glob("*.json"))
 
@@ -91,20 +118,10 @@ def load_capture_fixture(path: Path) -> CaptureFixture:
         expected_item_count=extract.get("item_count"),
         expected_type_hints=tuple(extract.get("type_hints", ())),
         expected_nodes=tuple(
-            ExpectedNode(
-                node_type=node["node_type"],
-                must_include=tuple(node.get("must_include", ())),
-                date=node.get("date", ""),
-            )
-            for node in expected.get("nodes", ())
+            _expected_node(node) for node in expected.get("nodes", ())
         ),
         allowed_extra=tuple(
-            ExpectedNode(
-                node_type=node["node_type"],
-                must_include=tuple(node.get("must_include", ())),
-                date=node.get("date", ""),
-            )
-            for node in expected.get("allowed_extra", ())
+            _expected_node(node) for node in expected.get("allowed_extra", ())
         ),
         expect_structural_guard=bool(data.get("expect_structural_guard", False)),
         notes=data.get("notes", ""),

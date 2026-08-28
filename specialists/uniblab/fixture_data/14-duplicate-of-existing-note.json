@@ -1,0 +1,18 @@
+{
+  "fixture_id": "duplicate-of-existing-note",
+  "category": "context",
+  "description": "Two of three dictated items are already in today's note; only the new one should be written.",
+  "source": "Composed for Stage 139 deliverable B7 duplicate avoidance, with a genuinely populated context block.",
+  "content": "need to pick up the order at Kohls, charge the Dale battery, and drop the recycling",
+  "now": "2026-06-12T09:00:00",
+  "context": "Already in today's note:\n- Pick up order at KOHLS (cogs/daily, 2026-06-12)\n- Check and charge Dale battery (cogs/daily, 2026-06-12)\nKnown hierarchy parents: General, Farm, Sprockets-Cogs Builder\n",
+  "expected": {
+    "extract": {
+      "item_count": 3
+    },
+    "nodes": [
+      {"node_type": "cogs/daily", "must_include": ["recycling"], "date": "2026-06-12"}
+    ]
+  },
+  "notes": "The context block has existed in every capture prompt but no fixture has ever populated it, so whether the model reads it has never been measured. Restating an item the user already captured produces a duplicate the user must clean up by hand, which is worse than a miss. Extract is expected to find three items - the input does contain three - and classify is where the two known ones should be suppressed, so expected_item_count 3 against one expected node is intentional rather than an inconsistency. Deliberately phrased differently from the context entries ('pick up the order at Kohls' vs 'Pick up order at KOHLS') so this grades recognition of the same item, not string equality."
+}

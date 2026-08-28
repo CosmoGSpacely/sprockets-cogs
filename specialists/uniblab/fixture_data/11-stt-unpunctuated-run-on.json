@@ -1,0 +1,24 @@
+{
+  "fixture_id": "stt-unpunctuated-run-on",
+  "category": "stt",
+  "description": "Typical dictated capture: no punctuation, filler words, spoken numbers, clauses joined by 'and'.",
+  "source": "Composed from the dictation style of /home/cosmo/sc/archive/telegram-*.input captures.",
+  "content": "um okay so i need to call Frank Ott about the tractor loan and pick up feed at the co-op and there's a dentist thing thursday at eight thirty",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 3
+    },
+    "nodes": [
+      {"node_type": "sprockets/task", "must_include": ["frank"]},
+      {"node_type": "cogs/daily", "must_include": ["frank"], "date": "2026-06-12"},
+      {"node_type": "sprockets/contact", "must_include": ["frank"]},
+      {"node_type": "cogs/daily", "must_include": ["feed"], "date": "2026-06-12"},
+      {"node_type": "cogs/daily", "must_include": ["dentist"], "date": "2026-06-18"}
+    ],
+    "allowed_extra": [
+      {"node_type": "sprockets/entity", "must_include": ["co-op"]}
+    ]
+  },
+  "notes": "The common real input, not an edge case: every archived capture carries 'modality: text' but was dictated. Filler ('um okay so'), absent punctuation, lowercase 'i', and a spoken time ('eight thirty') must not degrade extraction. Doctrine is deliberately unambiguous here so a failure means STT handling, not a classification judgment call: Frank Ott is a named person, so the paired sprockets/task + cogs/daily + sprockets/contact rule applies exactly as in contact-and-task. Thursday is 2026-06-18, the next Thursday after Friday 2026-06-12. The co-op is permitted as an entity but not required, since nothing turns on it."
+}

@@ -1,0 +1,20 @@
+{
+  "fixture_id": "reference-fact-not-task",
+  "category": "restraint",
+  "description": "A stated fact with no commitment in it; manufacturing a task or a dated item is the failure.",
+  "source": "Composed for Stage 139 deliverable B7 restraint cases.",
+  "content": "The tractor manual says the hydraulic filter is a Baldwin BT8851.",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 1
+    },
+    "nodes": [
+      {"node_type": "sprockets/note", "must_include": ["bt8851"], "parent_hint": ""}
+    ],
+    "allowed_extra": [
+      {"node_type": "sprockets/entity", "must_include": ["baldwin"]}
+    ]
+  },
+  "notes": "Nobody has agreed to do anything here. The user is recording a part number so it can be found later. Any cogs/daily is wrong - it puts a chore on a day the user never scheduled - and any sprockets/task is wrong for the same reason one step removed. This fixture is the direct counterweight to the CLASSIFY_SYSTEM instruction 'Output at least one node per input item. Never silently drop an item', which the section E audit flags as unarbitrated pressure toward over-production. Precision is the weakest metric in the set at 0.745, and restraint cases are how that gets measured rather than asserted. parent_hint is asserted empty: 'Farm' is a known parent and a tractor is plausibly farm equipment, but the manual reference was not stated as farm work and borrowing the parent is the same misfiling behavior project-task-list watches for."
+}

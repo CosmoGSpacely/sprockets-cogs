@@ -10,14 +10,14 @@
       "item_count": 7
     },
     "nodes": [
-      {"node_type": "sprockets/task", "must_include": ["rear wall"]},
-      {"node_type": "sprockets/task", "must_include": ["bin shelves"]},
-      {"node_type": "sprockets/task", "must_include": ["alcove light circuit"]},
-      {"node_type": "sprockets/task", "must_include": ["new alcove light"]},
-      {"node_type": "sprockets/task", "must_include": ["ladder racks"]},
-      {"node_type": "sprockets/task", "must_include": ["old workbench"]},
-      {"node_type": "sprockets/task", "must_include": ["design new workbench"]}
+      {"node_type": "sprockets/task", "must_include": ["rear wall"], "parent_hint": ""},
+      {"node_type": "sprockets/task", "must_include": ["bin shelves"], "parent_hint": ""},
+      {"node_type": "sprockets/task", "must_include": ["alcove light circuit"], "parent_hint": ""},
+      {"node_type": "sprockets/task", "must_include": ["new alcove light"], "parent_hint": ""},
+      {"node_type": "sprockets/task", "must_include": ["ladder racks"], "parent_hint": ""},
+      {"node_type": "sprockets/task", "must_include": ["old workbench"], "parent_hint": ""},
+      {"node_type": "sprockets/task", "must_include": ["design new workbench"], "parent_hint": ""}
     ]
   },
-  "notes": "Persistent actionable items with no time anchor are sprockets/task per CLASSIFY_SYSTEM. Seven near-identical phrasings make this the strongest test of whether dense lists survive without merging. Deliberately does not assert parent_hint, since 'Garage Work' is not in the supplied hierarchy context and the prompt forbids inventing parents."
+  "notes": "Persistent actionable items with no time anchor are sprockets/task per CLASSIFY_SYSTEM. Seven near-identical phrasings make this the strongest test of whether dense lists survive without merging. parent_hint is asserted empty as of slice 5: 'Garage Work' is not in the supplied hierarchy context and CLASSIFY_SYSTEM forbids inventing a parent, so no parent is the only correct answer. The earlier version deliberately left parent_hint ungraded, which the section E audit flagged as a blind spot - and it was hiding a real defect. Slice 3a output shows all seven nodes carrying parent_hint 'Farm', a known parent but the wrong one: garage work filed under the farm. That is worse than invention, because an invented parent is visibly wrong in review while a plausible real one is not."
 }
