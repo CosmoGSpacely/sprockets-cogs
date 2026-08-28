@@ -28,11 +28,30 @@ someone argues the doctrine is wrong.
     "extract": {"item_count": 1, "type_hints": ["appointment"]},
     "nodes": [
       {"node_type": "cogs/daily", "must_include": ["yoga"], "date": "2026-06-13"}
+    ],
+    "allowed_extra": [
+      {"node_type": "sprockets/entity", "must_include": ["farm"]}
     ]
   },
   "notes": "why this expectation is the correct one"
 }
 ```
+
+## Contested readings
+
+Some inputs have more than one defensible answer. "Area: Farm. Goal: Fix
+tractor." arguably should produce hierarchy nodes, and arguably should defer
+them to review. Asserting one reading punishes the model for the other;
+dropping the fixture biases the set toward easy cases.
+
+`allowed_extra` is the answer: a node matching one of its entries is **neither
+required nor counted against precision**. Each entry absorbs at most one node,
+so duplicated output is still over-production. An `allowed_extra` entry can
+never satisfy an `expected` node - permission is not credit.
+
+Use it only where the alternative reading is genuinely defensible, never to
+paper over a wrong answer. If a fixture needs many allowed extras to pass, the
+fixture is wrong or the doctrine is unclear; fix that instead.
 
 `now` is pinned per fixture so relative dates ("tomorrow", "next 3 Saturdays")
 grade deterministically. All current fixtures use Friday 2026-06-12.

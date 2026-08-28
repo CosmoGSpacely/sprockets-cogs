@@ -339,6 +339,116 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(results), 3)
 
 
+class AllowedExtraTests(unittest.TestCase):
+    """Stage 139 B8: some inputs have more than one defensible reading."""
+
+    def _fixture_with_allowed(self):
+        return _fixture(
+            expected_nodes=(
+                ExpectedNode(node_type="sprockets/task", must_include=("tires",)),
+            ),
+            allowed_extra=(
+                ExpectedNode(node_type="sprockets/entity", must_include=("farm",)),
+            ),
+        )
+
+    @staticmethod
+    def _node(node_type, title):
+        """A schema-complete node, so validate_node does not fail it."""
+
+        return {
+            "node_type": node_type,
+            "title": title,
+            "item_text": title,
+            "date": "2026-06-12",
+            "confidence": "high",
+        }
+
+    def _run(self, nodes):
+        return capture_harness.run_fixture(
+            capture_harness.HarnessConfig(model="m"),
+            self._fixture_with_allowed(),
+            classifier_factory=lambda config: ScriptedClassifier(nodes),
+        )
+
+    def test_allowed_node_does_not_count_against_precision(self):
+        result = self._run(
+            [
+                self._node("sprockets/task", "Remount front tires"),
+                self._node("sprockets/entity", "Farm"),
+            ]
+        )
+
+        self.assertTrue(result.passed)
+        self.assertEqual(result.precision, 1.0)
+        self.assertEqual(result.actual_count, 1)
+        self.assertEqual(result.emitted_count, 2)
+        self.assertEqual(result.extra, ())
+
+    def test_allowed_node_is_not_required(self):
+        result = self._run(
+            [self._node("sprockets/task", "Remount front tires")]
+        )
+
+        self.assertTrue(result.passed)
+        self.assertEqual(result.emitted_count, 1)
+
+    def test_genuinely_spurious_node_still_counts(self):
+        result = self._run(
+            [
+                self._node("sprockets/task", "Remount front tires"),
+                self._node("sprockets/note", "unrelated musing"),
+            ]
+        )
+
+        self.assertFalse(result.passed)
+        self.assertEqual(result.precision, 0.5)
+        self.assertTrue(result.extra)
+
+    def test_allowed_extra_cannot_satisfy_a_requirement(self):
+        """An allowed node must never be counted as a match."""
+
+        result = self._run([self._node("sprockets/entity", "Farm")])
+
+        self.assertEqual(result.matched, 0)
+        self.assertFalse(result.passed)
+        self.assertEqual(result.recall, 0.0)
+
+    def test_one_allowed_entry_absorbs_only_one_node(self):
+        """Duplicated defensible output is still over-production."""
+
+        result = self._run(
+            [
+                self._node("sprockets/task", "Remount front tires"),
+                self._node("sprockets/entity", "Farm"),
+                self._node("sprockets/entity", "Farm"),
+            ]
+        )
+
+        self.assertEqual(len(result.extra), 1)
+        self.assertFalse(result.passed)
+
+    def test_fixtures_without_allowed_extra_are_unaffected(self):
+        result = capture_harness.run_fixture(
+            capture_harness.HarnessConfig(model="m"),
+            _fixture(),
+            classifier_factory=lambda config: ScriptedClassifier(
+                [
+                    {
+                        "node_type": "cogs/daily",
+                        "title": "YOGA 5:30p",
+                        "item_text": "YOGA 5:30p",
+                        "date": "2026-06-13",
+                        "confidence": "high",
+                    }
+                ]
+            ),
+        )
+
+        self.assertTrue(result.passed)
+        self.assertEqual(result.actual_count, result.emitted_count)
+
+
 class TokenInstrumentationTests(unittest.TestCase):
     """Slice 2: real tokenizer counts, not character estimates."""
 

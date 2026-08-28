@@ -56,6 +56,16 @@ class CaptureFixture:
     expected_item_count: int | None = None
     expected_type_hints: tuple[str, ...] = ()
     expected_nodes: tuple[ExpectedNode, ...] = field(default_factory=tuple)
+    allowed_extra: tuple[ExpectedNode, ...] = field(default_factory=tuple)
+    """Nodes that are defensible but not required.
+
+    Some inputs have more than one correct reading. "Area: Farm. Goal: Fix
+    tractor." arguably should yield hierarchy nodes, and arguably should defer
+    them to review. Asserting one reading punishes the model for the other;
+    omitting the fixture biases the set toward easy cases. A node matching an
+    `allowed_extra` entry is neither required nor counted against precision.
+    """
+
     expect_structural_guard: bool = False
     notes: str = ""
 
@@ -87,6 +97,14 @@ def load_capture_fixture(path: Path) -> CaptureFixture:
                 date=node.get("date", ""),
             )
             for node in expected.get("nodes", ())
+        ),
+        allowed_extra=tuple(
+            ExpectedNode(
+                node_type=node["node_type"],
+                must_include=tuple(node.get("must_include", ())),
+                date=node.get("date", ""),
+            )
+            for node in expected.get("allowed_extra", ())
         ),
         expect_structural_guard=bool(data.get("expect_structural_guard", False)),
         notes=data.get("notes", ""),

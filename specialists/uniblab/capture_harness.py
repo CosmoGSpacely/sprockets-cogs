@@ -83,6 +83,11 @@ class FixtureResult:
     matched: int
     expected_count: int
     actual_count: int
+    """Graded node count: matched plus spurious, excluding absorbed extras."""
+
+    emitted_count: int = 0
+    """Every node the model produced, including ones allowed_extra absorbed."""
+
     missing: tuple[str, ...] = ()
     extra: tuple[str, ...] = ()
     extracted_count: int = 0
@@ -210,6 +215,17 @@ def grade_nodes(
         else:
             unmatched.remove(hit)
             matched += 1
+
+    # Defensible-but-not-required nodes are absorbed: they do not satisfy an
+    # expectation, and they do not count as spurious either.
+    for permitted in fixture.allowed_extra:
+        hit = next(
+            (i for i in unmatched if permitted.matches(classified_nodes[i])),
+            None,
+        )
+        if hit is not None:
+            unmatched.remove(hit)
+
     extra = tuple(_describe_node(classified_nodes[i]) for i in unmatched)
     return matched, tuple(missing), extra
 
@@ -267,6 +283,9 @@ def run_fixture(
         )
         elapsed = time.monotonic() - start
         matched, missing, extra = grade_nodes(fixture, classified_nodes)
+        # Graded count excludes nodes absorbed by allowed_extra, so a
+        # defensible reading does not depress precision.
+        graded_count = matched + len(extra)
         return FixtureResult(
             config_label=config.label,
             fixture_id=fixture.fixture_id,
@@ -276,7 +295,8 @@ def run_fixture(
             elapsed_seconds=elapsed,
             matched=matched,
             expected_count=len(fixture.expected_nodes),
-            actual_count=len(classified_nodes),
+            actual_count=graded_count,
+            emitted_count=len(classified_nodes),
             missing=missing,
             extra=extra,
             extracted_count=len(raw_nodes),
@@ -403,6 +423,7 @@ def results_to_dict(results: Sequence[FixtureResult]) -> dict[str, Any]:
                 "matched": result.matched,
                 "expected_count": result.expected_count,
                 "actual_count": result.actual_count,
+                "emitted_count": result.emitted_count,
                 "recall": round(result.recall, 3),
                 "precision": round(result.precision, 3),
                 "f1": round(result.f1, 3),
