@@ -152,6 +152,7 @@ class ExtractClassifier:
 
         ref = now or datetime.now()
         extract_msg = (
+            f"Today: {ref.strftime('%Y-%m-%d (%A)')}\n"
             f"This week's workdays: {week_workdays(ref)}\n\n"
             f"Extract all items from this text:\n\n{content}"
         )

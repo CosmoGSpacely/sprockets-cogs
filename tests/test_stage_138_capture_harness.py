@@ -489,6 +489,74 @@ class TokenInstrumentationTests(unittest.TestCase):
         self.assertAlmostEqual(summary["peak_context_utilization"], 0.0999, places=3)
 
 
+class ExtractDateAnchorTests(unittest.TestCase):
+    """Slice 4: the extract call must state today's date.
+
+    Without it the model resolved relative dates ("tomorrow") by picking from
+    the workday list it was given, producing dates in the past. All three
+    roster models reproduced this.
+    """
+
+    def _capture_message(self, now):
+        captured = {}
+
+        def fake_chat(**kwargs):
+            captured["content"] = kwargs["messages"][-1]["content"]
+
+            class Response:
+                class message:
+                    content = '{"items": []}'
+
+            return Response()
+
+        ExtractClassifier(
+            ExtractClassifierConfig(model="m"), chat_client=fake_chat
+        ).extract_nodes("Yoga is tomorrow at 5:30pm", now=now)
+        return captured["content"]
+
+    def test_extract_message_states_today(self):
+        content = self._capture_message(datetime(2026, 6, 12, 9, 0))
+
+        self.assertIn("Today: 2026-06-12 (Friday)", content)
+
+    def test_extract_still_supplies_workday_anchors(self):
+        content = self._capture_message(datetime(2026, 6, 12, 9, 0))
+
+        self.assertIn("This week's workdays: Mon 2026-06-08", content)
+
+    def test_today_line_precedes_the_workday_list(self):
+        content = self._capture_message(datetime(2026, 6, 12, 9, 0))
+
+        self.assertLess(content.index("Today:"), content.index("This week's"))
+
+    def test_extract_and_classify_agree_on_date_format(self):
+        now = datetime(2026, 6, 12, 9, 0)
+        extract_content = self._capture_message(now)
+        captured = {}
+
+        def fake_chat(**kwargs):
+            captured["content"] = kwargs["messages"][-1]["content"]
+
+            class Response:
+                class message:
+                    content = '{"nodes": []}'
+
+            return Response()
+
+        ExtractClassifier(
+            ExtractClassifierConfig(model="m"), chat_client=fake_chat
+        ).classify_nodes([{"raw": "a", "type_hint": "task"}], "ctx", now=now)
+
+        stamp = "Today: 2026-06-12 (Friday)"
+        self.assertIn(stamp, extract_content)
+        self.assertIn(stamp, captured["content"])
+
+    def test_weekend_reference_date_is_stated_even_though_not_a_workday(self):
+        content = self._capture_message(datetime(2026, 6, 13, 9, 0))
+
+        self.assertIn("Today: 2026-06-13 (Saturday)", content)
+
+
 class LoaderTests(unittest.TestCase):
     def test_missing_optional_fields_get_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:
