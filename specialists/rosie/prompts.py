@@ -23,9 +23,6 @@ classification can date the item.
 Multi-day settings: if a setting spans multiple days ("all week", "Mon-Fri"),
 extract one item per day using the workdays list in the message. Embed the date
 in the raw field: e.g. {"raw": "WFH 2026-04-20", "type_hint": "setting"}.
-Workdays only. Never Saturday or Sunday. "All week" means five days, Mon-Fri.
-Stop at any stated boundary: "until Thursday" ends that span on Thursday.
-Extract only the days the text asks for. Do not continue past the last one.
 
 Output format: {"items": [{"raw": "...", "type_hint": "..."}]}
 """
