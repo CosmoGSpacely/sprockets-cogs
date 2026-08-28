@@ -220,13 +220,18 @@ CLASSIFY_EXAMPLES = [
             ']}'
         )
     },
-    # ── Example 5: simple errand → cogs/daily ONLY (no sprockets/task) ──────────────
+    # ── Example 5: named person → sprockets/task + cogs/daily, plus contact ────
+    # Replaced a second simple-errand example ("buy milk"), which duplicated the
+    # cogs/daily-only lesson already carried by example 1. The pairing rule was
+    # previously demonstrated only in example 8, the longest and most complex of
+    # the set, and the model stopped applying it to short inputs.
     {
         "role": "user",
         "content": (
             "Today: 2026-04-22 (Wednesday)\n\n"
             "Extracted:\n"
-            '[{"raw": "buy milk", "type_hint": "task"}]\n\n'
+            '[{"raw": "call Maria about the lease", "type_hint": "task"}, '
+            '{"raw": "Maria", "type_hint": "contact"}]\n\n'
             "Classify each item."
         )
     },
@@ -234,7 +239,9 @@ CLASSIFY_EXAMPLES = [
         "role": "assistant",
         "content": (
             '{"nodes": ['
-            '{"node_type": "cogs/daily", "title": "Buy milk", "item_text": "Buy milk", "date": "2026-04-22", "confidence": "high"}'
+            '{"node_type": "sprockets/task", "title": "Call Maria about the lease", "item_text": "Call Maria about the lease", "date": "2026-04-22", "confidence": "high"}, '
+            '{"node_type": "cogs/daily", "title": "Call Maria about the lease", "item_text": "Call Maria about the lease", "date": "2026-04-22", "confidence": "high"}, '
+            '{"node_type": "sprockets/contact", "title": "Maria", "item_text": "Maria", "date": "2026-04-22", "confidence": "high"}'
             ']}'
         )
     },
