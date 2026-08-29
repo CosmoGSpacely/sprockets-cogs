@@ -54,6 +54,13 @@ _WEEKS_FROM_WEEKDAY_RE = re.compile(
 #: An explicit YYYY-MM-DD already in the text. More specific than any weekday
 #: word beside it, so it suppresses the weekday branches (finding 56).
 _EXPLICIT_ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+#: "the 3rd", "on the 15th". Excludes "the 3rd Saturday", which is an ordinal
+#: weekday and means something else entirely (finding 45).
+_DAY_OF_MONTH_RE = re.compile(
+    r"\bthe\s+(?P<day>\d{1,2})(?:st|nd|rd|th)\b"
+    r"(?!\s+(?:mon|tue|wed|thu|fri|sat|sun))",
+    re.IGNORECASE,
+)
 _DURATION_RE = re.compile(
     r"\bin\s+(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
     r"(?P<unit>days?|weeks?|months?)\b",
@@ -239,6 +246,12 @@ def resolve_relative_cogs_horizon(text: str, processing_date: str) -> tuple[str,
     # whole distinction; putting it earlier cost four fixtures.
     if _EXPLICIT_ISO_DATE_RE.search(lowered):
         return None
+
+    day_of_month = _DAY_OF_MONTH_RE.search(lowered)
+    if day_of_month:
+        resolved = _next_day_of_month(source, int(day_of_month.group("day")))
+        if resolved is not None:
+            return resolved.isoformat(), day_of_month.group(0), "day"
 
     bare_match = _BARE_WEEKDAY_RE.search(lowered)
     if bare_match:
@@ -449,6 +462,29 @@ def _normalize_recurrence_weekday(value: str) -> str:
 
 def _duration_count(value: str) -> int:
     return int(value) if value.isdigit() else _NUMBER_WORDS[value.lower()]
+
+
+def _next_day_of_month(source: date, day: int) -> date | None:
+    """The next occurrence of a day-of-month, today counting as itself.
+
+    Rolls forward past months that are too short, so "the 31st" in February
+    lands on the next month that actually has one rather than erroring or
+    silently clamping to the 28th. Returns None for a day no month has.
+    """
+
+    if not 1 <= day <= 31:
+        return None
+    candidate_month = source.replace(day=1)
+    for _ in range(13):
+        try:
+            candidate = candidate_month.replace(day=day)
+        except ValueError:
+            candidate_month = _add_months(candidate_month, 1)
+            continue
+        if candidate >= source:
+            return candidate
+        candidate_month = _add_months(candidate_month, 1)
+    return None
 
 
 def _add_months(value: date, count: int) -> date:

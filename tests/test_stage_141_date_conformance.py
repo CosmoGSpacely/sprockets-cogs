@@ -88,16 +88,6 @@ class PhraseResolutionTests(unittest.TestCase):
 class KnownGapsTests(unittest.TestCase):
     """Phrases the resolver does not handle. Documented, not asserted away."""
 
-    def test_day_of_month_is_unsupported(self):
-        """"the 3rd" returns nothing, so the model's answer stands unchecked.
-
-        This is why `date-year-rollover` depends on model arithmetic for its
-        propane-bill item.
-        """
-
-        self.assertIsNone(resolve_relative_cogs_horizon("the 3rd", FRIDAY))
-        self.assertIsNone(resolve_relative_cogs_horizon("on the 3rd", YEAR_END))
-
     def test_backward_references_are_unsupported(self):
         """Capture rarely needs "yesterday", but corrections do - and
         correction intent is Stage 141 deliverable D10."""
@@ -167,6 +157,49 @@ class WeekOffsetTests(unittest.TestCase):
             resolve_relative_cogs_horizon("a week from friday at 3pm", FRIDAY)[0],
             "2026-06-19",
         )
+
+
+class DayOfMonthTests(unittest.TestCase):
+    """Finding 45, fixed in 3g. Unsupported until the model stopped supplying
+    its own dates (finding 61), at which point the gap became a live defect."""
+
+    def test_day_already_past_rolls_to_next_month(self):
+        self.assertEqual(
+            resolve_relative_cogs_horizon("Pay the propane bill on the 3rd", YEAR_END)[0],
+            "2027-01-03",
+        )
+        self.assertEqual(
+            resolve_relative_cogs_horizon("the 3rd", FRIDAY)[0], "2026-07-03"
+        )
+
+    def test_day_still_ahead_stays_in_this_month(self):
+        self.assertEqual(
+            resolve_relative_cogs_horizon("the 15th", FRIDAY)[0], "2026-06-15"
+        )
+
+    def test_today_counts_as_itself(self):
+        self.assertEqual(
+            resolve_relative_cogs_horizon("due the 12th", FRIDAY)[0], "2026-06-12"
+        )
+
+    def test_short_months_roll_forward_rather_than_clamp(self):
+        """"the 31st" in February must not silently become the 28th."""
+
+        self.assertEqual(
+            resolve_relative_cogs_horizon("the 31st", "2026-02-01")[0], "2026-03-31"
+        )
+        self.assertEqual(
+            resolve_relative_cogs_horizon("the 29th", "2027-02-01")[0], "2027-03-29"
+        )
+
+    def test_ordinal_weekday_is_not_a_day_of_month(self):
+        """"the 3rd Saturday" means an ordinal weekday, not the 3rd."""
+
+        result = resolve_relative_cogs_horizon("the 3rd Saturday", FRIDAY)
+        self.assertNotEqual(result[0], "2026-07-03")
+
+    def test_impossible_day_declines(self):
+        self.assertIsNone(resolve_relative_cogs_horizon("the 99th", FRIDAY))
 
 
 class ExplicitDatePrecedenceTests(unittest.TestCase):
