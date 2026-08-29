@@ -46,6 +46,35 @@ DEFAULT_CONTEXT_MAX_CHARS = 2000
 _NS_PER_SECOND = 1_000_000_000
 
 
+class ModelOutputError(RuntimeError):
+    """The model's reply could not be read as the schema required.
+
+    Raised instead of returning `[]`. Stage 142 finding 73: a generation
+    truncated at `num_predict` produces invalid JSON, and both call sites used
+    to log the parse failure and return an empty list. The capture was then
+    consumed, wrote nothing, and reported success - indistinguishable from the
+    correct answer on an input that genuinely contains no items.
+
+    Truncation is not exotic. Marginal cost is ~34-49 completion tokens per
+    node, so a photographed list of roughly 75 items reaches the 4,096 cap
+    (finding 78), and that is an ordinary capture once image input is live.
+
+    Raising leaves the input in `processing/` with a failure record, which is
+    the behaviour a capture that could not be read deserves.
+    """
+
+    def __init__(self, call: str, detail: str, completion_tokens: int | None = None):
+        self.call = call
+        self.completion_tokens = completion_tokens
+        suffix = (
+            f" after {completion_tokens} completion tokens"
+            f" (truncation likely if this is the num_predict cap)"
+            if completion_tokens
+            else ""
+        )
+        super().__init__(f"{call} output unreadable: {detail}{suffix}")
+
+
 @dataclass(frozen=True)
 class CallStats:
     """Measured cost of one model call.
@@ -240,12 +269,14 @@ class ExtractClassifier:
         log.debug("extract_nodes raw: %s", raw)
         try:
             result = json.loads(raw)
-            items = result.get("items", []) if isinstance(result, dict) else result
-            log.info("Extracted %d item(s)", len(items))
-            return items
         except json.JSONDecodeError as exc:
             log.error("extract_nodes JSON parse failed: %s | raw: %s", exc, raw)
-            return []
+            raise ModelOutputError(
+                "extract", str(exc), getattr(response, "eval_count", None)
+            ) from exc
+        items = result.get("items", []) if isinstance(result, dict) else result
+        log.info("Extracted %d item(s)", len(items))
+        return items
 
     def classify_nodes(
         self,
@@ -280,9 +311,11 @@ class ExtractClassifier:
         log.debug("classify_nodes raw: %s", raw)
         try:
             result = json.loads(raw)
-            nodes = result.get("nodes", []) if isinstance(result, dict) else result
-            log.info("Classified %d node(s)", len(nodes))
-            return nodes
         except json.JSONDecodeError as exc:
             log.error("classify_nodes JSON parse failed: %s | raw: %s", exc, raw)
-            return []
+            raise ModelOutputError(
+                "classify", str(exc), getattr(response, "eval_count", None)
+            ) from exc
+        nodes = result.get("nodes", []) if isinstance(result, dict) else result
+        log.info("Classified %d node(s)", len(nodes))
+        return nodes

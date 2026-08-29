@@ -113,16 +113,23 @@ class Stage38ExtractorClassifierTests(unittest.TestCase):
         self.assertFalse(call["think"])
         self.assertIn("This week's workdays: Mon 2026-05-11", call["messages"][-1]["content"])
 
-    def test_extract_nodes_returns_empty_on_invalid_json(self):
-        chat = FakeChat({})
-        chat.payload = None
+    def test_extract_nodes_raises_on_invalid_json(self):
+        """Was `returns_empty_on_invalid_json`, asserting the defect.
+
+        Stage 142 finding 73: returning `[]` for an unreadable reply made a
+        truncated capture indistinguishable from one that genuinely contained
+        no items, so the input was consumed, wrote nothing, and reported
+        success. D104 changed it to raise, which leaves the file in
+        `processing/` with a failure record.
+        """
 
         def bad_chat(**kwargs):
             return SimpleNamespace(message=SimpleNamespace(content="{not json"))
 
         classifier = ec.ExtractClassifier(chat_client=bad_chat)
 
-        self.assertEqual(classifier.extract_nodes("bad"), [])
+        with self.assertRaises(ec.ModelOutputError):
+            classifier.extract_nodes("bad")
 
     def test_classify_nodes_calls_ollama_shape_without_live_model(self):
         chat = FakeChat({

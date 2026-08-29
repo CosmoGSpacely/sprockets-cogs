@@ -20,6 +20,12 @@ import specialists.rosie.classifier_context as classifier_context
 from substrate.format import apply_cogs_item_format
 from specialists.rudi.entity_state import get_entities_by_tier, upsert_entity
 from specialists.rosie.extractor_classifier import ExtractClassifier, ExtractClassifierConfig
+from specialists.rosie.pipeline import (
+    CaptureState,
+    PipelineStep,
+    retry_steps,
+    run_pipeline,
+)
 from graph.mutations import MutationCommand
 from graph.proposals import ReviewProposal
 from intents.models import (
@@ -1219,6 +1225,143 @@ def handle_correction_input(
 
 # ── Main pipeline ──────────────────────────────────────────────────────────────
 
+# ── The declared post-classify pipeline (Stage 142 A1) ────────────────────────
+#
+# Each wrapper adapts one existing step to the uniform CaptureState signature.
+# The wrappers add no logic: same functions, same arguments, same order. The
+# thirteen names here are the same thirteen the drift guard checks.
+
+
+def _step_runtime_date_context(state: CaptureState) -> None:
+    state.classified, decisions = apply_runtime_date_context(
+        state.raw_nodes, state.classified, state.source_date
+    )
+    for decision in decisions:
+        log.info(
+            "Runtime date context applied: node=%d phrase=%s date=%s -> %s",
+            decision.index,
+            decision.phrase,
+            decision.original_date or "(missing)",
+            decision.resolved_date,
+        )
+
+
+def _step_bounded_recurrence(state: CaptureState) -> None:
+    state.classified, decisions = apply_bounded_recurrence_context(
+        state.raw_nodes, state.classified, state.source_date
+    )
+    for decision in decisions:
+        log.info(
+            "Bounded recurrence expanded: node=%d occurrences=%d phrase=%r",
+            decision.index,
+            decision.occurrence_count,
+            decision.phrase,
+        )
+
+
+def _step_cogs_item_format(state: CaptureState) -> None:
+    state.classified, decisions = apply_cogs_item_format(
+        state.raw_nodes, state.classified
+    )
+    for decision in decisions:
+        log.info(
+            "Cogs item format applied: node=%d reason=%s %r -> %r",
+            decision.index,
+            decision.reason,
+            decision.original_text,
+            decision.formatted_text,
+        )
+
+
+def _step_structural_guard(state: CaptureState) -> None:
+    state.classified, routed = route_structural_guard_to_review(
+        state.content, state.raw_nodes, state.classified, state.session_id
+    )
+    # The only step that ends a capture. The runner stops here and
+    # process_input handles the reflection and archive.
+    state.terminated = bool(routed)
+
+
+def _step_ordinary_entity_authority(state: CaptureState) -> None:
+    state.classified = route_ordinary_entity_authority_to_review(
+        state.raw_nodes, state.classified
+    )
+
+
+def _step_recurrence_review(state: CaptureState) -> None:
+    state.classified = route_recurrence_to_review(state.raw_nodes, state.classified)
+
+
+def _step_explicit_hierarchy_hints(state: CaptureState) -> None:
+    state.classified = apply_explicit_hierarchy_hints(state.raw_nodes, state.classified)
+
+
+def _step_ensure_hierarchy_tasks(state: CaptureState) -> None:
+    state.classified = ensure_hierarchy_tasks(state.raw_nodes, state.classified)
+
+
+def _step_log_memory_parent_trace(state: CaptureState) -> None:
+    # Computing the trace belongs to this step; the next one persists it.
+    state._memory_trace = memory_parent_trace_for_classification(
+        state.content, state.raw_nodes, state.classified
+    )
+    log_memory_parent_trace(state._memory_trace)
+    state.memory_parent = state._memory_trace.parent_title
+
+
+def _step_write_memory_parent_trace(state: CaptureState) -> None:
+    write_memory_parent_trace(state._memory_trace)
+
+
+def _step_ensure_memory_hierarchy_tasks(state: CaptureState) -> None:
+    state.classified = ensure_memory_hierarchy_tasks(
+        state.raw_nodes, state.classified, state.memory_parent
+    )
+
+
+def _step_apply_memory_parent_title(state: CaptureState) -> None:
+    state.classified = apply_memory_parent_title(state.classified, state.memory_parent)
+
+
+def _step_ensure_cogs_companions(state: CaptureState) -> None:
+    state.classified = ensure_cogs_companions(state.classified)
+
+
+#: The capture pipeline. Order is behaviour - this is the same order the
+#: inline chain ran, and `tests/test_stage_139_full_pipeline.py` fails if the
+#: harness and this list disagree.
+PIPELINE: tuple[PipelineStep, ...] = (
+    PipelineStep("apply_runtime_date_context", "nodes", True, _step_runtime_date_context,
+                 retry_note="re-runs: retried nodes carry unresolved dates"),
+    PipelineStep("apply_bounded_recurrence_context", "nodes", True, _step_bounded_recurrence,
+                 retry_note="re-runs: a retried recurrence still needs expanding"),
+    PipelineStep("apply_cogs_item_format", "nodes", True, _step_cogs_item_format,
+                 retry_note="re-runs: formatting applies to any node text"),
+    PipelineStep("route_structural_guard_to_review", "capture", False, _step_structural_guard,
+                 retry_note="whole-capture decision, already made"),
+    PipelineStep("route_ordinary_entity_authority_to_review", "nodes", False,
+                 _step_ordinary_entity_authority,
+                 retry_note="omitted from retry - see RETRY_OMISSIONS"),
+    PipelineStep("route_recurrence_to_review", "nodes", False, _step_recurrence_review,
+                 retry_note="omitted from retry - see RETRY_OMISSIONS"),
+    PipelineStep("apply_explicit_hierarchy_hints", "nodes", True, _step_explicit_hierarchy_hints,
+                 retry_note="omitted from retry - see RETRY_OMISSIONS"),
+    PipelineStep("ensure_hierarchy_tasks", "nodes", True, _step_ensure_hierarchy_tasks,
+                 retry_note="omitted from retry - see RETRY_OMISSIONS"),
+    PipelineStep("log_memory_parent_trace", "capture", False, _step_log_memory_parent_trace,
+                 retry_note="capture-level tracing, emitted once"),
+    PipelineStep("write_memory_parent_trace", "capture", False, _step_write_memory_parent_trace,
+                 retry_note="capture-level tracing, written once"),
+    PipelineStep("ensure_memory_hierarchy_tasks", "nodes", True,
+                 _step_ensure_memory_hierarchy_tasks,
+                 retry_note="omitted from retry - see RETRY_OMISSIONS"),
+    PipelineStep("apply_memory_parent_title", "nodes", True, _step_apply_memory_parent_title,
+                 retry_note="omitted from retry - see RETRY_OMISSIONS"),
+    PipelineStep("ensure_cogs_companions", "nodes", True, _step_ensure_cogs_companions,
+                 retry_note="omitted from retry - see RETRY_OMISSIONS"),
+)
+
+
 def process_input(file_path: Path) -> None:
     log.info("Processing: %s", file_path.name)
     processing_path = PROCESSING_DIR / file_path.name
@@ -1247,53 +1390,22 @@ def process_input(file_path: Path) -> None:
         context    = build_context_for_input(content)
         raw_nodes  = extract_nodes(content, now=source_now)
         classified = classify_nodes(raw_nodes, context, now=source_now)
-        classified, date_decisions = apply_runtime_date_context(raw_nodes, classified, source_date)
-        for decision in date_decisions:
-            log.info(
-                "Runtime date context applied: node=%d phrase=%s date=%s -> %s",
-                decision.index,
-                decision.phrase,
-                decision.original_date or "(missing)",
-                decision.resolved_date,
-            )
-        classified, recurrence_decisions = apply_bounded_recurrence_context(raw_nodes, classified, source_date)
-        for decision in recurrence_decisions:
-            log.info(
-                "Bounded recurrence expanded: node=%d occurrences=%d phrase=%r",
-                decision.index,
-                decision.occurrence_count,
-                decision.phrase,
-            )
-        classified, format_decisions = apply_cogs_item_format(raw_nodes, classified)
-        for decision in format_decisions:
-            log.info(
-                "Cogs item format applied: node=%d reason=%s %r -> %r",
-                decision.index,
-                decision.reason,
-                decision.original_text,
-                decision.formatted_text,
-            )
-        classified, structural_guard_routed = route_structural_guard_to_review(
-            content,
-            raw_nodes,
-            classified,
-            session_id,
+
+        state = run_pipeline(
+            CaptureState(
+                content=content,
+                raw_nodes=raw_nodes,
+                classified=classified,
+                source_date=source_date,
+                session_id=session_id,
+            ),
+            PIPELINE,
         )
-        if structural_guard_routed:
+        if state.terminated:
             append_reflection(session_id, [])
             archive_input(processing_path)
             return
-        classified = route_ordinary_entity_authority_to_review(raw_nodes, classified)
-        classified = route_recurrence_to_review(raw_nodes, classified)
-        classified = apply_explicit_hierarchy_hints(raw_nodes, classified)
-        classified = ensure_hierarchy_tasks(raw_nodes, classified)
-        memory_trace = memory_parent_trace_for_classification(content, raw_nodes, classified)
-        log_memory_parent_trace(memory_trace)
-        write_memory_parent_trace(memory_trace)
-        memory_parent = memory_trace.parent_title
-        classified = ensure_memory_hierarchy_tasks(raw_nodes, classified, memory_parent)
-        classified = apply_memory_parent_title(classified, memory_parent)
-        classified = ensure_cogs_companions(classified)
+        classified = state.classified
 
         valid_nodes, invalid_triples = validate_output(classified, default_cogs_date=source_date)
 
@@ -1318,36 +1430,22 @@ def process_input(file_path: Path) -> None:
             error_context = "\n".join(f"- {reason}" for _, _, reason in retry_triples)
             log.info("Retrying classify for %d invalid node(s)", len(retry_triples))
             reclassified        = classify_nodes(retry_raw, context, error_context, use_examples=True, now=source_now)[:len(retry_triples)]
-            reclassified, retry_date_decisions = apply_runtime_date_context(retry_raw, reclassified, source_date)
-            for decision in retry_date_decisions:
-                log.info(
-                    "Runtime date context applied on retry: node=%d phrase=%s date=%s -> %s",
-                    decision.index,
-                    decision.phrase,
-                    decision.original_date or "(missing)",
-                    decision.resolved_date,
-                )
-            reclassified, retry_recurrence_decisions = apply_bounded_recurrence_context(
-                retry_raw,
-                reclassified,
-                source_date,
+            # Same declaration, filtered to the steps the inline retry ran.
+            # `pipeline.RETRY_OMISSIONS` records why each of the other ten is
+            # skipped - three correctly, seven as defects this declaration
+            # makes visible. Widening it changes behaviour and belongs to its
+            # own measured slice, not to a refactor.
+            retry_state = run_pipeline(
+                CaptureState(
+                    content=content,
+                    raw_nodes=retry_raw,
+                    classified=reclassified,
+                    source_date=source_date,
+                    session_id=session_id,
+                ),
+                retry_steps(PIPELINE),
             )
-            for decision in retry_recurrence_decisions:
-                log.info(
-                    "Bounded recurrence expanded on retry: node=%d occurrences=%d phrase=%r",
-                    decision.index,
-                    decision.occurrence_count,
-                    decision.phrase,
-                )
-            reclassified, retry_format_decisions = apply_cogs_item_format(retry_raw, reclassified)
-            for decision in retry_format_decisions:
-                log.info(
-                    "Cogs item format applied on retry: node=%d reason=%s %r -> %r",
-                    decision.index,
-                    decision.reason,
-                    decision.original_text,
-                    decision.formatted_text,
-                )
+            reclassified = retry_state.classified
             valid_retry, failed = validate_output(reclassified, default_cogs_date=source_date)
             valid_nodes.extend(valid_retry)
             if failed and route_openai_fallback_to_review(retry_raw, context, error_context, source_date):

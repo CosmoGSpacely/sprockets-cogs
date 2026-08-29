@@ -13,7 +13,7 @@ import inspect
 import re
 import unittest
 
-from specialists.rosie import loop
+from specialists.rosie import loop, pipeline
 from specialists.uniblab import capture_harness
 
 
@@ -21,23 +21,15 @@ class PostClassifyDriftTests(unittest.TestCase):
     """Guards the harness against the live pipeline moving underneath it."""
 
     def _live_sequence(self) -> list[str]:
-        """The post-classify calls `loop.py` makes, in source order.
+        """The post-classify chain, read from the declaration.
 
-        Read from the source of the capture function rather than from an
-        import list, so a step that is imported but never called - or called
-        in a different order - is still caught.
+        Stage 142 A1 turned the chain into data, so this reads `loop.PIPELINE`
+        instead of regexing the source of a 200-line function. The old parser
+        had to stop before the retry block because the retry block repeated the
+        chain by hand - which is precisely where an uncovered copy lived.
         """
 
-        source = inspect.getsource(loop)
-        body = source.split("classified = classify_nodes(", 1)[1]
-        # Stop before the retry block, which repeats the same chain.
-        body = body.split("valid_nodes, invalid_triples = validate_output", 1)[0]
-        found = []
-        pattern = r"^\s+(?:classified.*?=\s*)?((?:apply|route|ensure|log|write)_[a-z_]+)\("
-        for name in re.findall(pattern, body, re.M):
-            if name not in found:
-                found.append(name)
-        return found
+        return [step.name for step in loop.PIPELINE]
 
     def test_harness_matches_live_post_classify_order(self):
         self.assertEqual(
@@ -67,6 +59,114 @@ class PostClassifyDriftTests(unittest.TestCase):
     def test_modeled_and_unmodeled_do_not_overlap(self):
         overlap = set(capture_harness.MODELED_STEPS) & set(capture_harness.UNMODELED_STEPS)
         self.assertEqual(overlap, set())
+
+
+class DeclarationIsAuthoritativeTests(unittest.TestCase):
+    """Stage 142 A1/A3. A declaration nothing executes is documentation."""
+
+    def test_process_input_runs_the_pipeline(self):
+        source = inspect.getsource(loop.process_input)
+        self.assertIn("run_pipeline(", source)
+        self.assertIn("PIPELINE", source)
+
+    def test_process_input_does_not_call_steps_inline(self):
+        """The whole point. If a step is called directly, the declaration is
+        no longer the order that runs, and the drift guard above - which now
+        reads the declaration - would be checking a fiction."""
+
+        source = inspect.getsource(loop.process_input)
+        for step in loop.PIPELINE:
+            self.assertNotIn(
+                f"{step.name}(", source,
+                f"{step.name} is called inline in process_input; it belongs to "
+                "PIPELINE, and calling it directly makes the declaration a lie",
+            )
+
+    def test_every_step_declares_a_scope_and_purity(self):
+        for step in loop.PIPELINE:
+            with self.subTest(step=step.name):
+                self.assertIn(step.scope, ("capture", "nodes"))
+                self.assertIsInstance(step.pure, bool)
+                self.assertTrue(step.retry_note.strip(), "missing retry_note")
+
+    def test_every_modeled_step_is_pure(self):
+        """The implication runs one way only. The harness is read-only by
+        contract, so it can run a step only if that step has no side effects.
+
+        The converse is false, and conflating them is a mistake this test
+        originally made: `apply_memory_parent_title` and
+        `ensure_memory_hierarchy_tasks` are pure functions the harness still
+        cannot run, because their `memory_parent` input needs live RUDI
+        retrieval. Purity is a property of the step; modelability also depends
+        on whether its inputs exist outside the live path.
+        """
+
+        for step in loop.PIPELINE:
+            if step.name in capture_harness.MODELED_STEPS:
+                with self.subTest(step=step.name):
+                    self.assertTrue(
+                        step.pure,
+                        f"{step.name} is modeled by the read-only harness but "
+                        "declared impure",
+                    )
+
+    def test_pure_but_unmodeled_steps_say_why(self):
+        """A pure step the harness skips needs a recorded reason, or the gap
+        looks like an oversight rather than a missing input."""
+
+        for step in loop.PIPELINE:
+            if step.pure and step.name not in capture_harness.MODELED_STEPS:
+                with self.subTest(step=step.name):
+                    self.assertIn(step.name, capture_harness.UNMODELED_STEPS)
+
+
+class RetryPathDriftTests(unittest.TestCase):
+    """Stage 142 A2/A3. The retry path re-ran three of thirteen steps and the
+    reason was recorded nowhere. The old drift guard stopped parsing before
+    this block, so the second copy was entirely uncovered."""
+
+    def test_retry_uses_the_same_declaration(self):
+        source = inspect.getsource(loop.process_input)
+        self.assertIn("retry_steps(PIPELINE)", source)
+
+    def test_retry_selection_matches_the_recorded_set(self):
+        selected = [step.name for step in pipeline.retry_steps(loop.PIPELINE)]
+        self.assertEqual(selected, list(pipeline.RETRY_INCLUDED))
+
+    def test_every_step_is_included_or_its_omission_explained(self):
+        """No step may be silently absent from retry. This is finding 34's
+        lesson applied to the copy nobody was checking."""
+
+        for step in loop.PIPELINE:
+            with self.subTest(step=step.name):
+                self.assertTrue(
+                    step.name in pipeline.RETRY_INCLUDED
+                    or step.name in pipeline.RETRY_OMISSIONS,
+                    f"{step.name} neither re-runs on retry nor explains why not",
+                )
+
+    def test_included_and_omitted_do_not_overlap(self):
+        overlap = set(pipeline.RETRY_INCLUDED) & set(pipeline.RETRY_OMISSIONS)
+        self.assertEqual(overlap, set())
+
+    def test_omissions_are_classified_correct_or_defect(self):
+        """Each omission states which it is, so the seven defects cannot be
+        mistaken for design."""
+
+        for name, reason in pipeline.RETRY_OMISSIONS.items():
+            with self.subTest(step=name):
+                self.assertTrue(
+                    reason.startswith("CORRECT") or reason.startswith("DEFECT"),
+                    f"{name}: omission reason must begin CORRECT or DEFECT",
+                )
+
+    def test_the_known_defect_count_is_pinned(self):
+        """Seven per-node steps are skipped on retry, so a retried node gets a
+        different pipeline than one that passed first time. Pinned so fixing
+        them is a deliberate, measured change rather than a drift."""
+
+        defects = [n for n, r in pipeline.RETRY_OMISSIONS.items() if r.startswith("DEFECT")]
+        self.assertEqual(len(defects), 7, sorted(defects))
 
 
 class PostClassifyBehaviorTests(unittest.TestCase):

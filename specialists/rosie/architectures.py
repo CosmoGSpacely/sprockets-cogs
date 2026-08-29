@@ -42,6 +42,7 @@ from specialists.rosie.prompts import (
     EXTRACT_SYSTEM,
 )
 from specialists.rosie.extractor_classifier import (
+    ModelOutputError,
     build_classify_messages,
     date_anchor,
     truncate_context,
@@ -304,12 +305,22 @@ def _chat(classifier, call: str, messages: list[dict], schema: dict) -> Any:
 
 
 def _parse(response: Any, key: str) -> list[dict]:
+    """Read one model reply, raising rather than swallowing a parse failure.
+
+    Matches the live path (finding 73). The harness records the exception per
+    fixture, so a truncated generation shows as an error instead of scoring as
+    a fixture that produced no nodes - which is how `segmented`'s runaway on
+    `multi-day-setting-holiday` read as a clean 0 in slice 1.
+    """
+
     raw = response.message.content
     try:
         result = json.loads(raw)
     except json.JSONDecodeError as exc:
         log.error("%s parse failed: %s | raw: %s", key, exc, raw)
-        return []
+        raise ModelOutputError(
+            key, str(exc), getattr(response, "eval_count", None)
+        ) from exc
     if isinstance(result, dict):
         return result.get(key, []) or []
     return result if isinstance(result, list) else []
