@@ -20,8 +20,9 @@ captures each after a discarded warmup, the two tags were indistinguishable:
 | `gemma4:12b-16k-cosmo` | 1.884s | 4.201s | 8.40 GB |
 | `gemma4:12b-32k-cosmo` | 1.906s | 4.258s | 8.42 GB |
 
-Peak prompt is ~2,355 tokens, 14% of the smaller window, so `num_ctx` never
-binds. With no measurable difference the tiebreak fell to coherence, and 32k
+Peak prompt is 2,799 tokens, 17% of the smaller window, so `num_ctx` never
+binds. (Stage 138 measured this as 2,355; it has grown with the fixture set,
+and the ratio arguments below use the current number.) With no measurable difference the tiebreak fell to coherence, and 32k
 was what deployment ran, what the code named, and what the baseline was
 measured on.
 

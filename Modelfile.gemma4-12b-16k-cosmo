@@ -1,3 +1,25 @@
+# The capture model. Selected 2026-08-29 (Stage 142 finding 70).
+#
+# num_ctx is PER SLOT, and Ollama MULTIPLIES it by OLLAMA_NUM_PARALLEL when it
+# launches the runner. With -np 2 this line produces `-c 32768`, not 16384.
+# That multiplication is why 16k was chosen over an otherwise identical 32k
+# build: two slots at 16k cost the same KV as one slot at 32k, and two slots
+# are what keep the extract and classify scaffolds both cached instead of
+# evicting each other every call.
+#
+# Headroom against real measurements, not estimates: peak prompt 2,799 tokens
+# and largest single completion 1,003 tokens, so a worst-case sequence is
+# ~3,802 of 16,384 - about 4.3x. num_predict 4096 is 4x the largest real
+# emission; lowering it to 1024 would truncate `multi-day-setting-holiday`,
+# which legitimately emits 1,003.
+#
+# temperature here is redundant: request `options` override Modelfile
+# parameters and every caller sets it explicitly (Stage 139). Kept because it
+# agrees, so nothing depends on which layer wins.
+#
+# Server-side settings live in /home/cosmo/ollama-stack/compose.yaml, NOT in
+# the systemd unit - that unit is disabled and its drop-in applies to nothing.
+
 FROM gemma4:12b
 
 PARAMETER num_ctx        16384
