@@ -113,17 +113,36 @@ class SegmentationResult:
 
     declined_reason: str = ""
 
-    def to_raw_nodes(self) -> list[dict]:
+    def to_raw_nodes(self, processing_date: str = "") -> list[dict]:
         """Shape the segments like `extract_nodes` output, minus type_hint.
 
         No `type_hint` field is emitted: this module does not type items, and
         emitting an empty hint would let a downstream reader mistake "not
         computed" for "computed as nothing".
+
+        **A heading is folded in only when it names a day.** The fold exists so
+        `apply_runtime_date_context` can see "Saturday:" - that is the whole
+        reason for it. Folding a non-date heading instead pays for itself
+        twice: "Garage Work Project Tasks: Patch holes in rear wall" is echoed
+        into `title` and `item_text`, inflating prompt *and* completion on
+        every item under the heading. Stage 142 finding 74 measured that as
+        part of what made candidate 5 the most expensive arm at 17.28s.
+
+        `processing_date` is optional so callers that only want segmentation
+        need not supply one; without it no heading is folded, since whether a
+        heading names a day cannot be answered without knowing today.
         """
+
+        from substrate.time_context import states_a_date
 
         nodes: list[dict] = []
         for segment in self.segments:
-            raw = f"{segment.scope}: {segment.raw}" if segment.scope else segment.raw
+            fold = bool(
+                segment.scope
+                and processing_date
+                and states_a_date(segment.scope, processing_date)
+            )
+            raw = f"{segment.scope}: {segment.raw}" if fold else segment.raw
             nodes.append({"raw": raw})
         return nodes
 

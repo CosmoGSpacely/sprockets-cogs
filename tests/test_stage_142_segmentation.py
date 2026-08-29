@@ -168,7 +168,31 @@ class HeadingScopeTests(unittest.TestCase):
         on today."""
 
         result = segment_capture("Saturday:\n- Walmart")
-        self.assertEqual(result.to_raw_nodes(), [{"raw": "Saturday: Walmart"}])
+        self.assertEqual(
+            result.to_raw_nodes("2026-06-12"), [{"raw": "Saturday: Walmart"}]
+        )
+
+    def test_a_non_date_heading_is_not_folded_in(self):
+        """Slice 5b repair of finding 74. The fold exists so the date resolver
+        can see "Saturday:". Folding "Garage Work Project Tasks:" instead pays
+        twice - it is echoed into title and item_text on every item under the
+        heading - which is part of what made candidate 5 the most expensive
+        arm at 17.28s."""
+
+        result = segment_capture(
+            "Garage Work Project Tasks:\nPatch holes in rear wall\nInstall bin shelves"
+        )
+        self.assertEqual(
+            [n["raw"] for n in result.to_raw_nodes("2026-06-12")],
+            ["Patch holes in rear wall", "Install bin shelves"],
+        )
+
+    def test_without_a_processing_date_no_heading_is_folded(self):
+        """Whether a heading names a day cannot be answered without knowing
+        today, so the safe answer is not to fold."""
+
+        result = segment_capture("Saturday:\n- Walmart")
+        self.assertEqual(result.to_raw_nodes(), [{"raw": "Walmart"}])
 
     def test_trailing_heading_with_nothing_under_it_stays_an_item(self):
         result = segment_capture("Walmart\nSaturday:")

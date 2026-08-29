@@ -437,7 +437,7 @@ def segmented(classifier, content, ref, context, config) -> ArchitectureRun:
     result = segment_capture(content)
     notes: list[str] = []
     if result.structured and result.segments:
-        raw_nodes = result.to_raw_nodes()
+        raw_nodes = result.to_raw_nodes(ref.strftime("%Y-%m-%d"))
         notes.append(f"segmented deterministically into {len(raw_nodes)}")
     else:
         raw_nodes = classifier.extract_nodes(content, now=ref)
