@@ -346,7 +346,7 @@ def apply_live_post_classify(
     # The two memory-parent steps sit here in loop.py and are skipped: they
     # need live RUDI retrieval. See UNMODELED_STEPS.
     before = [dict(node) for node in nodes]
-    nodes = ensure_cogs_companions(nodes)
+    nodes = ensure_cogs_companions(list(raw_nodes), nodes, source_date)
     if nodes != before:
         applied.append("ensure_cogs_companions")
 

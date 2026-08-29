@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from typing import Mapping, Sequence
 
 from substrate.format import normalize_cogs_time_text
+from substrate.node_matching import match_raw_index, match_words
 
 
 WEEKDAYS = {
@@ -262,63 +263,34 @@ def resolve_relative_cogs_horizon(text: str, processing_date: str) -> tuple[str,
     return None
 
 
-_MATCH_STOPWORDS = {
-    "a", "an", "and", "at", "for", "from", "in", "of", "on", "re", "the", "to",
-    "with", "is", "it", "my", "need", "about", "up",
-}
-
-#: Below this, an overlap is coincidence rather than evidence of shared origin.
-_MATCH_MIN_SCORE = 0.15
-
-
-def _match_words(text: str) -> set[str]:
-    return {
-        word for word in re.findall(r"[a-z0-9:]+", text.lower())
-        if word not in _MATCH_STOPWORDS
-    }
+#: Node-to-raw pairing moved to `substrate/node_matching.py` in Stage 142
+#: slice 4, when `substrate/format.py` became the third call site (finding 80).
+#: Re-exported under the old private names so existing callers here are
+#: unchanged.
+_match_words = match_words
+_match_raw_index = match_raw_index
 
 
-def _match_raw_index(
-    node: Mapping[str, object],
-    raw_nodes: Sequence[Mapping[str, object]],
-) -> int | None:
-    """Find the raw item a classified node came from, by content not position.
+def states_a_date(text: str, processing_date: str) -> bool:
+    """Whether the text names a day at all.
 
-    `classify_nodes` does not emit one node per raw item: the named-person rule
-    yields two, and a multi-day setting yields one per workday. Pairing by index
-    therefore reads the wrong item's text as soon as either rule fires, which
-    moved a date onto an unrelated node (Stage 139 finding 42).
+    Stage 142 C8: a task spawns its companion Cog only when the capture stated
+    a day, so a dateless standing task is not dumped onto today. That question
+    has to be answered from the source text rather than from the node's date
+    field, because `normalize_raw_node` fills a missing date with the
+    processing date - by which point "stated" and "defaulted" are
+    indistinguishable.
 
-    Returns None when nothing matches well enough, or when the best two
-    candidates tie - both mean "no evidence", and using the node's own text
-    alone is safer than guessing between them.
+    Explicit ISO dates are checked separately: `resolve_relative_cogs_horizon`
+    deliberately declines them (it has nothing to resolve), so relying on it
+    alone would read "2026-07-03" as stating no date.
     """
 
-    node_words = _match_words(
-        f"{_string(node.get('title'))} {_string(node.get('item_text'))}"
-    )
-    if not node_words:
-        return None
-
-    scored: list[tuple[float, int]] = []
-    for index, raw in enumerate(raw_nodes):
-        raw_words = _match_words(_string(raw.get("raw")))
-        if not raw_words:
-            continue
-        overlap = node_words & raw_words
-        if not overlap:
-            continue
-        scored.append((len(overlap) / len(node_words | raw_words), index))
-
-    if not scored:
-        return None
-    scored.sort(key=lambda pair: (-pair[0], pair[1]))
-    best_score, best_index = scored[0]
-    if best_score < _MATCH_MIN_SCORE:
-        return None
-    if len(scored) > 1 and scored[1][0] == best_score:
-        return None
-    return best_index
+    if not text:
+        return False
+    if _EXPLICIT_ISO_DATE_RE.search(text):
+        return True
+    return resolve_relative_cogs_horizon(text, processing_date) is not None
 
 
 def apply_runtime_date_context(

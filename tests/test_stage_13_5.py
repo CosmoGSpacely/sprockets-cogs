@@ -142,6 +142,9 @@ class Stage135HardeningTests(unittest.TestCase):
         self.assertIn("Unknown node_type", invalid[1][2])
 
     def test_ensure_cogs_companions_adds_missing_daily_for_task(self):
+        # Stage 142 C8: the companion is spawned only when the capture named a
+        # day, so the raw text has to state one.
+        raw_nodes = [{"raw": "Send proposal to Alex Monday", "type_hint": "task"}]
         classified = [
             {
                 "node_type": "sprockets/task",
@@ -152,7 +155,9 @@ class Stage135HardeningTests(unittest.TestCase):
             }
         ]
 
-        result = agentic_loop.ensure_cogs_companions(classified)
+        result = agentic_loop.ensure_cogs_companions(
+            raw_nodes, classified, "2026-05-04"
+        )
 
         self.assertEqual(len(result), 2)
         companion = result[1]
@@ -171,7 +176,11 @@ class Stage135HardeningTests(unittest.TestCase):
             }
         ]
 
-        result = agentic_loop.ensure_cogs_companions(classified)
+        result = agentic_loop.ensure_cogs_companions(
+            [{"raw": "Review memory context Monday", "type_hint": "task"}],
+            classified,
+            "2026-05-04",
+        )
 
         self.assertEqual(len(result), 1)
         self.assertNotIn("date", result[0])
@@ -199,10 +208,12 @@ class Stage135HardeningTests(unittest.TestCase):
             )
 
         self.assertTrue(routed)
-        self.assertEqual(len(written), 2)
+        # Stage 142 C8: "call Alex" names no day, so no companion Cog is
+        # spawned. Before C8 this wrote two - the task and a companion dumped
+        # onto today.
+        self.assertEqual(len(written), 1)
         self.assertEqual(written[0][0]["node_type"], "sprockets/task")
         self.assertEqual(written[0][1], "openai_fallback_candidate: confidence: low")
-        self.assertEqual(written[1][0]["node_type"], "cogs/daily")
 
     def test_openai_fallback_schema_is_strict_responses_api_shape(self):
         schema = openai_fallback._openai_classify_schema()
@@ -440,11 +451,12 @@ class Stage135HardeningTests(unittest.TestCase):
                 agentic_loop.process_input(input_path)
 
             review_files = sorted(review_dir.glob("*.md"))
-            self.assertEqual(len(review_files), 2)
+            # Stage 142 C8: one review file, not two. The second was a
+            # companion Cog spawned for a task whose capture named no day.
+            self.assertEqual(len(review_files), 1)
             review_text = "\n".join(path.read_text() for path in review_files)
             self.assertIn("openai_fallback_candidate: confidence: low", review_text)
             self.assertIn('"node_type": "sprockets/task"', review_text)
-            self.assertIn('"node_type": "cogs/daily"', review_text)
             self.assertTrue((archive_dir / "low.input").exists())
             daily_files = list(daily_dir.glob("*.md"))
             self.assertEqual(len(daily_files), 1)

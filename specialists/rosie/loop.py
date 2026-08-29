@@ -54,7 +54,12 @@ from specialists.rudi.response_routing import (
 from substrate.slug_utils import slugify
 from specialists.sprockets.specialist import SprocketsSpecialist, SprocketsSpecialistConfig
 import specialists.orbit.adapters.telegram_response as telegram_response
-from substrate.time_context import apply_bounded_recurrence_context, apply_runtime_date_context
+from substrate.node_matching import match_words, raw_text_for, similarity
+from substrate.time_context import (
+    apply_bounded_recurrence_context,
+    apply_runtime_date_context,
+    states_a_date,
+)
 from specialists.cogs.corrections import apply_correction_command, parse_correction_command
 from specialists.sprockets.vault_graph import (
     HIERARCHY_PARENT_NODE_TYPES,
@@ -805,12 +810,30 @@ def process_existing_inputs(input_dir: Path = INPUT_DIR) -> int:
 
 
 
-def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
-    """Guarantee every sprockets/task has a cogs/daily companion on the same date."""
-    _stop = {"a", "the", "for", "to", "of", "and", "in", "by", "at", "on", "re"}
+#: How similar two Cogs item texts must be before one counts as the other's
+#: companion. Stage 142 C9 / finding 36: the old test was "share any word",
+#: which suppressed "Install ladder racks" because "Install bin shelves" had
+#: already produced a companion. A ratio keeps near-duplicates suppressed and
+#: lets genuinely different tasks through.
+COMPANION_DUPLICATE_THRESHOLD = 0.6
 
-    def _words(s: str) -> set:
-        return set(s.lower().split()) - _stop
+
+def ensure_cogs_companions(
+    raw_nodes: list[dict],
+    classified: list[dict],
+    processing_date: str,
+) -> list[dict]:
+    """Give a sprockets/task a cogs/daily companion when the capture named a day.
+
+    Stage 142 C8, a product decision rather than an inferred one: spawning is a
+    capture act **only when the source text states a day**. A standing task with
+    no date waits for planning instead of being dumped onto today, which is what
+    made `project-task-list` emit seven tasks and four spurious Cogs.
+
+    The question is asked of the **raw text**, not the node's `date` field,
+    because `normalize_raw_node` fills a missing date with the processing date -
+    after which "stated" and "defaulted" cannot be told apart.
+    """
 
     def _valid_date(date: str) -> bool:
         if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
@@ -839,10 +862,21 @@ def ensure_cogs_companions(classified: list[dict]) -> list[dict]:
             node.pop("date", None)
             log.warning("ensure_cogs_companions: task %r has invalid date, skipping companion", title)
             continue
-        title_words = _words(title)
+        # C8: only when the capture actually named a day.
+        raw_text = raw_text_for(node, raw_nodes)
+        if not states_a_date(raw_text, processing_date):
+            log.info(
+                "ensure_cogs_companions: no day stated for task %r, "
+                "leaving it for planning",
+                title,
+            )
+            continue
+
+        # C9: near-duplicate, not any-shared-word.
+        title_words = match_words(title)
         existing = cogs_by_date.get(date, [])
         has_companion = any(
-            title_words & _words(item)
+            similarity(title_words, match_words(item)) >= COMPANION_DUPLICATE_THRESHOLD
             for item in existing
         )
         if not has_companion:
@@ -1090,7 +1124,11 @@ def route_openai_fallback_to_review(
     if not candidates:
         return False
 
-    candidates = ensure_cogs_companions(candidates)
+    candidates = ensure_cogs_companions(
+        raw_nodes,
+        candidates,
+        default_cogs_date or datetime.now().strftime("%Y-%m-%d"),
+    )
     valid, invalid = validate_output(
         candidates,
         default_cogs_date=default_cogs_date or datetime.now().strftime("%Y-%m-%d"),
@@ -1324,7 +1362,9 @@ def _step_apply_memory_parent_title(state: CaptureState) -> None:
 
 
 def _step_ensure_cogs_companions(state: CaptureState) -> None:
-    state.classified = ensure_cogs_companions(state.classified)
+    state.classified = ensure_cogs_companions(
+        state.raw_nodes, state.classified, state.source_date
+    )
 
 
 #: The capture pipeline. Order is behaviour - this is the same order the

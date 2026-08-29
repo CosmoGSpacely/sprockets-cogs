@@ -6,11 +6,15 @@ outside everything Stages 138-142 have scored. That is part of why the
 omission survived: no measurement covered it. Verification here is end to end
 through `process_input`, which is the only place the retry branch runs.
 
-The defect: `ensure_cogs_companions` guarantees every `sprockets/task` has a
-`cogs/daily` companion, so the task appears on the day it belongs to. It ran
-in the main pass and not on retry, so a node that failed validation once and
-came back correct on the second attempt was written **without its companion**
-and never showed up on the day.
+The defect: `ensure_cogs_companions` gives a `sprockets/task` a `cogs/daily`
+companion so it appears on the day it belongs to. It ran in the main pass and
+not on retry, so a node that failed validation once and came back correct on
+the second attempt was written **without its companion** and never showed up
+on the day.
+
+The capture says "Wednesday" deliberately. Stage 142 C8 spawns a companion
+only when the source text names a day, so a dateless task would now correctly
+get none - and this file would pass for the wrong reason.
 """
 from __future__ import annotations
 
@@ -48,12 +52,17 @@ class FakeDateTime:
         return "2026-06-17"
 
 
-#: First classify reply: a cogs/daily carrying a malformed date. That fails
-#: `validate_output` with a reason other than "confidence: low", which is the
-#: condition that routes a node to retry rather than straight to review.
+#: First classify reply: an unknown node_type. That fails `validate_output`
+#: with a reason other than "confidence: low", which is the condition routing
+#: a node to retry rather than straight to review.
+#:
+#: An earlier version used a malformed date, which stopped working once the
+#: capture text said "Wednesday": `apply_runtime_date_context` repaired the
+#: date, the node validated, and retry never fired. node_type is the right
+#: lever because no pipeline step repairs it.
 FIRST_REPLY = [
     {
-        "node_type": "cogs/daily",
+        "node_type": "sprockets/bogus",
         "title": "Fix the tractor hydraulics",
         "item_text": "Fix the tractor hydraulics",
         "date": "not-a-date",
@@ -94,7 +103,7 @@ class RetryRunsNodeScopedStepsTests(unittest.TestCase):
         input_path = dirs["input"] / "retry-companion.input"
         input_path.write_text(
             "---\nsession_id: stage142b\nsource: telegram\n---\n\n"
-            "Fix the tractor hydraulics\n",
+            "Fix the tractor hydraulics Wednesday\n",
             encoding="utf-8",
         )
 
@@ -114,7 +123,7 @@ class RetryRunsNodeScopedStepsTests(unittest.TestCase):
              patch.object(agentic_loop, "datetime", FakeDateTime), \
              patch.object(agentic_loop, "build_context_for_input", return_value=""), \
              patch.object(agentic_loop, "extract_nodes",
-                          return_value=[{"raw": "Fix the tractor hydraulics",
+                          return_value=[{"raw": "Fix the tractor hydraulics Wednesday",
                                          "type_hint": "task"}]), \
              patch.object(agentic_loop, "classify_nodes", side_effect=fake_classify), \
              patch.object(agentic_loop, "memory_parent_trace") as memory_trace, \

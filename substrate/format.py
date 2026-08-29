@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
+from substrate.node_matching import raw_text_for
+
 
 TIME_TOKEN_RE = re.compile(
     r"\b(?P<hour>1[0-2]|0?[1-9])(?P<minute>:[0-5]\d)?\s*"
@@ -72,7 +74,12 @@ def apply_cogs_item_format(
     for index, node in enumerate(result):
         if node.get("node_type") != "cogs/daily":
             continue
-        raw_text = _string(raw_nodes[index].get("raw")) if index < len(raw_nodes) else ""
+        # Content matching, not position. Finding 80: this ran *after*
+        # recurrence expansion, so `classified` is routinely longer than
+        # `raw_nodes` and every occurrence past the first read an index that
+        # does not exist - a recurring appointment showed its time span on the
+        # first occurrence only.
+        raw_text = raw_text_for(node, raw_nodes)
         original = _string(node.get("item_text") or node.get("title"))
         if not original:
             continue
