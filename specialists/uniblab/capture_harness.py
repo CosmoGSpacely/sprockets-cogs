@@ -198,6 +198,16 @@ def model_num_ctx(model: str) -> int | None:
     return value
 
 
+def _round(value: float | None) -> float | None:
+    """Round a duration for the report, preserving a real zero.
+
+    `if value else None` would turn a genuine 0.0 - a warm model reporting no
+    load time - into a missing measurement, which is a different claim.
+    """
+
+    return None if value is None else round(value, 3)
+
+
 def _describe_expected(expected) -> str:
     terms = ",".join(expected.must_include) if expected.must_include else "*"
     date = expected.date or "*"
@@ -585,9 +595,20 @@ def results_to_dict(results: Sequence[FixtureResult]) -> dict[str, Any]:
                             if stat.chars_per_token
                             else None
                         ),
-                        "eval_seconds": (
-                            round(stat.eval_seconds, 3) if stat.eval_seconds else None
-                        ),
+                        # Decode. Dominates cost: measured at ~20 tok/s against
+                        # prefill near 1000 tok/s, so a call costs what it
+                        # emits, not what it reads.
+                        "eval_seconds": _round(stat.eval_seconds),
+                        # Prefill, load, and the total the server reports.
+                        # Serialized as of Stage 142 slice 0a: the call
+                        # architecture experiment compares designs that trade
+                        # prefill against decode, and without these the
+                        # comparison is wall-clock subtraction. load_seconds
+                        # also answers whether a cold start dominates a short
+                        # conversational reply, which nothing has measured.
+                        "prompt_eval_seconds": _round(stat.prompt_eval_seconds),
+                        "load_seconds": _round(stat.load_seconds),
+                        "total_seconds": _round(stat.total_seconds),
                     }
                     for stat in result.call_stats
                 ],

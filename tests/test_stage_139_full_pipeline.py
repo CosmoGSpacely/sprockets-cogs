@@ -131,3 +131,61 @@ class ConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CallTimingSerializationTests(unittest.TestCase):
+    """Stage 142 slice 0a - the cost half of the architecture experiment.
+
+    `CallStats` has captured prefill, load, and total durations since Stage 138,
+    but only `eval_seconds` reached the JSON report, so every cost claim in
+    Stages 138-141 rested on wall-clock subtraction.
+    """
+
+    def _report(self, **stat_kwargs):
+        stat = capture_harness.CallStats(
+            call="extract", model="m", prompt_chars=100, **stat_kwargs
+        )
+        result = capture_harness.FixtureResult(
+            config_label="m",
+            fixture_id="f",
+            category="c",
+            raw_nodes=[],
+            classified_nodes=[],
+            elapsed_seconds=1.0,
+            matched=0,
+            expected_count=0,
+            actual_count=0,
+            call_stats=(stat,),
+        )
+        payload = capture_harness.results_to_dict([result])
+        return payload["results"][0]["calls"][0]
+
+    def test_every_duration_is_serialized(self):
+        call = self._report(
+            prompt_tokens=100,
+            completion_tokens=10,
+            eval_seconds=0.5,
+            prompt_eval_seconds=0.25,
+            load_seconds=1.5,
+            total_seconds=2.25,
+        )
+        self.assertEqual(call["eval_seconds"], 0.5)
+        self.assertEqual(call["prompt_eval_seconds"], 0.25)
+        self.assertEqual(call["load_seconds"], 1.5)
+        self.assertEqual(call["total_seconds"], 2.25)
+
+    def test_zero_is_a_measurement_not_a_gap(self):
+        """A warm model reports 0.0 load. That must not serialize as null -
+        'no load time' and 'not measured' are different claims."""
+
+        call = self._report(load_seconds=0.0, eval_seconds=0.0)
+        self.assertEqual(call["load_seconds"], 0.0)
+        self.assertEqual(call["eval_seconds"], 0.0)
+        self.assertIsNotNone(call["load_seconds"])
+
+    def test_absent_stays_absent(self):
+        """A client that omits durations must not report fabricated zeros."""
+
+        call = self._report(prompt_tokens=100)
+        for key in ("eval_seconds", "prompt_eval_seconds", "load_seconds", "total_seconds"):
+            self.assertIsNone(call[key], key)
