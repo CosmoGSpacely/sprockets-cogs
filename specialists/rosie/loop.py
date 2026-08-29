@@ -1302,15 +1302,15 @@ def _step_ensure_hierarchy_tasks(state: CaptureState) -> None:
 
 def _step_log_memory_parent_trace(state: CaptureState) -> None:
     # Computing the trace belongs to this step; the next one persists it.
-    state._memory_trace = memory_parent_trace_for_classification(
+    state.memory_trace = memory_parent_trace_for_classification(
         state.content, state.raw_nodes, state.classified
     )
-    log_memory_parent_trace(state._memory_trace)
-    state.memory_parent = state._memory_trace.parent_title
+    log_memory_parent_trace(state.memory_trace)
+    state.memory_parent = state.memory_trace.parent_title
 
 
 def _step_write_memory_parent_trace(state: CaptureState) -> None:
-    write_memory_parent_trace(state._memory_trace)
+    write_memory_parent_trace(state.memory_trace)
 
 
 def _step_ensure_memory_hierarchy_tasks(state: CaptureState) -> None:
@@ -1430,11 +1430,13 @@ def process_input(file_path: Path) -> None:
             error_context = "\n".join(f"- {reason}" for _, _, reason in retry_triples)
             log.info("Retrying classify for %d invalid node(s)", len(retry_triples))
             reclassified        = classify_nodes(retry_raw, context, error_context, use_examples=True, now=source_now)[:len(retry_triples)]
-            # Same declaration, filtered to the steps the inline retry ran.
-            # `pipeline.RETRY_OMISSIONS` records why each of the other ten is
-            # skipped - three correctly, seven as defects this declaration
-            # makes visible. Widening it changes behaviour and belongs to its
-            # own measured slice, not to a refactor.
+            # Every node-scoped step, so a retried node gets the same
+            # treatment as one that classified correctly first time. Slice 2b:
+            # previously three of thirteen ran here, and the seven per-node
+            # steps that did not are listed in `pipeline.RETRY_DEFECTS_FIXED`.
+            # `memory_parent` is inherited rather than recomputed - the
+            # capture-scoped step that derives it does not re-run, and a second
+            # retrieval could return something different for no reason.
             retry_state = run_pipeline(
                 CaptureState(
                     content=content,
@@ -1442,6 +1444,7 @@ def process_input(file_path: Path) -> None:
                     classified=reclassified,
                     source_date=source_date,
                     session_id=session_id,
+                    memory_parent=state.memory_parent,
                 ),
                 retry_steps(PIPELINE),
             )

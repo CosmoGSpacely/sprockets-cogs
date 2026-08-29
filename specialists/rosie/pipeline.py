@@ -44,6 +44,16 @@ class CaptureState:
     source_date: str
     session_id: str
     memory_parent: str | None = None
+    """The capture's memory-derived parent title.
+
+    Computed once by `log_memory_parent_trace`, which is `capture`-scoped and
+    so does not re-run on retry. The retry state inherits the value rather
+    than recomputing it: retried nodes belong to the same capture, and a
+    second RUDI retrieval could return something different for no reason.
+    """
+
+    memory_trace: object | None = None
+    """Trace record passed from the logging step to the writing step."""
 
     terminated: bool = False
     """Set by a step that ends the capture early - today only the structural
@@ -91,28 +101,26 @@ def run_pipeline(
 
 
 def retry_steps(steps):
-    """The steps that re-run on reclassified nodes.
+    """The steps that re-run on reclassified nodes: every `nodes`-scoped one.
 
-    Deliberately **not** every `NODES` step: see `RETRY_OMISSIONS`. This
-    returns exactly what the inline retry path ran, so declaring the pipeline
-    changes nothing. Widening it is a behaviour change and belongs to its own
-    measured slice.
+    Slice 2b. The inline retry path re-ran three of thirteen, and slice 2
+    reconstructed why - three omissions correct, seven defects. The fix is not
+    a new list but the scope distinction the declaration already carries: a
+    `nodes` step transforms a node list and is meaningful on any subset, so it
+    belongs in retry; a `capture` step decides something about the whole input
+    and must not be re-decided on a handful of reclassified items.
+
+    The three correct omissions fall out automatically - all three are
+    `capture`-scoped. That they do is the evidence that the scope field is
+    carrying a real distinction rather than restating a hand-written list.
     """
 
-    return tuple(step for step in steps if step.name in RETRY_INCLUDED)
+    return tuple(step for step in steps if step.scope == "nodes")
 
 
-#: What the inline retry path re-ran. Three of thirteen.
-RETRY_INCLUDED = (
-    "apply_runtime_date_context",
-    "apply_bounded_recurrence_context",
-    "apply_cogs_item_format",
-)
-
-#: Deliverable A2 required establishing whether the omission is deliberate.
-#: It is not recorded anywhere, so it was reconstructed by reading the steps.
-#: Three omissions are correct; seven are defects that this declaration makes
-#: visible and a later slice must fix, because fixing them changes behaviour.
+#: Steps deliberately absent from retry, and why. After slice 2b these are
+#: exactly the `capture`-scoped steps; there is no longer a hand-maintained
+#: inclusion list to drift from the declaration.
 RETRY_OMISSIONS = {
     "route_structural_guard_to_review": (
         "CORRECT. A whole-capture decision that already ran and would have "
@@ -120,33 +128,31 @@ RETRY_OMISSIONS = {
     ),
     "log_memory_parent_trace": (
         "CORRECT. Tracing for the capture, emitted once. Re-running would "
-        "write a second trace for the same input."
+        "write a second trace for the same input. The `memory_parent` it "
+        "computes is carried into the retry state instead of recomputed."
     ),
     "write_memory_parent_trace": (
         "CORRECT. Same reason; it writes a file."
     ),
-    "route_ordinary_entity_authority_to_review": (
-        "DEFECT. Per-node review routing. A node that came back through retry "
-        "is never checked for ordinary-entity authority."
-    ),
-    "route_recurrence_to_review": (
-        "DEFECT. Per-node. A retried recurrence node skips the guard entirely."
-    ),
-    "apply_explicit_hierarchy_hints": (
-        "DEFECT. A retried node never receives explicit hierarchy hints."
-    ),
-    "ensure_hierarchy_tasks": (
-        "DEFECT. A retried node never gains its hierarchy task."
-    ),
-    "ensure_memory_hierarchy_tasks": (
-        "DEFECT. Same, for the memory-derived parent."
-    ),
-    "apply_memory_parent_title": (
-        "DEFECT. A retried node keeps no memory parent title."
-    ),
-    "ensure_cogs_companions": (
-        "DEFECT. A retried task never gets its companion Cog, so it is "
-        "invisible on the day it belongs to. Probably the most user-visible "
-        "of the seven."
-    ),
+}
+
+#: The seven defects slice 2b fixed, kept so the history is not lost when the
+#: omission list shrinks to three. Each was a per-node step that a retried
+#: node silently never received.
+RETRY_DEFECTS_FIXED = {
+    "route_ordinary_entity_authority_to_review":
+        "a retried node was never checked for ordinary-entity authority",
+    "route_recurrence_to_review":
+        "a retried recurrence node skipped the guard entirely",
+    "apply_explicit_hierarchy_hints":
+        "a retried node never received explicit hierarchy hints",
+    "ensure_hierarchy_tasks":
+        "a retried node never gained its hierarchy task",
+    "ensure_memory_hierarchy_tasks":
+        "same, for the memory-derived parent",
+    "apply_memory_parent_title":
+        "a retried node kept no memory parent title",
+    "ensure_cogs_companions":
+        "a retried task never got its companion Cog, so it never appeared on "
+        "the day it belonged to - the most user-visible of the seven",
 }

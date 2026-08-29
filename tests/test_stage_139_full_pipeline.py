@@ -129,44 +129,48 @@ class RetryPathDriftTests(unittest.TestCase):
         source = inspect.getsource(loop.process_input)
         self.assertIn("retry_steps(PIPELINE)", source)
 
-    def test_retry_selection_matches_the_recorded_set(self):
+    def test_retry_runs_every_node_scoped_step(self):
+        """Slice 2b. A retried node now gets the same treatment as one that
+        classified correctly first time."""
+
         selected = [step.name for step in pipeline.retry_steps(loop.PIPELINE)]
-        self.assertEqual(selected, list(pipeline.RETRY_INCLUDED))
+        expected = [s.name for s in loop.PIPELINE if s.scope == "nodes"]
+        self.assertEqual(selected, expected)
+        self.assertEqual(len(selected), 10)
 
-    def test_every_step_is_included_or_its_omission_explained(self):
-        """No step may be silently absent from retry. This is finding 34's
-        lesson applied to the copy nobody was checking."""
+    def test_retry_omits_only_capture_scoped_steps(self):
+        """The three correct omissions are exactly the capture-scoped steps.
+        That they fall out of the scope field, rather than a hand-written
+        list, is what stops the two drifting apart again."""
 
-        for step in loop.PIPELINE:
-            with self.subTest(step=step.name):
-                self.assertTrue(
-                    step.name in pipeline.RETRY_INCLUDED
-                    or step.name in pipeline.RETRY_OMISSIONS,
-                    f"{step.name} neither re-runs on retry nor explains why not",
-                )
+        omitted = [s.name for s in loop.PIPELINE if s not in pipeline.retry_steps(loop.PIPELINE)]
+        self.assertEqual(sorted(omitted), sorted(pipeline.RETRY_OMISSIONS))
+        for name in omitted:
+            with self.subTest(step=name):
+                step = next(s for s in loop.PIPELINE if s.name == name)
+                self.assertEqual(step.scope, "capture")
 
-    def test_included_and_omitted_do_not_overlap(self):
-        overlap = set(pipeline.RETRY_INCLUDED) & set(pipeline.RETRY_OMISSIONS)
-        self.assertEqual(overlap, set())
-
-    def test_omissions_are_classified_correct_or_defect(self):
-        """Each omission states which it is, so the seven defects cannot be
-        mistaken for design."""
+    def test_every_omission_is_justified_as_correct(self):
+        """After 2b there are no defect omissions left. A new DEFECT entry
+        here means someone re-broke retry."""
 
         for name, reason in pipeline.RETRY_OMISSIONS.items():
             with self.subTest(step=name):
-                self.assertTrue(
-                    reason.startswith("CORRECT") or reason.startswith("DEFECT"),
-                    f"{name}: omission reason must begin CORRECT or DEFECT",
-                )
+                self.assertTrue(reason.startswith("CORRECT"), f"{name}: {reason}")
 
-    def test_the_known_defect_count_is_pinned(self):
-        """Seven per-node steps are skipped on retry, so a retried node gets a
-        different pipeline than one that passed first time. Pinned so fixing
-        them is a deliberate, measured change rather than a drift."""
+    def test_the_fixed_defects_are_recorded_and_now_run(self):
+        """History is kept: the seven are named, and each must now be in the
+        retry set. A regression that drops one is caught by name."""
 
-        defects = [n for n, r in pipeline.RETRY_OMISSIONS.items() if r.startswith("DEFECT")]
-        self.assertEqual(len(defects), 7, sorted(defects))
+        selected = {step.name for step in pipeline.retry_steps(loop.PIPELINE)}
+        self.assertEqual(len(pipeline.RETRY_DEFECTS_FIXED), 7)
+        for name in pipeline.RETRY_DEFECTS_FIXED:
+            with self.subTest(step=name):
+                self.assertIn(name, selected)
+
+    def test_fixed_and_omitted_do_not_overlap(self):
+        overlap = set(pipeline.RETRY_DEFECTS_FIXED) & set(pipeline.RETRY_OMISSIONS)
+        self.assertEqual(overlap, set())
 
 
 class PostClassifyBehaviorTests(unittest.TestCase):

@@ -91,38 +91,72 @@ class RunnerTests(unittest.TestCase):
 
 
 class RetrySelectionTests(unittest.TestCase):
-    def test_retry_includes_exactly_the_three_inline_steps(self):
-        steps = [_step(n) for n in pipeline.RETRY_INCLUDED] + [_step("other")]
-        selected = [s.name for s in pipeline.retry_steps(steps)]
-        self.assertEqual(selected, list(pipeline.RETRY_INCLUDED))
+    """Slice 2b. Retry selects by scope rather than by a hand-written list."""
 
-    def test_omissions_are_split_into_correct_and_defect(self):
-        correct = [n for n, r in pipeline.RETRY_OMISSIONS.items() if r.startswith("CORRECT")]
-        defect = [n for n, r in pipeline.RETRY_OMISSIONS.items() if r.startswith("DEFECT")]
-        self.assertEqual(len(correct), 3)
-        self.assertEqual(len(defect), 7)
+    def test_retry_selects_node_scoped_steps(self):
+        steps = [
+            _step("node_a", scope="nodes"),
+            _step("capture_a", scope="capture"),
+            _step("node_b", scope="nodes"),
+        ]
+        self.assertEqual(
+            [s.name for s in pipeline.retry_steps(steps)], ["node_a", "node_b"]
+        )
 
-    def test_capture_scoped_omissions_are_all_correct(self):
-        """A whole-capture decision should never be re-made on a retried
-        subset, so no capture-scoped step may be marked a defect."""
+    def test_retry_preserves_declared_order(self):
+        steps = [_step(n, scope="nodes") for n in ("c", "a", "b")]
+        self.assertEqual([s.name for s in pipeline.retry_steps(steps)], ["c", "a", "b"])
+
+    def test_capture_scoped_steps_never_retry(self):
+        steps = [_step(n, scope="capture") for n in pipeline.RETRY_OMISSIONS]
+        self.assertEqual(pipeline.retry_steps(steps), ())
+
+    def test_the_seven_fixed_defects_are_recorded(self):
+        """Kept after the omission list shrank to three, so the history of
+        what was broken is not lost with the fix."""
+
+        self.assertEqual(len(pipeline.RETRY_DEFECTS_FIXED), 7)
+        self.assertIn("ensure_cogs_companions", pipeline.RETRY_DEFECTS_FIXED)
+
+    def test_ensure_cogs_companions_now_runs_on_retry(self):
+        """The most user-visible of the seven: without it a retried task never
+        appears on the day it belongs to."""
 
         from specialists.rosie import loop
 
-        for step in loop.PIPELINE:
-            if step.scope == "capture" and step.name in pipeline.RETRY_OMISSIONS:
-                with self.subTest(step=step.name):
-                    self.assertTrue(
-                        pipeline.RETRY_OMISSIONS[step.name].startswith("CORRECT")
-                    )
+        selected = {s.name for s in pipeline.retry_steps(loop.PIPELINE)}
+        self.assertIn("ensure_cogs_companions", selected)
 
-    def test_ensure_cogs_companions_is_a_recorded_defect(self):
-        """Named explicitly because it is the most user-visible of the seven:
-        a retried task never gets its companion Cog, so it does not appear on
-        the day it belongs to."""
 
-        self.assertTrue(
-            pipeline.RETRY_OMISSIONS["ensure_cogs_companions"].startswith("DEFECT")
+class RetryMemoryParentTests(unittest.TestCase):
+    """The two memory steps are node-scoped and now retry, but the step that
+    derives their input is capture-scoped and does not. The value has to be
+    carried, or they would run against nothing."""
+
+    def test_memory_parent_is_carried_into_a_retry_state(self):
+        applied = []
+
+        def uses_parent(state):
+            applied.append(state.memory_parent)
+
+        run_pipeline(
+            _state(memory_parent="Garage Work"),
+            [_step("apply_memory_parent_title", fn=uses_parent)],
         )
+        self.assertEqual(applied, ["Garage Work"])
+
+    def test_retry_call_site_passes_the_main_pass_parent(self):
+        import inspect
+        from specialists.rosie import loop
+
+        source = inspect.getsource(loop.process_input)
+        self.assertIn("memory_parent=state.memory_parent", source)
+
+    def test_memory_trace_is_a_declared_field_not_an_ad_hoc_attribute(self):
+        """The logging step hands the trace to the writing step. A dynamic
+        attribute would work and would not survive anyone reading the class."""
+
+        self.assertIn("memory_trace", CaptureState.__dataclass_fields__)
 
 
 def _reply(content, eval_count=10):
