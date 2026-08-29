@@ -20,6 +20,10 @@ Use entity only when nothing is being done at the place.
 Never drop a day, date, or time from the input. Keep it in the raw field so
 classification can date the item.
 
+Counted repeats stay ONE item: "next 3 Saturdays", "every Tuesday for 4 weeks".
+Keep the whole phrase in the raw field. Do not list the occurrences yourself.
+e.g. {"raw": "YOGA next 3 Saturdays at 10a", "type_hint": "appointment"}
+
 Multi-day settings: if a setting spans multiple days ("all week", "Mon-Fri"),
 extract one item per day using the workdays list in the message. Embed the date
 in the raw field: e.g. {"raw": "WFH 2026-04-20", "type_hint": "setting"}.
@@ -135,6 +139,9 @@ Tasks:
 Multi-day settings: a setting that spans multiple days ("all week", "Mon–Fri") yields one
 cogs/daily per workday. "WFH all week" → five WFH nodes, one per workday Mon–Fri of the
 current week.
+
+Counted repeats are different: "next 3 Saturdays" or "every Tuesday for 4 weeks" yields
+exactly ONE cogs/daily keeping the whole phrase. Do not list the occurrences.
 
 Date resolution: use today's date from the user message.
 "next Monday" when today is Tuesday means 6 days away, not yesterday.
