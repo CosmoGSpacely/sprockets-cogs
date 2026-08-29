@@ -27,6 +27,7 @@ from substrate.time_context import (
     apply_bounded_recurrence_context,
     apply_runtime_date_context,
 )
+from specialists.rosie.architectures import ARCHITECTURES, DEFAULT_ARCHITECTURE
 from specialists.rosie.extractor_classifier import (
     DEFAULT_CONTEXT_MAX_CHARS,
     CallStats,
@@ -53,6 +54,15 @@ class HarnessConfig:
     presence_penalty: float | None = None
     top_k: int | None = None
     top_p: float | None = None
+    architecture: str = DEFAULT_ARCHITECTURE
+    """Which call architecture assembles the model calls (Stage 142 slice 1).
+
+    `two-call` is the shipped chain and the baseline. Every other value changes
+    the number of calls or the seam between them while leaving the fixtures,
+    the grader, and the post-classify chain identical, so the architecture is
+    the only variable.
+    """
+
     full_pipeline: bool = True
     """Score the live post-classify chain, not raw classify output.
 
@@ -66,6 +76,8 @@ class HarnessConfig:
     @property
     def label(self) -> str:
         parts = [self.model]
+        if self.architecture != DEFAULT_ARCHITECTURE:
+            parts.append(self.architecture)
         if not self.full_pipeline:
             parts.append("rawclassify")
         if self.context_max_chars != DEFAULT_CONTEXT_MAX_CHARS:
@@ -116,6 +128,19 @@ class FixtureResult:
     expect_structural_guard: bool = False
     error: str = ""
     call_stats: tuple[CallStats, ...] = ()
+    architecture: str = DEFAULT_ARCHITECTURE
+    architecture_notes: tuple[str, ...] = ()
+    """What the architecture did that the score alone will not show - a
+    segmenter decline, an escalation, a lost inspection point."""
+
+    @property
+    def call_count(self) -> int:
+        """Model calls actually made. The point of the whole experiment, and
+        not inferable from the architecture name: `segmented` pays one or two
+        depending on whether the splitter declined, and `conditional` pays one
+        or two depending on what the first call returned."""
+
+        return len(self.call_stats)
 
     @property
     def prompt_tokens(self) -> int:
@@ -411,13 +436,13 @@ def run_fixture(
                     top_p=config.top_p,
                 )
             )
-        raw_nodes = classifier.extract_nodes(fixture.content, now=fixture.now)
-        classified_nodes = classifier.classify_nodes(
-            raw_nodes,
-            fixture.context,
-            use_examples=config.use_examples,
-            now=fixture.now,
+        architecture = ARCHITECTURES[config.architecture]
+        run = architecture(
+            classifier, fixture.content, fixture.now, fixture.context, config
         )
+        raw_nodes = run.raw_nodes
+        classified_nodes = run.classified_nodes
+        architecture_notes = run.notes
         pipeline_steps: tuple[str, ...] = ()
         if config.full_pipeline:
             classified_nodes, pipeline_steps = apply_live_post_classify(
@@ -453,6 +478,8 @@ def run_fixture(
             ),
             expect_structural_guard=fixture.expect_structural_guard,
             call_stats=tuple(getattr(classifier, "call_stats", ())),
+            architecture=config.architecture,
+            architecture_notes=architecture_notes,
         )
     except Exception as exc:
         return FixtureResult(
@@ -468,6 +495,7 @@ def run_fixture(
             expected_item_count=fixture.expected_item_count,
             expect_structural_guard=fixture.expect_structural_guard,
             error=str(exc),
+            architecture=config.architecture,
         )
 
 
@@ -579,6 +607,12 @@ def results_to_dict(results: Sequence[FixtureResult]) -> dict[str, Any]:
                 "structural_guard_reasons": list(result.structural_guard_reasons),
                 "pipeline_steps": list(result.pipeline_steps),
                 "guard_ok": result.guard_ok,
+                "architecture": result.architecture,
+                "architecture_notes": list(result.architecture_notes),
+                # Not inferable from the architecture name: `segmented` and
+                # `conditional` both pay one or two calls depending on the
+                # input, and their whole claim is that the second is rare.
+                "call_count": result.call_count,
                 "elapsed_seconds": round(result.elapsed_seconds, 3),
                 "error": result.error,
                 "prompt_tokens": result.prompt_tokens,
@@ -692,6 +726,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="classifier context cap to test; repeat to compare caps",
     )
     parser.add_argument(
+        "--architecture",
+        action="append",
+        dest="architectures",
+        choices=sorted(ARCHITECTURES),
+        help="call architecture to test; repeat to compare (Stage 142 slice 1)",
+    )
+    parser.add_argument(
         "--raw-classify",
         action="store_true",
         help=(
@@ -766,9 +807,13 @@ def configs_from_args(args: argparse.Namespace) -> tuple[HarnessConfig, ...]:
     top_ps = tuple(getattr(args, "top_ps", None) or (None,))
     example_modes = (True, False) if args.no_examples else (True,)
     pipeline_modes = (True, False) if getattr(args, "raw_classify", False) else (True,)
+    architectures = tuple(
+        getattr(args, "architectures", None) or (DEFAULT_ARCHITECTURE,)
+    )
 
     return tuple(
         HarnessConfig(
+            architecture=architecture,
             model=model,
             context_max_chars=cap,
             use_examples=use_examples,
@@ -779,6 +824,11 @@ def configs_from_args(args: argparse.Namespace) -> tuple[HarnessConfig, ...]:
             top_p=top_p,
             full_pipeline=full_pipeline,
         )
+        # Architecture is the outermost axis so every fixture for one
+        # architecture runs consecutively. Finding 63: alternating scaffolds
+        # halve the prefix-cache hit rate, so interleaving architectures would
+        # charge each one for the others' cache evictions.
+        for architecture in architectures
         for model in models
         for full_pipeline in pipeline_modes
         for cap in caps
