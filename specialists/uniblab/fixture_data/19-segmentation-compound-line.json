@@ -1,0 +1,21 @@
+{
+  "fixture_id": "segmentation-compound-line",
+  "category": "segmentation",
+  "description": "One line carrying two independent errands must become two items.",
+  "source": "Composed for Stage 142 slice 0.",
+  "content": "Call the vet and pick up feed at the co-op",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 2
+    },
+    "nodes": [
+      {"node_type": "cogs/daily", "must_include": ["vet"], "date": "2026-06-12"},
+      {"node_type": "cogs/daily", "must_include": ["feed"], "date": "2026-06-12"}
+    ],
+    "allowed_extra": [
+      {"node_type": "sprockets/entity", "must_include": ["co-op"]}
+    ]
+  },
+  "notes": "Two actions joined by 'and', both independently actionable, so line count and item count differ. Deliberately paired with 19's counterweight, segmentation-single-errand: one of these splits and the other must not, and no segmenter can pass both by preferring one behavior. Neither names a person, so both are cogs/daily only per the Tasks block. The vet is a role rather than a named person; if the model emits a contact for it that is a doctrine question, not a segmentation one, so it is not permitted here."
+}

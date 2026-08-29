@@ -110,7 +110,7 @@ class FixtureSetIntegrityTests(unittest.TestCase):
         self.fixtures = capture_fixtures.load_capture_fixtures()
 
     def test_every_fixture_loads(self):
-        self.assertEqual(len(self.fixtures), 17)
+        self.assertEqual(len(self.fixtures), 22)
 
     def test_node_types_are_emittable(self):
         """A fixture asserting a type outside the schema enum can never pass."""
@@ -141,7 +141,10 @@ class FixtureSetIntegrityTests(unittest.TestCase):
 
     def test_stt_and_context_categories_are_present(self):
         categories = {fixture.category for fixture in self.fixtures}
-        for required in ("stt", "context", "restraint", "mutation", "date"):
+        for required in (
+            "stt", "context", "restraint", "mutation", "date",
+            "segmentation", "confidence",
+        ):
             self.assertIn(required, categories)
 
 

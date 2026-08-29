@@ -6,7 +6,7 @@ on the real `extract_nodes` / `classify_nodes` path.
 
 Fixtures 01-09 are verbatim real captures taken from
 `/home/cosmo/sc/archive/*.input`; the `source` field names the file. Fixtures
-10-17 are composed, because the behaviors they grade - corrections, duplicate
+10-22 are composed, because the behaviors they grade - corrections, duplicate
 suppression, year rollover, restraint, context crowding - either never occurred
 in the archive or cannot be isolated from a real capture. Composed fixtures say
 so in `source`.
@@ -29,6 +29,24 @@ deliberately: correct-but-messy (`11-stt-unpunctuated-run-on`) where extraction
 should be unaffected, and wrong (`12-stt-garbled-proper-noun`) where the right
 answer is to preserve the garbled token verbatim at low confidence rather than
 repair it or drop it.
+
+## Fixtures written for a candidate design
+
+`18-22` were added before Stage 142's call-architecture experiment, to make
+candidates measurable that the existing set could not distinguish:
+deterministic segmentation (18-20) and a conditional escalation path (21-22).
+
+That is a real hazard. A fixture written to make a candidate measurable can end
+up shaped by the candidate, and then the experiment grades the fixture author's
+preference rather than the design. Three guards:
+
+- They are written **from doctrine**, before any candidate runs, and their
+  notes cite the rule they come from.
+- **19 and 20 are a pair.** `segmentation-compound-line` must split on "and";
+  `segmentation-single-errand` must not. No segmenter passes both by preferring
+  one behavior, so neither fixture can be satisfied by a rule tuned to it.
+- **No fixture may be adjusted because a candidate scores badly on it.** If a
+  candidate fails one of these, that is the measurement working.
 
 ## Known-red fixtures
 

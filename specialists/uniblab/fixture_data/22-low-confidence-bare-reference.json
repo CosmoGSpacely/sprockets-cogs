@@ -1,0 +1,21 @@
+{
+  "fixture_id": "low-confidence-bare-reference",
+  "category": "confidence",
+  "description": "An input with no recoverable intent; every reading is defensible and none is confident.",
+  "source": "Composed for Stage 142 slice 0.",
+  "content": "the Henderson thing",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 1
+    },
+    "nodes": [
+      {"node_type": "sprockets/note", "must_include": ["henderson"], "confidence": "low"}
+    ],
+    "allowed_extra": [
+      {"node_type": "sprockets/task", "must_include": ["henderson"], "confidence": "low"},
+      {"node_type": "sprockets/entity", "must_include": ["henderson"]}
+    ]
+  },
+  "notes": "Three words with no verb, no date, and no resolvable subject. sprockets/note is the doctrine reading - reference or idea, no action - but task and entity are both defensible, so they are permitted rather than asserted. What is NOT permitted is a cogs/daily: putting this on a day invents a commitment the user never made, and that is the failure being graded. The confidence assertion is the point: a confident answer here is wrong regardless of which type it picks, because nothing in the input supports confidence. Contrast with empty-greeting, where the correct output is nothing at all; here there is something worth keeping and the only honest way to keep it is flagged."
+}

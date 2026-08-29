@@ -1,0 +1,20 @@
+{
+  "fixture_id": "segmentation-single-errand",
+  "category": "segmentation",
+  "description": "A long line containing 'and' that is one errand and must not split.",
+  "source": "Composed for Stage 142 slice 0.",
+  "content": "Pick up the replacement hydraulic filter and gasket kit for the tractor at the dealer on Route 40 before they close",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 1
+    },
+    "nodes": [
+      {"node_type": "cogs/daily", "must_include": ["filter"], "date": "2026-06-12"}
+    ],
+    "allowed_extra": [
+      {"node_type": "sprockets/entity", "must_include": ["route 40"]}
+    ]
+  },
+  "notes": "The counterweight to segmentation-compound-line. 'Filter and gasket kit' is one purchase at one place in one trip; splitting it produces two errands the user must reconcile by hand. A rule that splits on 'and' passes fixture 19 and fails this one; a rule that never splits passes this and fails 19. The pair is the actual test, and neither is meaningful alone. Long enough to be a plausible wrapped line, which is the shape a naive line-based segmenter handles correctly and a naive conjunction-based one does not."
+}

@@ -1,0 +1,17 @@
+{
+  "fixture_id": "low-confidence-ambiguous-day",
+  "category": "confidence",
+  "description": "The user offered two possible days; the correct answer is unconfident, not a guess.",
+  "source": "Composed for Stage 142 slice 0.",
+  "content": "dentist maybe Tuesday or Wednesday",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 1
+    },
+    "nodes": [
+      {"node_type": "cogs/daily", "must_include": ["dentist"], "confidence": "low"}
+    ]
+  },
+  "notes": "Grades confidence, not the date: whichever day is chosen, the answer is a guess, and the fixture deliberately leaves date ungraded so it cannot be passed by picking correctly. 'Maybe X or Y' is the plainest possible signal of uncertainty and the model has it in the input. Emitting two nodes is also wrong - the user has one appointment, not two - so this is a restraint case as well as a confidence one. Low-confidence nodes route to review without retry per validate_output, which makes this the fixture that exercises the escalation path Stage 142 candidate 6 depends on."
+}

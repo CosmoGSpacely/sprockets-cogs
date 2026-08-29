@@ -1,0 +1,19 @@
+{
+  "fixture_id": "segmentation-day-heading",
+  "category": "segmentation",
+  "description": "A day heading governs the lines beneath it; the heading is not itself an item.",
+  "source": "Composed for Stage 142 slice 0. Heading-plus-list is the commonest shape in /home/cosmo/sc/archive captures.",
+  "content": "Saturday:\n- Walmart\n- Home Depot\n- oil change",
+  "now": "2026-06-12T09:00:00",
+  "expected": {
+    "extract": {
+      "item_count": 3
+    },
+    "nodes": [
+      {"node_type": "cogs/daily", "must_include": ["walmart"], "date": "2026-06-13"},
+      {"node_type": "cogs/daily", "must_include": ["home depot"], "date": "2026-06-13"},
+      {"node_type": "cogs/daily", "must_include": ["oil change"], "date": "2026-06-13"}
+    ]
+  },
+  "notes": "Three items, not four: 'Saturday:' is scope, not an errand, and emitting a node for it is the failure this watches for. All three inherit the heading's day, which is the second thing being graded - a segmenter that splits correctly but drops the heading's date produces three items dated today. Saturday from Friday 2026-06-12 is the bare weekday reading, 2026-06-13, not the 'next Saturday' doctrine of finding 48. Deterministic segmentation (Stage 142 candidate 5) should find this trivial; the model-driven path currently has no fixture proving it does."
+}
