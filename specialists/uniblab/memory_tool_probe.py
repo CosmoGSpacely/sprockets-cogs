@@ -15,7 +15,7 @@ from typing import Any
 import ollama
 
 
-DEFAULT_MODEL = "gemma4:12b-32k-cosmo"
+DEFAULT_MODEL = "gemma4:12b-16k-cosmo"
 MODEL = os.environ.get("SPROCKETS_COGS_MODEL", DEFAULT_MODEL)
 
 ALLOWED_TOOL_NAMES = frozenset(

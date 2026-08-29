@@ -62,7 +62,7 @@ from specialists.astro.vault import (
 )
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-DEFAULT_MODEL = "gemma4:12b-32k-cosmo"
+DEFAULT_MODEL = "gemma4:12b-16k-cosmo"
 MODEL = os.environ.get("SPROCKETS_COGS_MODEL", DEFAULT_MODEL)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────

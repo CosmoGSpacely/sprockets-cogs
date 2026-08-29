@@ -54,7 +54,7 @@ class Stage92IntentModelTests(unittest.TestCase):
             adapter="cogswell-preview",
             confidence=Confidence.MEDIUM,
             provider="ollama",
-            model="gemma4:12b-32k-cosmo",
+            model="gemma4:12b-16k-cosmo",
             provenance=("direct image probe",),
         )
 

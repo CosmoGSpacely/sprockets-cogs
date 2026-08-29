@@ -27,7 +27,7 @@ TEXT_SUFFIXES = {".md", ".markdown", ".txt", ".text"}
 DOCUMENT_SUFFIXES = {".csv", ".doc", ".docx", ".html", ".pdf", ".rtf", ".tsv", ".xls", ".xlsx"}
 DEFAULT_GEMMA_IMAGE_MODEL = os.environ.get(
     "SPROCKETS_COGS_IMAGE_MODEL",
-    "gemma4:12b-32k-cosmo",
+    "gemma4:12b-16k-cosmo",
 )
 GEMMA_IMAGE_SCHEMA = {
     "type": "object",

@@ -248,7 +248,7 @@ class DefaultModelTests(unittest.TestCase):
     def test_capture_default_names_the_deployed_model(self):
         """The code default previously claimed Qwen while production ran Gemma."""
 
-        self.assertEqual(DEFAULT_CAPTURE_MODEL, "gemma4:12b-32k-cosmo")
+        self.assertEqual(DEFAULT_CAPTURE_MODEL, "gemma4:12b-16k-cosmo")
 
 
 class PromptDumpTests(unittest.TestCase):

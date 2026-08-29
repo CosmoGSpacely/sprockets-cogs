@@ -83,7 +83,7 @@ class Stage104RichInputTests(unittest.TestCase):
             image.write_bytes(b"\xff\xd8\xff fake jpeg")
             probe = rich_inputs.GemmaImageProbe(
                 path=image,
-                model="gemma4:12b-32k-cosmo",
+                model="gemma4:12b-16k-cosmo",
                 source_kind="scanned_text",
                 resource_summary="Notebook page with errands.",
                 extracted_text="Harbor Freight: tire changer",
@@ -117,7 +117,7 @@ class Stage104RichInputTests(unittest.TestCase):
             image.write_bytes(b"RIFF\x10\x00\x00\x00WEBPVP8 ")
             probe = rich_inputs.GemmaImageProbe(
                 path=image,
-                model="gemma4:12b-32k-cosmo",
+                model="gemma4:12b-16k-cosmo",
                 source_kind="poster_artifact",
                 resource_summary="Marchant calculator advertisement.",
                 extracted_text="EASE that makes figurework output soar",
@@ -167,7 +167,7 @@ class Stage104RichInputTests(unittest.TestCase):
 
             probe = rich_inputs.run_gemma_image_probe(
                 image,
-                model="gemma4:12b-32k-cosmo",
+                model="gemma4:12b-16k-cosmo",
                 chat_client=fake_chat,
             )
 

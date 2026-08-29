@@ -25,7 +25,7 @@ from specialists.rosie.prompts import (
 )
 
 
-DEFAULT_CAPTURE_MODEL = "gemma4:12b-32k-cosmo"
+DEFAULT_CAPTURE_MODEL = "gemma4:12b-16k-cosmo"
 CAPTURE_MODEL = os.environ.get(
     "SPROCKETS_COGS_EXTRACTOR_MODEL",
     os.environ.get("SPROCKETS_COGS_MODEL", DEFAULT_CAPTURE_MODEL),

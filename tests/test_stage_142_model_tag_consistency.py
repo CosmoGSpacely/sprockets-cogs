@@ -1,16 +1,20 @@
 """Stage 142 slice 0: exactly one capture model tag across the project.
 
-The project shipped two tags of the same weights, `gemma4:12b-16k-cosmo` and
-`gemma4:12b-32k-cosmo`, differing only in `num_ctx`. Measurement found them
-indistinguishable - 1.884s vs 1.906s prefill per capture, 4.201s vs 4.258s
-decode, 8.40 vs 8.42 GB resident - because peak prompt is ~2,355 tokens and
-neither window ever binds.
+The project shipped two tags of the same weights, differing only in `num_ctx`.
+Measured with one model resident at a time they were indistinguishable -
+1.884s vs 1.906s prefill per capture, 4.201s vs 4.258s decode, 8.40 vs 8.42 GB
+resident - because peak prompt is ~2,355 tokens and neither window ever binds.
 
-Having both was not free. The GPU holds exactly one 12B model, so naming the
-other tag forces an unload and reload measured at **6.4s**, and destroys the
-prefix cache with it. That is far larger than any difference this stage's
-candidates are trying to measure, so a stray tag reference does not just cost
-time - it silently corrupts a cost comparison.
+The 16k tag was selected once `OLLAMA_NUM_PARALLEL=2` broke that tie. Ollama
+multiplies `num_ctx` by the slot count, so 16k on two slots allocates the same
+KV as 32k did on one; with `q8_0` on top, the server runs two cached prefixes
+and still leaves 3,332 MiB free where 32k on two slots left 2,432 MiB.
+
+Having both tags installed was never free. The card holds one 12B model, so
+naming the other forces an unload and reload measured at **6.4s** and destroys
+every cached prefix. That is far larger than any difference this stage's
+candidates are trying to measure, so a stray tag reference does not merely
+cost time - it silently corrupts a cost comparison.
 
 This guard is therefore about measurement integrity, not tidiness.
 """
@@ -23,7 +27,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-CANONICAL_CAPTURE_MODEL = "gemma4:12b-32k-cosmo"
+CANONICAL_CAPTURE_MODEL = "gemma4:12b-16k-cosmo"
 
 #: Any `<family>:<size>-<ctx>-cosmo` tag. Matches the retired ones too, which
 #: is the point.
@@ -74,7 +78,16 @@ class CaptureModelTagTests(unittest.TestCase):
         only the selected one is what stops the pair coming back."""
 
         live = sorted(p.name for p in REPO.glob("Modelfile.*"))
-        self.assertEqual(live, ["Modelfile.gemma4-12b-32k-cosmo"])
+        self.assertEqual(live, ["Modelfile.gemma4-12b-16k-cosmo"])
+
+    def test_the_live_modelfile_matches_the_canonical_tag(self):
+        """The filename and the tag the code names must not drift apart. That
+        pairing is the only thing tying the checked-in build recipe to the
+        model production actually loads, and the two moved independently once
+        already."""
+
+        expected = "Modelfile." + CANONICAL_CAPTURE_MODEL.replace(":", "-")
+        self.assertTrue((REPO / expected).is_file(), expected)
 
     def test_archived_modelfiles_are_kept_not_deleted(self):
         """Stage 140 reopens the model comparison and needs these to exist."""
@@ -83,7 +96,7 @@ class CaptureModelTagTests(unittest.TestCase):
         self.assertEqual(
             archived,
             [
-                "Modelfile.gemma4-12b-16k-cosmo",
+                "Modelfile.gemma4-12b-32k-cosmo",
                 "Modelfile.phi4-14b-16k-cosmo",
                 "Modelfile.qwen3.5-9b-16k-cosmo",
                 "Modelfile.qwen3.5-9b-32k-cosmo",
