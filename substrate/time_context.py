@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from typing import Mapping, Sequence
 
 from substrate.format import normalize_cogs_time_text
-from substrate.node_matching import match_raw_index, match_words
+from substrate.node_matching import match_raw_index, match_words, raw_text_for
 
 
 WEEKDAYS = {
@@ -564,3 +564,183 @@ def _first_expandable_phrase(texts: Sequence[str], processing_date: str) -> str:
 
 def _string(value: object) -> str:
     return value if isinstance(value, str) else ""
+
+
+# ── Multi-day settings (Stage 142 slice 5a) ───────────────────────────────────
+#
+# Finding 77: `EXTRACT_SYSTEM` and `CLASSIFY_SYSTEM` both instruct the model to
+# expand "all next week" into one item per workday, the model does it badly -
+# a contiguous 19-day run including weekends on the one fixture that tests it -
+# and **no code did it at all**. This is the missing capability. The prompt
+# rule can only be removed once this exists, or the behaviour disappears
+# entirely, which is exactly what `preserve-extract` demonstrated by emitting
+# three nodes where ten belonged.
+
+#: Which week a phrase points at, relative to the capture's week.
+_WEEK_OFFSETS = (
+    (re.compile(r"\bthe\s+(?:week\s+after\s+next|following\s+week)\b", re.I), 2),
+    (re.compile(r"\ball\s+next\s+week\b", re.I), 1),
+    (re.compile(r"\bnext\s+week\b", re.I), 1),
+    (re.compile(r"\b(?:all|this)\s+week\b", re.I), 0),
+)
+
+#: "until Thursday", "through Wed" - truncates the span short of Friday.
+_UNTIL_WEEKDAY_RE = re.compile(
+    r"\b(?:until|through|thru|to)\s+(?P<weekday>"
+    r"mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|"
+    r"fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b",
+    re.IGNORECASE,
+)
+
+#: A span is workdays unless the text says otherwise. Cosmo's captures are
+#: work context ("Full loom", "WFH"), and a weekend in a WFH span is noise the
+#: user then has to delete.
+WORKDAYS_IN_WEEK = 5
+
+
+@dataclass(frozen=True)
+class MultiDaySpan:
+    """One multi-day setting phrase and the dates it covers."""
+
+    phrase: str
+    dates: tuple[str, ...]
+
+
+def multi_day_spans(text: str, processing_date: str) -> list[MultiDaySpan]:
+    """Every multi-day setting span in the text, in order of appearance.
+
+    A capture can hold more than one - "all next week and the following week
+    until Thursday" is two - so this returns a list rather than the first
+    match. Each span is independent: they may have different lengths and
+    neither constrains the other.
+    """
+
+    if not text:
+        return []
+    try:
+        source = parse_iso_date(processing_date)
+    except (ValueError, TypeError):
+        return []
+
+    this_monday = source - timedelta(days=source.weekday())
+    spans: list[MultiDaySpan] = []
+    consumed: list[tuple[int, int]] = []
+
+    for pattern, offset in _WEEK_OFFSETS:
+        for match in pattern.finditer(text):
+            if any(start <= match.start() < end for start, end in consumed):
+                continue
+            consumed.append((match.start(), match.end()))
+            monday = this_monday + timedelta(weeks=offset)
+            last = _span_last_weekday(text, match.end())
+            dates = tuple(
+                (monday + timedelta(days=day)).isoformat()
+                for day in range(last + 1)
+            )
+            if dates:
+                spans.append(MultiDaySpan(match.group(0).lower(), dates))
+
+    spans.sort(key=lambda span: text.lower().find(span.phrase))
+    return spans
+
+
+def _span_last_weekday(text: str, from_index: int) -> int:
+    """Index of the span's final weekday: 4 (Friday) unless "until X" cuts it.
+
+    Only looks *after* the week phrase, and only as far as the next one, so
+    "all next week and the following week until Thursday" does not let the
+    Thursday truncate the first span as well.
+    """
+
+    tail = text[from_index:]
+    for pattern, _ in _WEEK_OFFSETS:
+        following = pattern.search(tail)
+        if following:
+            tail = tail[: following.start()]
+    match = _UNTIL_WEEKDAY_RE.search(tail)
+    if not match:
+        return WORKDAYS_IN_WEEK - 1
+    return WEEKDAYS[_normalize_weekday(match.group("weekday"))]
+
+
+@dataclass(frozen=True)
+class MultiDayDecision:
+    """One multi-day setting expanded by code rather than by the model."""
+
+    index: int
+    phrase: str
+    occurrence_count: int
+
+
+def apply_multi_day_setting_context(
+    raw_nodes: Sequence[Mapping[str, object]],
+    classified: Sequence[Mapping[str, object]],
+    processing_date: str,
+) -> tuple[list[dict], list[MultiDayDecision]]:
+    """Expand a multi-day setting the model left as a single node.
+
+    **Guarded, deliberately.** Both prompts still instruct the model to expand
+    these itself, so this fires only when it did not - otherwise the two would
+    compound and produce twice the nodes, which is the failure mode already
+    measured at 20 nodes for an expected 10.
+
+    That makes this step inert on most captures today and load-bearing the
+    moment slice 6 removes the prompt rule. Landing it live but guarded is
+    what stops it being preview code that nothing imports, while keeping the
+    capability and the instruction from firing at once.
+    """
+
+    result = [dict(node) for node in classified]
+    decisions: list[MultiDayDecision] = []
+
+    for index, node in enumerate(list(result)):
+        if node.get("node_type") != "cogs/daily":
+            continue
+        # A week-horizon node is deliberately one item for the whole week -
+        # `apply_runtime_date_context` decided that a step earlier, and it
+        # goes to the weekly carry. Expanding it would replace one carry entry
+        # with five daily copies.
+        if _string(node.get("horizon")) not in ("", "day"):
+            continue
+        raw_index = match_raw_index(node, raw_nodes)
+        if raw_index is None:
+            continue
+        raw = raw_nodes[raw_index]
+        # Only settings span days. "Full loom all next week" applies to every
+        # day; "Call Tom next week" is one action to do sometime that week.
+        # The distinction is typing, which is the model's job under this
+        # stage's principle - expansion is arithmetic, which is code's.
+        if _string(raw.get("type_hint")).lower() != "setting":
+            continue
+        raw_text = _string(raw.get("raw"))
+        if not raw_text:
+            continue
+        spans = multi_day_spans(raw_text, processing_date)
+        if not spans:
+            continue
+
+        covered = {_string(other.get("date")) for other in result}
+        for position, span in enumerate(spans):
+            missing = [day for day in span.dates if day not in covered]
+            # The model already produced this span: leave it alone rather than
+            # topping it up, since a partial overlap more likely means it chose
+            # different days than that it stopped early.
+            if len(missing) < len(span.dates) - 1:
+                continue
+            if position == 0:
+                # The first span reuses the node, which carries the model's
+                # title, item_text and confidence; later spans clone it.
+                node["date"] = span.dates[0]
+                covered.add(span.dates[0])
+            for day in span.dates:
+                if day in covered:
+                    continue
+                clone = dict(node)
+                clone["date"] = day
+                result.append(clone)
+                covered.add(day)
+            decisions.append(
+                MultiDayDecision(index, span.phrase, len(span.dates))
+            )
+
+    return result, decisions

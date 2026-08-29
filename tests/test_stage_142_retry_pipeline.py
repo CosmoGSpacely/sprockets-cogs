@@ -170,7 +170,7 @@ class RetryStepSelectionIsLiveTests(unittest.TestCase):
         from specialists.rosie import pipeline
 
         selected = pipeline.retry_steps(agentic_loop.PIPELINE)
-        self.assertEqual(len(selected), 10)
+        self.assertEqual(len(selected), 11)
         self.assertNotIn(
             "route_structural_guard_to_review", {s.name for s in selected}
         )

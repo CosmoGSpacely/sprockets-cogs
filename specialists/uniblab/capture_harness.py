@@ -25,6 +25,7 @@ from typing import Any, Callable, Sequence
 from substrate.format import apply_cogs_item_format
 from substrate.time_context import (
     apply_bounded_recurrence_context,
+    apply_multi_day_setting_context,
     apply_runtime_date_context,
 )
 from specialists.rosie.architectures import ARCHITECTURES, DEFAULT_ARCHITECTURE
@@ -256,6 +257,7 @@ def _describe_node(node: dict[str, Any]) -> str:
 LIVE_POST_CLASSIFY_STEPS = (
     "apply_runtime_date_context",
     "apply_bounded_recurrence_context",
+    "apply_multi_day_setting_context",
     "apply_cogs_item_format",
     "route_structural_guard_to_review",
     "route_ordinary_entity_authority_to_review",
@@ -274,6 +276,7 @@ LIVE_POST_CLASSIFY_STEPS = (
 MODELED_STEPS = (
     "apply_runtime_date_context",
     "apply_bounded_recurrence_context",
+    "apply_multi_day_setting_context",
     "apply_cogs_item_format",
     "apply_explicit_hierarchy_hints",
     "ensure_hierarchy_tasks",
@@ -320,6 +323,12 @@ def apply_live_post_classify(
     )
     if recurrence_decisions:
         applied.append("apply_bounded_recurrence_context")
+
+    nodes, multi_day_decisions = apply_multi_day_setting_context(
+        raw_nodes, nodes, source_date
+    )
+    if multi_day_decisions:
+        applied.append("apply_multi_day_setting_context")
 
     nodes, format_decisions = apply_cogs_item_format(raw_nodes, nodes)
     if format_decisions:

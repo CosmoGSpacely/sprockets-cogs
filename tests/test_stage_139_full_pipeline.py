@@ -136,7 +136,7 @@ class RetryPathDriftTests(unittest.TestCase):
         selected = [step.name for step in pipeline.retry_steps(loop.PIPELINE)]
         expected = [s.name for s in loop.PIPELINE if s.scope == "nodes"]
         self.assertEqual(selected, expected)
-        self.assertEqual(len(selected), 10)
+        self.assertEqual(len(selected), 11)
 
     def test_retry_omits_only_capture_scoped_steps(self):
         """The three correct omissions are exactly the capture-scoped steps.

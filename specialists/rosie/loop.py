@@ -57,6 +57,7 @@ import specialists.orbit.adapters.telegram_response as telegram_response
 from substrate.node_matching import match_words, raw_text_for, similarity
 from substrate.time_context import (
     apply_bounded_recurrence_context,
+    apply_multi_day_setting_context,
     apply_runtime_date_context,
     states_a_date,
 )
@@ -1297,6 +1298,19 @@ def _step_bounded_recurrence(state: CaptureState) -> None:
         )
 
 
+def _step_multi_day_setting(state: CaptureState) -> None:
+    state.classified, decisions = apply_multi_day_setting_context(
+        state.raw_nodes, state.classified, state.source_date
+    )
+    for decision in decisions:
+        log.info(
+            "Multi-day setting expanded: node=%d days=%d phrase=%r",
+            decision.index,
+            decision.occurrence_count,
+            decision.phrase,
+        )
+
+
 def _step_cogs_item_format(state: CaptureState) -> None:
     state.classified, decisions = apply_cogs_item_format(
         state.raw_nodes, state.classified
@@ -1375,6 +1389,9 @@ PIPELINE: tuple[PipelineStep, ...] = (
                  retry_note="re-runs: retried nodes carry unresolved dates"),
     PipelineStep("apply_bounded_recurrence_context", "nodes", True, _step_bounded_recurrence,
                  retry_note="re-runs: a retried recurrence still needs expanding"),
+    PipelineStep("apply_multi_day_setting_context", "nodes", True,
+                 _step_multi_day_setting,
+                 retry_note="re-runs: a retried setting still needs expanding"),
     PipelineStep("apply_cogs_item_format", "nodes", True, _step_cogs_item_format,
                  retry_note="re-runs: formatting applies to any node text"),
     PipelineStep("route_structural_guard_to_review", "capture", False, _step_structural_guard,
