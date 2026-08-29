@@ -19,7 +19,7 @@ from specialists.uniblab.memory_tool_probe import (
 )
 
 
-DEFAULT_MODEL = os.environ.get("SPROCKETS_COGS_MODEL", "qwen3.5:9b-32k-cosmo")
+DEFAULT_MODEL = os.environ.get("SPROCKETS_COGS_MODEL", "gemma4:12b-32k-cosmo")
 DEFAULT_QUERIES = (
     "Find memory related to the tractor tire remounting project.",
     "Summarize recent Cogs from the last three days.",

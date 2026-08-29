@@ -208,13 +208,13 @@ class Stage32SystemStatusTests(unittest.TestCase):
     def test_parse_ollama_list_reads_model_names(self):
         output = (
             "NAME                           ID              SIZE      MODIFIED\n"
-            "qwen3.5:9b-32k-cosmo          abc123          7.0 GB    2 days ago\n"
+            "gemma4:12b-32k-cosmo          abc123          7.0 GB    2 days ago\n"
             "nomic-embed-text:latest        def456          274 MB    3 days ago\n"
         )
 
         models = system_status.parse_ollama_list(output)
 
-        self.assertEqual(models, ("qwen3.5:9b-32k-cosmo", "nomic-embed-text:latest"))
+        self.assertEqual(models, ("gemma4:12b-32k-cosmo", "nomic-embed-text:latest"))
 
     def test_model_availability_accepts_implicit_latest_tag(self):
         status = system_status.ModelAvailabilityStatus(
@@ -230,7 +230,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
     @patch("specialists.uniblab.system_status.subprocess.run")
     def test_build_model_availability_status_reports_installed_models(self, mock_run):
         runtime = system_status.RuntimeStatus(
-            model="qwen3.5:9b-32k-cosmo",
+            model="gemma4:12b-32k-cosmo",
             sc_root=Path("/tmp/sc"),
             input_dir=Path("/tmp/sc/input"),
             processing_dir=Path("/tmp/sc/processing"),
@@ -244,7 +244,7 @@ class Stage32SystemStatusTests(unittest.TestCase):
         mock_run.return_value = Mock(
             stdout=(
                 "NAME                           ID              SIZE      MODIFIED\n"
-                "qwen3.5:9b-32k-cosmo          abc123          7.0 GB    2 days ago\n"
+                "gemma4:12b-32k-cosmo          abc123          7.0 GB    2 days ago\n"
                 "nomic-embed-text:latest        def456          274 MB    3 days ago\n"
             ),
             stderr="",
