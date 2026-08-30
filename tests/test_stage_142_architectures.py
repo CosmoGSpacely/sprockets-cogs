@@ -100,7 +100,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(sorted(ARCHITECTURES), [
             "conditional", "one-flat", "one-staged", "preserve-extract",
             "preserve-nocalendar", "preserve-noexamples", "preserve-noprose",
-            "segmented", "two-call", "two-seam-decision",
+            "segmented", "two-call", "two-call-adapted", "two-seam-decision",
         ])
 
     def test_every_architecture_produces_nodes(self):

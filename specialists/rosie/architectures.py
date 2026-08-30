@@ -306,6 +306,123 @@ CLASSIFY_EXAMPLES_NO_MULTIDAY = _without_pair(
 )
 
 
+# ── Stage 145: the adapted-prompt arm ─────────────────────────────────────────
+#
+# The shipped prompts were shaped by six stages of measurement against one 12B
+# local model. Scoring a frontier model on them measures drop-in replacement
+# value; scoring it on prompts without the small-model scaffolding measures the
+# ceiling. Only the second answers Phase 14's question.
+#
+# **The boundary, fixed before any arm runs.** Removed: the few-shot examples,
+# the inline `e.g.` illustrations, and two lines that teach rather than state -
+# "Never silently drop an item" and the "next Monday ... not yesterday"
+# corrective. **Every rule stays**, including the ALLCAPS `item_text`
+# formatting.
+#
+# A correction to this stage's own plan: that plan called ALLCAPS formatting
+# "a drill that compensates for a small model". It is not - it is a product
+# formatting rule the vault templates depend on, and removing it would change
+# what the system writes rather than how the model is prompted. Following the
+# plan there would have measured a different system.
+
+ADAPTED_EXTRACT_SYSTEM = """\
+You are an extraction engine. Given text, identify all discrete items and output them as JSON.
+
+type_hint values:
+  appointment — has a specific time (8am, 5:30p, noon)
+  setting     — context keyword, no time (WFH, ONSITE, HOLIDAY)
+  task        — actionable, no time anchor
+  contact     — a person
+  entity      — org, place, or thing mentioned only for reference
+  note        — reference or idea, no action
+
+A store or place name paired with a day or time is an errand, not an entity.
+Use entity only when nothing is being done at the place.
+
+Never drop a day, date, or time from the input. Keep it in the raw field so
+classification can date the item.
+
+Counted repeats stay ONE item: "next 3 Saturdays", "every Tuesday for 4 weeks".
+Keep the whole phrase in the raw field.
+
+Multi-day settings: if a setting spans multiple days ("all week", "Mon-Fri"),
+extract one item per day using the workdays list in the message. Embed the date
+in the raw field.
+
+Output format: {"items": [{"raw": "...", "type_hint": "..."}]}
+"""
+
+ADAPTED_CLASSIFY_SYSTEM = """\
+You are a classification engine. Given extracted items, assign each a node_type and fields.
+
+You may receive an "Already in today's note:" line listing items already scheduled. Use it to avoid duplicating them.
+
+node_type rules:
+  cogs/daily        has a specific time, OR is WFH/ONSITE/HOLIDAY, OR is a one-off day action
+  sprockets/task    persistent actionable item, no time anchor
+  sprockets/contact a person
+  sprockets/entity  org, place, or thing
+  sprockets/note    reference or idea, no action
+
+item_text formatting for cogs/daily:
+  appointment → ALLCAPS name + time
+  setting     → ALLCAPS only
+  todo        → mixed case
+
+Tasks:
+  Listed under a project, goal, or area heading → sprockets/task ONLY.
+    Project work is standing work. Do not also put it on a day.
+  Named person or ongoing effort → TWO nodes: sprockets/task + cogs/daily (mixed case).
+  Simple errand or chore, no named person → cogs/daily only (mixed case).
+  For any cogs/daily: use the mentioned day if given, otherwise today's date.
+
+Multi-day settings: a setting that spans multiple days ("all week", "Mon–Fri") yields one
+cogs/daily per workday.
+
+Counted repeats are different: "next 3 Saturdays" or "every Tuesday for 4 weeks" yields
+exactly ONE cogs/daily keeping the whole phrase.
+
+Date resolution: use today's date from the user message.
+Use confidence "low" when date or type is ambiguous.
+
+parent_hint (optional): if a Sprockets node clearly belongs to a known hierarchy
+parent target from context, put that exact area/goal/project title here. Omit if unknown.
+Never invent a new area, goal, or project name for parent_hint.
+
+Output one or more nodes per input item.
+
+Output format: {"nodes": [...]}
+"""
+
+
+def two_call_adapted(classifier, content, ref, context, config) -> ArchitectureRun:
+    """Stage 145. The shipped two-call seam, scaffolding removed, no examples."""
+
+    extract_messages = [
+        {"role": "system", "content": ADAPTED_EXTRACT_SYSTEM},
+        {"role": "user", "content": (
+            f"{date_anchor(ref)}\n\nExtract all items from this text:\n\n{content}"
+        )},
+    ]
+    raw_nodes = _parse(
+        _chat(classifier, "extract", extract_messages, EXTRACT_SCHEMA), "items"
+    )
+    classify_messages = build_classify_messages(
+        raw_nodes,
+        context,
+        ref,
+        use_examples=False,
+        context_max_chars=classifier.config.context_max_chars,
+        system=ADAPTED_CLASSIFY_SYSTEM,
+    )
+    classified = _parse(
+        _chat(classifier, "classify", classify_messages, CLASSIFY_SCHEMA), "nodes"
+    )
+    return ArchitectureRun(
+        raw_nodes, classified, notes=("adapted prompts, no few-shot examples",)
+    )
+
+
 #: Candidate 7's second call: decisions, not nodes. The seam is by decision
 #: type, and it is only cheap if the second call emits a small answer rather
 #: than re-emitting everything it was given.
@@ -684,6 +801,7 @@ ARCHITECTURES: dict[str, Callable[..., ArchitectureRun]] = {
     "preserve-noprose": preserve_noprose,
     "preserve-noexamples": preserve_noexamples,
     "preserve-nocalendar": preserve_nocalendar,
+    "two-call-adapted": two_call_adapted,
     "one-flat": one_flat,
     "one-staged": one_staged,
     "segmented": segmented,

@@ -29,6 +29,7 @@ from substrate.time_context import (
     apply_runtime_date_context,
 )
 from specialists.rosie.architectures import ARCHITECTURES, DEFAULT_ARCHITECTURE
+from specialists.uniblab.cloud_client import AnthropicChatClient, is_cloud_model
 from specialists.rosie.extractor_classifier import (
     DEFAULT_CONTEXT_MAX_CHARS,
     CallStats,
@@ -434,6 +435,12 @@ def run_fixture(
         if classifier_factory is not None:
             classifier = classifier_factory(config)
         else:
+            # Stage 145: a `claude-*` model is served by Anthropic instead of
+            # Ollama. Everything downstream - fixtures, grader, post-classify
+            # chain - is identical, so the provider is the only variable.
+            chat_client = None
+            if is_cloud_model(config.model):
+                chat_client = AnthropicChatClient()
             classifier = ExtractClassifier(
                 ExtractClassifierConfig(
                     model=config.model,
@@ -443,7 +450,8 @@ def run_fixture(
                     presence_penalty=config.presence_penalty,
                     top_k=config.top_k,
                     top_p=config.top_p,
-                )
+                ),
+                chat_client=chat_client,
             )
         architecture = ARCHITECTURES[config.architecture]
         run = architecture(
