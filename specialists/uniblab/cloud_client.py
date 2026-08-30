@@ -109,9 +109,14 @@ class AnthropicChatClient:
             "system": system,
             "messages": turns,
         }
-        temperature = (options or {}).get("temperature")
-        if temperature is not None:
-            kwargs["temperature"] = temperature
+        # `temperature` is deliberately NOT forwarded: anthropic 1.2.0's
+        # `messages.create` does not accept it, so the cloud arms run at the
+        # provider default while the local arms run at the 0.1 Stage 139
+        # settled on. **That is a confound in the comparison, not a detail** -
+        # it is recorded in the stage file rather than papered over, and it
+        # means a small cloud/local gap should not be read as a model
+        # difference.
+        _ = options
         if format:
             kwargs["tools"] = [{
                 "name": TOOL_NAME,

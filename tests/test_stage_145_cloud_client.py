@@ -97,7 +97,10 @@ class RequestShapeTests(unittest.TestCase):
         self.assertEqual(sent["tools"][0]["input_schema"], SCHEMA)
         self.assertEqual(sent["system"], "sys")
         self.assertEqual(sent["max_tokens"], MAX_TOKENS)
-        self.assertEqual(sent["temperature"], 0.1)
+        # anthropic 1.2.0 has no temperature parameter, so it must not be sent.
+        # The cloud arms therefore run at the provider default - a recorded
+        # confound against the local arms' 0.1.
+        self.assertNotIn("temperature", sent)
         self.assertNotIn("system", [m["role"] for m in sent["messages"]])
 
     def test_no_schema_sends_no_tools(self):
