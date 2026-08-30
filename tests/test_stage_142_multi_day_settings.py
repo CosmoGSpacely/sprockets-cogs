@@ -158,14 +158,40 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(len(out), 9)
         self.assertEqual([d.occurrence_count for d in decisions], [5, 4])
 
-    def test_a_week_horizon_node_is_left_alone(self):
-        """`apply_runtime_date_context` runs earlier and may already have
-        decided this is a week-horizon carry item. That decision stands."""
+    def test_a_week_horizon_action_is_left_alone(self):
+        """`apply_runtime_date_context` may already have decided this is a
+        week-horizon carry item, and for an *action* that decision stands.
+
+        Finding 82's real case: expanding "Call Tom next week" would replace
+        one weekly carry entry with five daily copies.
+        """
 
         out, _ = apply_multi_day_setting_context(
-            _raw("Full loom all next week"), [_node(horizon="week")], NOW
+            _raw("Call Tom next week", type_hint="task"),
+            [_node(title="Call Tom", horizon="week")], NOW,
         )
         self.assertEqual(len(out), 1)
+
+    def test_a_week_horizon_span_expands_anyway(self):
+        """Finding 95, and this test previously asserted the opposite.
+
+        The old version used "Full loom all next week" - a *spanning* phrase -
+        to demonstrate a rule about non-spanning actions, so it conflated the
+        two cases and locked in the defect. Stage 145 exposed it:
+        `multi-day-setting-holiday` expanded only its second span, because
+        "until Thursday" made the resolver call that one a day horizon while
+        "all next week" got a week horizon and was skipped.
+
+        The two signals answer different questions - the horizon says *when to
+        act*, the span says *how many days it covers* - so a span overrides.
+        """
+
+        out, decisions = apply_multi_day_setting_context(
+            _raw("Full loom all next week"), [_node(horizon="week")], NOW
+        )
+
+        self.assertEqual(len(out), 5)
+        self.assertEqual([d.occurrence_count for d in decisions], [5])
 
     def test_non_cogs_nodes_are_untouched(self):
         task = {"node_type": "sprockets/task", "title": "Full loom",

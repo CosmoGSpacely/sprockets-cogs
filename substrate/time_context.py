@@ -720,12 +720,6 @@ def apply_multi_day_setting_context(
     for index, node in enumerate(list(result)):
         if node.get("node_type") != "cogs/daily":
             continue
-        # A week-horizon node is deliberately one item for the whole week -
-        # `apply_runtime_date_context` decided that a step earlier, and it
-        # goes to the weekly carry. Expanding it would replace one carry entry
-        # with five daily copies.
-        if _string(node.get("horizon")) not in ("", "day"):
-            continue
         raw_index = match_raw_index(node, raw_nodes)
         if raw_index is None:
             continue
@@ -737,10 +731,22 @@ def apply_multi_day_setting_context(
         # is one action to do sometime that week. A setting always spans its
         # week; anything else must say so (finding 86 - the model typed a
         # spanning item as a task, and keying on the type alone missed it).
-        if (
-            _string(raw.get("type_hint")).lower() != "setting"
-            and not states_a_day_span(raw_text)
-        ):
+        spans_the_days = states_a_day_span(raw_text)
+        if _string(raw.get("type_hint")).lower() != "setting" and not spans_the_days:
+            continue
+        # A week-horizon node is deliberately one item for the whole week -
+        # `apply_runtime_date_context` decided that a step earlier, and it goes
+        # to the weekly carry. Expanding it would replace one carry entry with
+        # five daily copies, which is finding 82.
+        #
+        # **Unless the text says it covers every day of that week** (finding
+        # 95). "all next week" resolves to a week horizon *and* states a span,
+        # and the guard silently won - which is why `multi-day-setting-holiday`
+        # expanded only its second span, the one whose "until Thursday" made
+        # the resolver call it a day horizon. The two signals answer different
+        # questions: the horizon says *when to act*, the span says *how many
+        # days it covers*.
+        if _string(node.get("horizon")) not in ("", "day") and not spans_the_days:
             continue
         spans = multi_day_spans(raw_text, processing_date)
         if not spans:
