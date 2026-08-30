@@ -606,6 +606,30 @@ class MultiDaySpan:
     dates: tuple[str, ...]
 
 
+#: Phrases that make a week reference cover every day in it, rather than name
+#: a week to act within. "all next week" spans; a bare "next week" does not.
+#: This is the distinction finding 82 turned on - "Call Tom next week" became
+#: five daily copies - and slice 5a drew it with `type_hint == "setting"`
+#: instead, which finding 86 then showed does not reach a spanning item the
+#: model typed as a task.
+_SPAN_MARKER_RES = (
+    re.compile(r"\ball\s+(?:next\s+|this\s+|the\s+following\s+)?week\b", re.I),
+    re.compile(r"\ball\s+(?:day|week)\s+long\b", re.I),
+    _UNTIL_WEEKDAY_RE,
+)
+
+
+def states_a_day_span(text: str) -> bool:
+    """Whether the text says a week reference covers all of its days.
+
+    The span is a property of the phrase, not of the item's type. "Full loom
+    all next week" spans whether the model called it a setting or a task; "Call
+    Tom next week" spans under neither.
+    """
+
+    return any(pattern.search(text) for pattern in _SPAN_MARKER_RES)
+
+
 def multi_day_spans(text: str, processing_date: str) -> list[MultiDaySpan]:
     """Every multi-day setting span in the text, in order of appearance.
 
@@ -706,14 +730,17 @@ def apply_multi_day_setting_context(
         if raw_index is None:
             continue
         raw = raw_nodes[raw_index]
-        # Only settings span days. "Full loom all next week" applies to every
-        # day; "Call Tom next week" is one action to do sometime that week.
-        # The distinction is typing, which is the model's job under this
-        # stage's principle - expansion is arithmetic, which is code's.
-        if _string(raw.get("type_hint")).lower() != "setting":
-            continue
         raw_text = _string(raw.get("raw"))
         if not raw_text:
+            continue
+        # "Full loom all next week" applies to every day; "Call Tom next week"
+        # is one action to do sometime that week. A setting always spans its
+        # week; anything else must say so (finding 86 - the model typed a
+        # spanning item as a task, and keying on the type alone missed it).
+        if (
+            _string(raw.get("type_hint")).lower() != "setting"
+            and not states_a_day_span(raw_text)
+        ):
             continue
         spans = multi_day_spans(raw_text, processing_date)
         if not spans:

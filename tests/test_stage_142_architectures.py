@@ -89,9 +89,17 @@ def _run(name, content="Call the vet", context="", client=None):
 
 
 class RegistryTests(unittest.TestCase):
-    def test_all_seven_candidates_are_registered(self):
+    def test_all_candidates_are_registered(self):
+        """Seven call-architecture candidates, plus the slice 6 prompt ladder.
+
+        The ladder arms share `preserve-extract`'s call shape and vary only the
+        prompt surface, so they are not new candidates - they retire when
+        slice 6 promotes whichever rung wins.
+        """
+
         self.assertEqual(sorted(ARCHITECTURES), [
             "conditional", "one-flat", "one-staged", "preserve-extract",
+            "preserve-nocalendar", "preserve-noexamples", "preserve-noprose",
             "segmented", "two-call", "two-seam-decision",
         ])
 
@@ -100,6 +108,57 @@ class RegistryTests(unittest.TestCase):
             with self.subTest(architecture=name):
                 run, _, _ = _run(name, context="Areas: Farm")
                 self.assertTrue(run.classified_nodes, name)
+
+
+class Slice6LadderTests(unittest.TestCase):
+    """Each rung must actually differ from the one below it.
+
+    The ladder's whole purpose is attributing a movement to one change, so an
+    arm that silently sends the same prompt as its predecessor would produce a
+    "no effect" reading that measured nothing (finding 79).
+    """
+
+    def _prompt_surface(self, name) -> str:
+        _, client, _ = _run(name)
+        return json.dumps([call["messages"] for call in client.calls])
+
+    def test_rungs_remove_the_multi_day_rule_in_order(self):
+        base = self._prompt_surface("preserve-extract")
+        noprose = self._prompt_surface("preserve-noprose")
+        noexamples = self._prompt_surface("preserve-noexamples")
+
+        # The prose lives only in classify; extract's copy is already gone.
+        self.assertIn("Multi-day settings", base)
+        self.assertNotIn("Multi-day settings", noprose)
+
+        # The examples survive the prose removal, and that is the point.
+        self.assertIn("working from home all week", noprose)
+        self.assertNotIn("all week", noexamples)
+
+    def test_nocalendar_drops_the_workday_list_from_both_calls(self):
+        with_calendar = self._prompt_surface("preserve-noexamples")
+        without = self._prompt_surface("preserve-nocalendar")
+
+        self.assertEqual(with_calendar.count("This week's workdays"), 2)
+        self.assertNotIn("This week's workdays", without)
+        self.assertIn("Today: 2026-06-12", without)
+
+    def test_every_rung_keeps_the_two_call_seam_and_raw_nodes(self):
+        for name in ("preserve-noprose", "preserve-noexamples", "preserve-nocalendar"):
+            with self.subTest(architecture=name):
+                run, client, _ = _run(name)
+                self.assertEqual(len(client.calls), 2)
+                self.assertTrue(run.raw_nodes)
+
+    def test_removal_helpers_refuse_to_no_op(self):
+        """A drifted prompt must fail loudly rather than produce a duplicate arm."""
+
+        with self.assertRaises(ValueError):
+            architectures._without_block("some prompt", "absent block", "label")
+        with self.assertRaises(ValueError):
+            architectures._without_pair(
+                architectures.EXTRACT_EXAMPLES, 0, "working from home all week"
+            )
 
 
 class CallCountTests(unittest.TestCase):

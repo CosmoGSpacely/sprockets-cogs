@@ -140,6 +140,24 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(decisions, [])
 
+    def test_a_spanning_item_the_model_typed_as_a_task_still_expands(self):
+        """Finding 86 / D108. Under preserve-only extract the model emitted
+        "Full loom all next week..." as `type_hint: task` - "Full loom" is a
+        garbled company name, not a WFH/ONSITE/HOLIDAY keyword - and the
+        `type_hint == "setting"` guard skipped it, producing 2 nodes where 10
+        were expected. The span is a property of the phrase, not the type."""
+
+        out, decisions = apply_multi_day_setting_context(
+            _raw(
+                "Full loom all next week and the following week until Thursday",
+                type_hint="task",
+            ),
+            [_node(title="Full loom")], NOW,
+        )
+
+        self.assertEqual(len(out), 9)
+        self.assertEqual([d.occurrence_count for d in decisions], [5, 4])
+
     def test_a_week_horizon_node_is_left_alone(self):
         """`apply_runtime_date_context` runs earlier and may already have
         decided this is a week-horizon carry item. That decision stands."""

@@ -159,15 +159,101 @@ def week_workdays(ref: datetime) -> str:
     )
 
 
+TRUNCATION_MARKER = "[... truncated]"
+
+#: Capture length above which a single classify call is no longer a safe shape.
+#: Finding 78 measured ~34-49 completion tokens per node against a 4096 cap, so
+#: the practical ceiling is ~75 nodes; this threshold is set well below that, at
+#: roughly the size where a photographed list stops being a dictated note.
+CAPTURE_BUDGET_CHARS = 4000
+
+
+def capture_exceeds_budget(text: str) -> bool:
+    """Whether a capture is too large for one unbatched pass.
+
+    **The capture is never truncated.** Context is advisory vault state and
+    degrades gracefully when trimmed; the capture is the user's own words, and
+    silently cutting them is the finding 73 defect class - a total loss that
+    scores as a clean result. An oversize capture is a batching case (D105) or
+    a review case, never a truncated one.
+
+    This predicate is the guard, not the handling. It exists so the condition
+    is detectable and logged now rather than discovered in production; D105
+    owns what to do about it.
+    """
+
+    return len(text) > CAPTURE_BUDGET_CHARS
+
+#: Context lines that must survive bounding. The classify prompt has a hard
+#: rule about this one - "Never invent a new area, goal, or project name for
+#: parent_hint" - so it is the only part of the context the model is forbidden
+#: to work around. It is also the last line of the block and the smallest.
+PRIORITY_CONTEXT_PREFIXES = ("Known hierarchy parents:",)
+
+
 def truncate_context(context: str, max_chars: int = DEFAULT_CONTEXT_MAX_CHARS) -> str:
-    """Keep classifier context bounded to the existing prompt budget."""
+    """Bound the classifier context, dropping the least load-bearing part first.
+
+    Head-truncation was the Stage 142 slice 7 defect (finding 87): the
+    hierarchy parent list sits at the end of the context, so every binding cap
+    deleted the one section the prompt has a rule about while keeping twenty
+    lines of recent nodes. Worse, it cut mid-word, and finding 88 measured that
+    a visibly incomplete parent list suppresses `parent_hint` even when the
+    needed name survives the cut.
+
+    So: keep the priority lines whole, spend what is left on the rest, and drop
+    whole lines rather than characters. A partial list is worse than a short
+    one.
+    """
 
     if len(context) <= max_chars:
         return context
-    return context[:max_chars] + "\n[... truncated]"
+
+    lines = context.splitlines()
+    priority = [
+        line for line in lines
+        if line.startswith(PRIORITY_CONTEXT_PREFIXES)
+    ]
+    rest = [line for line in lines if line not in priority]
+
+    priority_text = "\n".join(priority)
+    if not priority or len(priority_text) + len(TRUNCATION_MARKER) + 1 > max_chars:
+        # No priority section, or no room for it. Fall back to dropping whole
+        # lines from the end - never a mid-word cut.
+        return _fit_lines(lines, max_chars)
+
+    budget = max_chars - len(priority_text) - len(TRUNCATION_MARKER) - 2
+    kept: list[str] = []
+    used = 0
+    for line in rest:
+        if used + len(line) + 1 > budget:
+            break
+        kept.append(line)
+        used += len(line) + 1
+
+    return "\n".join([*kept, TRUNCATION_MARKER, priority_text])
 
 
-def date_anchor(ref: datetime) -> str:
+def _fit_lines(lines: list[str], max_chars: int) -> str:
+    """Keep as many whole leading lines as fit, then mark the truncation."""
+
+    kept: list[str] = []
+    used = 0
+    limit = max_chars - len(TRUNCATION_MARKER) - 1
+    for line in lines:
+        if used + len(line) + 1 > limit:
+            break
+        kept.append(line)
+        used += len(line) + 1
+    if not kept:
+        # One line longer than the whole budget. Line granularity would drop
+        # the entire context, so cut characters here rather than return
+        # nothing - losing the tail beats losing everything.
+        return lines[0][:limit] + "\n" + TRUNCATION_MARKER if lines else ""
+    return "\n".join([*kept, TRUNCATION_MARKER])
+
+
+def date_anchor(ref: datetime, *, include_workdays: bool = True) -> str:
     """Shared date block for both model calls.
 
     Both calls must state today's date and the week's workday anchors. They
@@ -175,17 +261,29 @@ def date_anchor(ref: datetime) -> str:
     the `Today:` line while classify kept it, so the model resolved relative
     dates by guessing from the workday list (Stage 138 finding 12). Keeping one
     definition is what stops that recurring.
+
+    `include_workdays=False` drops the calendar line. Stage 142 B5: under
+    preserve-only extract the model is told never to compute a date, so the
+    workday list is either dead weight or an invitation to compute anyway.
+    Which one is a measurement (slice 6), not an argument.
     """
 
-    return (
-        f"Today: {ref.strftime('%Y-%m-%d (%A)')}\n"
-        f"This week's workdays: {week_workdays(ref)}"
-    )
+    today = f"Today: {ref.strftime('%Y-%m-%d (%A)')}"
+    if not include_workdays:
+        return today
+    return f"{today}\nThis week's workdays: {week_workdays(ref)}"
 
 
 def build_extract_messages(content: str, ref: datetime) -> list[dict]:
     """Assemble the exact message list for the extract call."""
 
+    if capture_exceeds_budget(content):
+        log.warning(
+            "capture is %d chars, above the %d single-pass budget; "
+            "sending unbatched (D105 owns batching)",
+            len(content),
+            CAPTURE_BUDGET_CHARS,
+        )
     return [
         {"role": "system", "content": EXTRACT_SYSTEM},
         *EXTRACT_EXAMPLES,
@@ -207,11 +305,19 @@ def build_classify_messages(
     error_context: str = "",
     use_examples: bool = True,
     context_max_chars: int = DEFAULT_CONTEXT_MAX_CHARS,
+    system: str | None = None,
+    examples: list[dict] | None = None,
+    include_workdays: bool = True,
 ) -> list[dict]:
-    """Assemble the exact message list for the classify call."""
+    """Assemble the exact message list for the classify call.
+
+    `system` and `examples` override the shipped prompt surface for one call.
+    They exist so a harness arm can vary the prompt without swapping a module
+    global, which two architectures running in one process would race on.
+    """
 
     user_msg = (
-        f"{date_anchor(ref)}\n\n"
+        f"{date_anchor(ref, include_workdays=include_workdays)}\n\n"
         f"{truncate_context(context, context_max_chars)}\n\n"
         f"Extracted:\n{json.dumps(raw_nodes, indent=2)}\n\n"
     )
@@ -220,8 +326,8 @@ def build_classify_messages(
     user_msg += "Classify each item."
 
     return [
-        {"role": "system", "content": CLASSIFY_SYSTEM},
-        *(CLASSIFY_EXAMPLES if use_examples else []),
+        {"role": "system", "content": system if system is not None else CLASSIFY_SYSTEM},
+        *((examples if examples is not None else CLASSIFY_EXAMPLES) if use_examples else []),
         {"role": "user", "content": user_msg},
     ]
 

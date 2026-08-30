@@ -35,6 +35,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from specialists.rosie.prompts import (
+    CLASSIFY_EXAMPLES,
     CLASSIFY_SCHEMA,
     CLASSIFY_SYSTEM,
     EXTRACT_EXAMPLES,
@@ -247,6 +248,64 @@ original phrase to do it.
 Output format: {"items": [{"raw": "...", "type_hint": "..."}]}
 """
 
+# ── Slice 6 ladder: removing the multi-day expansion rule ─────────────────────
+#
+# Slice 5a built workday expansion in `substrate/time_context.py`, so the rule
+# both prompts assert is now performed correctly by code. Slice 6 removes the
+# rule from the prompt surface - and finding 49 says prose and examples are not
+# equal authority, so "remove the rule" is two changes, not one.
+#
+# Each arm below is one step past the arm above it, so a movement is
+# attributable. They are experiment scaffolding: whichever step wins gets
+# promoted into `prompts.py` and these arms retire with the slice.
+
+
+def _without_block(prompt: str, block: str, label: str) -> str:
+    """Remove one paragraph from a prompt, loudly if it is not there.
+
+    A silent no-op here would produce an arm identical to its predecessor and a
+    verdict of "no effect" that measured nothing - which is the failure mode
+    finding 79 recorded for a regression test that passed first time.
+    """
+
+    if block not in prompt:
+        raise ValueError(f"{label}: block not found; prompt has drifted")
+    return prompt.replace(block, "")
+
+
+def _without_pair(messages: list[dict], index: int, must_contain: str) -> list[dict]:
+    """Drop one few-shot user/assistant pair, checked by content not position."""
+
+    if must_contain not in messages[index]["content"]:
+        raise ValueError(f"example pair {index} is not the expected one")
+    return [*messages[:index], *messages[index + 2:]]
+
+
+_CLASSIFY_MULTIDAY_BLOCK = (
+    'Multi-day settings: a setting that spans multiple days ("all week", "Mon–Fri") yields one\n'
+    'cogs/daily per workday. "WFH all week" → five WFH nodes, one per workday Mon–Fri of the\n'
+    'current week.\n\n'
+)
+
+#: Classify prose with the expansion instruction gone. Extract's copy of the
+#: same rule is already absent from `PRESERVE_EXTRACT_SYSTEM`.
+CLASSIFY_SYSTEM_NO_MULTIDAY = _without_block(
+    CLASSIFY_SYSTEM, _CLASSIFY_MULTIDAY_BLOCK, "CLASSIFY_SYSTEM multi-day"
+)
+
+#: The two examples that teach the same arithmetic by demonstration. Extract
+#: pair 4 expands "all week" into five dated WFH items using the workday list;
+#: classify pair 2 expands the identical phrase into five nodes. Stage 138
+#: measured Qwen copying the extract one to turn "WALMART Saturday" into five
+#: WFH nodes, which is the only recorded instance of an example causing harm.
+EXTRACT_EXAMPLES_NO_MULTIDAY = _without_pair(
+    EXTRACT_EXAMPLES, 6, "Working from home all week"
+)
+CLASSIFY_EXAMPLES_NO_MULTIDAY = _without_pair(
+    CLASSIFY_EXAMPLES, 2, "working from home all week"
+)
+
+
 #: Candidate 7's second call: decisions, not nodes. The seam is by decision
 #: type, and it is only cheap if the second call emits a small answer rather
 #: than re-emitting everything it was given.
@@ -392,6 +451,103 @@ def preserve_extract(classifier, content, ref, context, config) -> ArchitectureR
     return ArchitectureRun(raw_nodes, classified)
 
 
+def _preserve_run(
+    classifier,
+    content,
+    ref,
+    context,
+    config,
+    *,
+    extract_examples,
+    classify_system,
+    classify_examples,
+    include_workdays: bool = True,
+    notes: tuple[str, ...] = (),
+) -> ArchitectureRun:
+    """Shared body for the slice 6 ladder: preserve-only extract, varied prompts.
+
+    Assembles both calls here rather than swapping module globals, for the
+    reason `preserve_extract` gives: a failure must not leave the shipped
+    prompt replaced.
+    """
+
+    anchor = date_anchor(ref, include_workdays=include_workdays)
+    extract_messages = [
+        {"role": "system", "content": PRESERVE_EXTRACT_SYSTEM},
+        *(extract_examples if config.use_examples else []),
+        {"role": "user", "content": (
+            f"{anchor}\n\nExtract all items from this text:\n\n{content}"
+        )},
+    ]
+    raw_nodes = _parse(_chat(classifier, "extract", extract_messages, EXTRACT_SCHEMA), "items")
+
+    classify_messages = build_classify_messages(
+        raw_nodes,
+        context,
+        ref,
+        use_examples=config.use_examples,
+        context_max_chars=classifier.config.context_max_chars,
+        system=classify_system,
+        examples=classify_examples,
+        include_workdays=include_workdays,
+    )
+    classified = _parse(_chat(classifier, "classify", classify_messages, CLASSIFY_SCHEMA), "nodes")
+    return ArchitectureRun(raw_nodes, classified, notes=notes)
+
+
+def preserve_noprose(classifier, content, ref, context, config) -> ArchitectureRun:
+    """Slice 6 rung 1. Preserve-only extract, and the multi-day *prose* removed
+    from classify. The examples that teach the same rule are left in place.
+
+    Finding 49 predicts this changes little: when prose and example disagree
+    the example wins, and here the prose is simply gone while both examples
+    remain. The arm exists to test that prediction rather than assume it.
+    """
+
+    return _preserve_run(
+        classifier, content, ref, context, config,
+        extract_examples=EXTRACT_EXAMPLES,
+        classify_system=CLASSIFY_SYSTEM_NO_MULTIDAY,
+        classify_examples=CLASSIFY_EXAMPLES,
+        notes=("multi-day prose removed; both multi-day examples retained",),
+    )
+
+
+def preserve_noexamples(classifier, content, ref, context, config) -> ArchitectureRun:
+    """Slice 6 rung 2. Rung 1 plus the two examples that demonstrate expansion.
+
+    This is the full slice 6 change: the rule leaves the prompt surface
+    entirely and `substrate` performs it instead.
+    """
+
+    return _preserve_run(
+        classifier, content, ref, context, config,
+        extract_examples=EXTRACT_EXAMPLES_NO_MULTIDAY,
+        classify_system=CLASSIFY_SYSTEM_NO_MULTIDAY,
+        classify_examples=CLASSIFY_EXAMPLES_NO_MULTIDAY,
+        notes=("multi-day rule absent from prose and examples",),
+    )
+
+
+def preserve_nocalendar(classifier, content, ref, context, config) -> ArchitectureRun:
+    """Slice 6 rung 3 (deliverable B5). Rung 2 plus the injected workday list.
+
+    Once nothing asks the model to compute a date, the calendar line is either
+    unused context or a standing invitation to compute one anyway. Removing it
+    also shortens every prompt in every capture, so a null result on accuracy
+    is still a cost win.
+    """
+
+    return _preserve_run(
+        classifier, content, ref, context, config,
+        extract_examples=EXTRACT_EXAMPLES_NO_MULTIDAY,
+        classify_system=CLASSIFY_SYSTEM_NO_MULTIDAY,
+        classify_examples=CLASSIFY_EXAMPLES_NO_MULTIDAY,
+        include_workdays=False,
+        notes=("workday list removed from both calls (B5)",),
+    )
+
+
 def one_flat(classifier, content, ref, context, config) -> ArchitectureRun:
     """Candidate 3. One call, capture text to final nodes.
 
@@ -525,6 +681,9 @@ def two_seam_decision(classifier, content, ref, context, config) -> Architecture
 ARCHITECTURES: dict[str, Callable[..., ArchitectureRun]] = {
     "two-call": two_call,
     "preserve-extract": preserve_extract,
+    "preserve-noprose": preserve_noprose,
+    "preserve-noexamples": preserve_noexamples,
+    "preserve-nocalendar": preserve_nocalendar,
     "one-flat": one_flat,
     "one-staged": one_staged,
     "segmented": segmented,

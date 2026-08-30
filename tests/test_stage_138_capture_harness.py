@@ -243,7 +243,7 @@ class ConfigAxisTests(unittest.TestCase):
         self.assertEqual(ExtractClassifierConfig().context_max_chars, 2000)
 
         long_context = "x" * 5000
-        self.assertEqual(len(truncate_context(long_context)), 2000 + len("\n[... truncated]"))
+        self.assertLessEqual(len(truncate_context(long_context)), 2000)
 
     def test_raised_cap_changes_the_prompt_the_model_sees(self):
         captured = {}

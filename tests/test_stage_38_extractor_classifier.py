@@ -183,11 +183,20 @@ class Stage38ExtractorClassifierTests(unittest.TestCase):
         self.assertEqual(classifier.classify_nodes([], "context"), [])
 
     def test_truncate_context_marks_long_context(self):
+        """A single oversize line still yields content, not just the marker.
+
+        Stage 142 slice 7 moved bounding to line granularity. One line longer
+        than the entire budget is the case where that would drop everything,
+        so it falls back to a character cut.
+        """
+
         context = "x" * 2005
 
-        truncated = ec.truncate_context(context, max_chars=10)
+        truncated = ec.truncate_context(context, max_chars=100)
 
-        self.assertEqual(truncated, "x" * 10 + "\n[... truncated]")
+        self.assertTrue(truncated.startswith("x" * 80))
+        self.assertTrue(truncated.endswith(ec.TRUNCATION_MARKER))
+        self.assertLessEqual(len(truncated), 100)
 
     def test_agentic_loop_extract_nodes_delegates_to_facade_with_existing_model(self):
         calls = []
@@ -329,6 +338,71 @@ class Stage38ExtractorClassifierTests(unittest.TestCase):
         self.assertIn("Capture preview", output)
         self.assertIn("- writes: none", output)
         self.assertIn("classified nodes: 1", output)
+
+
+class ContextBoundingTests(unittest.TestCase):
+    """Stage 142 slice 7. The hierarchy parent list is the one context section
+    the classify prompt forbids the model to work around, and it is last - so
+    head-truncation deleted exactly it (finding 87)."""
+
+    CONTEXT = (
+        "Already in today's note:\n"
+        + "".join(f"- Item number {i} (cogs/daily, 2026-06-12)\n" for i in range(20))
+        + "Known hierarchy parents: General, Farm, Vehicle Maintenance, Home Network"
+    )
+
+    def test_parent_list_survives_a_binding_cap(self):
+        bounded = ec.truncate_context(self.CONTEXT, max_chars=400)
+
+        self.assertIn("Vehicle Maintenance", bounded)
+        self.assertIn("Known hierarchy parents:", bounded)
+        self.assertLessEqual(len(bounded), 400)
+
+    def test_recent_notes_are_what_gets_dropped(self):
+        bounded = ec.truncate_context(self.CONTEXT, max_chars=400)
+
+        self.assertIn("Item number 0", bounded)
+        self.assertNotIn("Item number 19", bounded)
+        self.assertIn(ec.TRUNCATION_MARKER, bounded)
+
+    def test_lines_are_dropped_whole(self):
+        """Never a mid-word cut. Finding 88: a visibly partial parent list
+        suppresses parent_hint even when the needed name survives."""
+
+        bounded = ec.truncate_context(self.CONTEXT, max_chars=400)
+
+        for line in bounded.splitlines():
+            if line.startswith("- Item number"):
+                self.assertTrue(line.endswith("2026-06-12)"), line)
+
+    def test_unbounded_context_is_returned_unchanged(self):
+        self.assertEqual(ec.truncate_context(self.CONTEXT, max_chars=5000), self.CONTEXT)
+
+    def test_priority_line_too_large_falls_back_without_losing_everything(self):
+        bounded = ec.truncate_context(self.CONTEXT, max_chars=120)
+
+        self.assertIn("Already in today's note:", bounded)
+        self.assertLessEqual(len(bounded), 120)
+
+
+class CaptureBudgetTests(unittest.TestCase):
+    """Stage 142 slice 7 / D10. The capture is bounded by detection, never by
+    truncation - cutting the user's own words is a silent total loss."""
+
+    def test_ordinary_capture_is_within_budget(self):
+        self.assertFalse(ec.capture_exceeds_budget("Dentist Monday at 8am"))
+
+    def test_photographed_list_sized_capture_is_flagged(self):
+        self.assertTrue(ec.capture_exceeds_budget("x" * (ec.CAPTURE_BUDGET_CHARS + 1)))
+
+    def test_oversize_capture_is_still_sent_whole(self):
+        """The guard warns; it does not truncate and does not refuse."""
+
+        content = "y" * (ec.CAPTURE_BUDGET_CHARS + 500)
+
+        messages = ec.build_extract_messages(content, datetime(2026, 6, 12, 9, 0))
+
+        self.assertIn(content, messages[-1]["content"])
 
 
 if __name__ == "__main__":
