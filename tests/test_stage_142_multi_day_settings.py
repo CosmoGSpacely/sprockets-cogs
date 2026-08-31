@@ -193,6 +193,59 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(len(out), 5)
         self.assertEqual([d.occurrence_count for d in decisions], [5])
 
+    def test_a_provisional_date_does_not_block_another_spans_day(self):
+        """Finding 96, from the live `preserve-extract` run of fixture 08.
+
+        Extract splits the capture into two items, and classify put the second
+        - "the following week until Thursday" - on 2026-06-18, a day inside
+        the *first* item's span. `covered` was built from every node's current
+        date, so the first span saw 06-18 as taken and skipped it; the second
+        span then moved that node to 06-22 and 06-18 ended up covered by
+        nothing. Nine nodes where ten belonged.
+
+        A node sitting outside its own span is going to move, so it is not
+        evidence that the day is taken.
+        """
+
+        raw = [
+            {"raw": "Full loom all next week", "type_hint": "task"},
+            {"raw": "Full loom the following week until Thursday",
+             "type_hint": "task"},
+        ]
+        nodes = [
+            _node(title="Full loom all next week", date=NOW),
+            _node(title="Full loom the following week until Thursday",
+                  date="2026-06-18"),
+        ]
+
+        out, _ = apply_multi_day_setting_context(raw, nodes, NOW)
+
+        self.assertEqual(
+            sorted(n["date"] for n in out),
+            ["2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18",
+             "2026-06-19", "2026-06-22", "2026-06-23", "2026-06-24",
+             "2026-06-25"],
+        )
+
+    def test_a_node_inside_its_own_span_still_blocks_expansion(self):
+        """The other half of finding 96's fix, and the one that could regress.
+
+        The double-expansion guard reads `covered` to decide the model already
+        produced a span. Excluding *every* candidate from `covered` would have
+        broken it and produced twice the nodes - the 20-against-10 failure.
+        Only a node sitting outside its own span is provisional.
+        """
+
+        already = [_node(title="Full loom all next week", date=d) for d in
+                   ("2026-06-15", "2026-06-16", "2026-06-17",
+                    "2026-06-18", "2026-06-19")]
+        out, decisions = apply_multi_day_setting_context(
+            _raw("Full loom all next week"), already, NOW
+        )
+
+        self.assertEqual(len(out), 5)
+        self.assertEqual(decisions, [])
+
     def test_non_cogs_nodes_are_untouched(self):
         task = {"node_type": "sprockets/task", "title": "Full loom",
                 "item_text": "Full loom", "date": NOW, "confidence": "high"}

@@ -717,7 +717,11 @@ def apply_multi_day_setting_context(
     result = [dict(node) for node in classified]
     decisions: list[MultiDayDecision] = []
 
-    for index, node in enumerate(list(result)):
+    # Two passes, because the coverage question cannot be answered until every
+    # span's target dates are known (finding 96). Pass one only decides which
+    # nodes span days at all.
+    candidates: list[tuple[int, dict, list]] = []
+    for index, node in enumerate(result):
         if node.get("node_type") != "cogs/daily":
             continue
         raw_index = match_raw_index(node, raw_nodes)
@@ -751,8 +755,33 @@ def apply_multi_day_setting_context(
         spans = multi_day_spans(raw_text, processing_date)
         if not spans:
             continue
+        candidates.append((index, node, spans))
 
-        covered = {_string(other.get("date")) for other in result}
+    # **`covered` was read before the reassignments it had to account for**
+    # (finding 96). Fixture 08 splits into two raw items, and classify put the
+    # second - *"the following week until Thursday"* - on 2026-06-18, a day
+    # inside the *first* item's span. The first span therefore saw 06-18 as
+    # already taken and skipped it, and the second span then moved that node
+    # to 06-22, leaving 06-18 covered by nothing.
+    #
+    # A node whose date lies outside its own span is provisional: it is going
+    # to move. Only a node sitting *within* its own span is evidence that the
+    # model produced that day, which is what the guard below is testing for -
+    # so this leaves the double-expansion guard intact rather than trading one
+    # defect for the other.
+    provisional = {
+        id(node)
+        for _, node, spans in candidates
+        if _string(node.get("date"))
+        not in {day for span in spans for day in span.dates}
+    }
+    covered = {
+        _string(other.get("date"))
+        for other in result
+        if id(other) not in provisional
+    }
+
+    for index, node, spans in candidates:
         for position, span in enumerate(spans):
             missing = [day for day in span.dates if day not in covered]
             # The model already produced this span: leave it alone rather than

@@ -3,6 +3,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The builder repo's registers go stale from edits made in this session, and
+# `scripts/check` is the command actually run. Skipped when the sibling
+# checkout is absent, so this repo still checks standalone (Stage 146).
+if [ -x ../sprockets-cogs-builder/scripts/check ]; then
+  ../sprockets-cogs-builder/scripts/check
+fi
+
 .venv/bin/python -m unittest discover -v
 .venv/bin/python -m specialists.uniblab.smoke_test
 scripts/fallback-eval
