@@ -219,34 +219,11 @@ MERGED_STAGED_EXAMPLES = [
     },
 ]
 
-#: Candidate 2: extract preserves, never computes. Stage 141 slice 3d measured
-#: most of this and reverted it standalone; here it is one arm of a larger
-#: comparison rather than a change on its own.
-PRESERVE_EXTRACT_SYSTEM = """\
-You are an extraction engine. Given text, identify all discrete items and output them as JSON.
-
-type_hint values:
-  appointment — has a specific time (8am, 5:30p, noon)
-  setting     — context keyword, no time (WFH, ONSITE, HOLIDAY)
-  task        — actionable, no time anchor
-  contact     — a person
-  entity      — org, place, or thing mentioned only for reference
-  note        — reference or idea, no action
-
-A store or place name paired with a day or time is an errand, not an entity.
-"WALMART Saturday" → {"raw": "WALMART Saturday", "type_hint": "task"}
-Use entity only when nothing is being done at the place.
-
-PRESERVE, NEVER COMPUTE. Copy the source text into the raw field exactly as
-written. Keep every day, date, time, and repeat phrase verbatim.
-
-Do not resolve dates. "Saturday" stays "Saturday", never a calendar date.
-Do not expand repeats. "next 3 Saturdays" and "all next week" stay as written,
-as ONE item. Something downstream does that arithmetic correctly and needs the
-original phrase to do it.
-
-Output format: {"items": [{"raw": "...", "type_hint": "..."}]}
-"""
+#: Candidate 2: extract preserves, never computes. Promoted to the live
+#: `EXTRACT_SYSTEM` by D118 (2026-09-29); kept as a name so the slice 6 ladder
+#: arms read as they did when measured. `two-call` and `preserve-extract` are
+#: now the same chain.
+PRESERVE_EXTRACT_SYSTEM = EXTRACT_SYSTEM
 
 # ── Slice 6 ladder: removing the multi-day expansion rule ─────────────────────
 #

@@ -2,6 +2,11 @@
 
 # ── Call 1: Extract ────────────────────────────────────────────────────────────
 
+#: Preserve-only since D118 (2026-09-29): extract copies dates and repeat
+#: phrases verbatim and `substrate/time_context.py` does the arithmetic. The
+#: few-shot examples still demonstrate the old computing behaviour (extract
+#: pair 4); Stage 143 owns that, and D118 was measured with them in place.
+
 EXTRACT_SYSTEM = """\
 You are an extraction engine. Given text, identify all discrete items and output them as JSON.
 
@@ -17,16 +22,13 @@ A store or place name paired with a day or time is an errand, not an entity.
 "WALMART Saturday" → {"raw": "WALMART Saturday", "type_hint": "task"}
 Use entity only when nothing is being done at the place.
 
-Never drop a day, date, or time from the input. Keep it in the raw field so
-classification can date the item.
+PRESERVE, NEVER COMPUTE. Copy the source text into the raw field exactly as
+written. Keep every day, date, time, and repeat phrase verbatim.
 
-Counted repeats stay ONE item: "next 3 Saturdays", "every Tuesday for 4 weeks".
-Keep the whole phrase in the raw field. Do not list the occurrences yourself.
-e.g. {"raw": "YOGA next 3 Saturdays at 10a", "type_hint": "appointment"}
-
-Multi-day settings: if a setting spans multiple days ("all week", "Mon-Fri"),
-extract one item per day using the workdays list in the message. Embed the date
-in the raw field: e.g. {"raw": "WFH 2026-04-20", "type_hint": "setting"}.
+Do not resolve dates. "Saturday" stays "Saturday", never a calendar date.
+Do not expand repeats. "next 3 Saturdays" and "all next week" stay as written,
+as ONE item. Something downstream does that arithmetic correctly and needs the
+original phrase to do it.
 
 Output format: {"items": [{"raw": "...", "type_hint": "..."}]}
 """
