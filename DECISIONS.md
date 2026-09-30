@@ -68,6 +68,16 @@ Sync tools replicate current state. Backups need point-in-time snapshots and
 restore previews. The runtime backup helper protects SC operational data; vault
 backup is a separate policy.
 
+## Gemma Stays Resident
+
+**2026-09-30.** Gemma 4 12B stays loaded as the capture model because it
+decodes image and audio input natively, which voice and photo capture depend
+on. Its VRAM is spent regardless, so it is the default extractor, and a second
+model competes only where it fits beside it (~3 GB) or on CPU - in practice,
+for classify's closed questions. An alternative must be better at a specific
+job, not merely cheaper. Mapping Gemma's strengths and weaknesses job by job is
+itself part of the project's learning and portfolio goals.
+
 ---
 
 # Graph Substrate Decisions, 2026-08-29 to 2026-09-01
