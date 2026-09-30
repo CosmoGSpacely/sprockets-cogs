@@ -240,10 +240,33 @@ a soft target.
 - **Code:** not yet. Where capacity lives (day attribute, computed over the
   surface, or supplied by settings) is undecided.
 
+## Capture May Propose Structure
+
+**2026-09-29.** Capture may propose new structure - areas, goals, projects,
+settings - for review, instead of only attaching to structure that exists. A
+hosted fallback model is admissible for this job.
+
+- **Why:** a capture that can only create leaves keeps the graph empty, and
+  the attempt is worth making even where the local model falls short.
+- **Replaced:** "the model must never invent structure".
+- **Code:** not yet. Proposals stay review-first, per *Local First, Review
+  First*.
+
+## One Parent, Plus Labelled Edges (Provisional)
+
+**2026-09-29, provisional.** A node has at most one `parent`. A second
+affiliation - a truck repair that is both Farm and Vehicle Maintenance work -
+is a labelled edge, not a second parent. New fixtures may reopen this.
+
+- **Why:** the one-edge-type design already expresses a second affiliation
+  without making hierarchy ambiguous.
+- **Replaced:** an open question.
+- **Code:** partly. `parent` is scalar, but a list-valued `parent` is silently
+  truncated to its first element instead of being rejected.
+
 ## Not Yet Decided
 
-Recorded so they are not mistaken for decisions: whether capture may propose
-new structure (direction signalled, review-first, not decided); whether a node
-may have more than one parent; whether the model can create node types safely
-(untested); whether relationship labels measurably help traversal (untested);
-and whether Cog subtype determines carry behavior (a prediction).
+Recorded so they are not mistaken for decisions: whether the model can create
+node types safely (untested); whether relationship labels measurably help
+traversal (untested); and whether Cog subtype determines carry behavior (a
+prediction).
