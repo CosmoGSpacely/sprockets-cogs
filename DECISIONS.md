@@ -274,6 +274,68 @@ is a labelled edge, not a second parent. New fixtures may reopen this.
 - **Code:** partly. `parent` is scalar, but a list-valued `parent` is silently
   truncated to its first element instead of being rejected.
 
+---
+
+# Planning Decisions, 2026-10-02
+
+Product-owner decisions about how captured work lands in time. Placement is
+code; the model judges properties of an item once, at capture.
+
+## A Call Or Message To A Person Is One Cog
+
+**2026-10-02.** "Call Jon about truck" is one task Cog related to the Jon
+contact Sprocket - bridged to it if Jon exists, proposing Jon if not. A link to
+anything else it mentions (a truck) is welcome but not required.
+
+- **Why:** one action, one Cog; the person is a relationship, not a second item.
+- **Replaced:** "named person -> two nodes: sprockets/task + cogs/daily", plus a
+  contact node from extract.
+- **Code:** not yet. Cogs are not graph vertices.
+
+## Undated Tasks Get The Next Day Portion With Room
+
+**2026-10-02.** An undated task goes in the next day portion that suits it and
+has room - not today by default, and not a backlog.
+
+- **Capacity:** the rule of three per day portion. Morning and afternoon are the
+  two daytime portions, so a weekday's daytime holds six; evening is its own.
+- **Suitability:** the model judges once, at capture, when the item could be
+  done - "call doctor for appointment" needs weekday business hours; "make
+  doctor appointment on MyChart" fits an evening or weekend. Code places.
+- **Spill:** if nothing fits this week, the item goes to the week's carry
+  block, the "eighth day", rather than an arbitrary later day.
+- **A plan, not a constraint:** Cosmo looks ahead and completes future tasks
+  early; that is normal and frees the portion's room.
+- **Correction:** a wrong suitability is corrected and code re-places the item.
+- **Replaced:** classify's "otherwise today's date", and for tasks outside a
+  project, C8's "wait for planning".
+- **Code:** not yet. No capacity, suitability or portion placement exists; the
+  week's `CARRY` block does.
+
+## Project Tasks Are Scheduled One At A Time
+
+**2026-10-02.** A project's tasks are written under the project, and only the
+next one goes on the calendar. When it is closed, the next is placed by the
+rule above. Cosmo's paper practice, and a place the model should help: judging
+which task comes next.
+
+- **Why:** placing every project task at once floods the next free portions
+  with work that cannot all be next.
+- **Replaced:** classify's "project work is standing work; do not put it on a day",
+  which never placed any of it.
+- **Code:** not yet.
+
+## An Ambiguous Past Date Means The Next One
+
+**2026-10-02.** A date given without a year that has already passed this year
+- "Holiday on 7/3" on 2 October - means the next occurrence.
+
+- **Why:** a mistakenly unspecified year almost always means the future.
+- **Replaced:** nothing explicit.
+- **Code:** not yet - and code does not resolve a bare month/day at all;
+  `resolve_relative_date` returns nothing for "7/3", so the model computes it,
+  against "the model proposes, code computes".
+
 ## Not Yet Decided
 
 Recorded so they are not mistaken for decisions: whether the model can create
