@@ -178,8 +178,10 @@ uniformly `family/subtype`. Time horizon is a separate field: a Cog is
 
 **2026-09-01.** `setting`, `appointment`, `task`, `note`. `appointment` covers
 opportunities (`Flea market 8a-2p`) as well as obligations (`DENTIST 8a`):
-both are occasions bounded in time. A note can give a setting context - a
-shopping list, a reservation number, an itinerary.
+both are occasions bounded in time. A note gives context that is not an
+action - an itinerary, a reference. *(Amended 2026-10-04: a shopping list is
+not a note but a set of task Cogs, and a reservation number is a task's text -
+see "Cogs Link To Sprockets, Never To Cogs".)*
 
 - **Why:** an open set ending in "or similar" cannot become a `node_type`.
 - **Replaced:** the open Cog kind list.
@@ -325,27 +327,34 @@ which task comes next.
   which never placed any of it.
 - **Code:** not yet.
 
-## A Cog's Details Belong To It
+## Cogs Link To Sprockets, Never To Cogs
 
-**2026-10-04.** Details for a Cog - a shopping list, a phone number, a
-reservation number, a coupon - belong to that Cog: either inline as its text
-("WALMART: magnesium, cacao, paprika", "call Carty's: 410-555-1212", "pickup
-car: Avis #123456798K") or as a note Cog linked to it. Both are correct.
+**2026-10-04.** Everything that attaches to a Cog does so in one of two ways:
 
-**Recognised by meaning, not punctuation.** A colon is one clue, but speech,
-photos and casual typing rarely carry one: "at Walmart get magnesium, cacao
-and paprika", or "add flaxseed to Walmart list", which adds a detail to a Cog
-that already exists. Headings are the same: context by meaning, whether or
-not a line ends in a colon.
+- **Its own text,** for details specific to that one occurrence: "call
+  Carty's: 410-555-1212", "pickup car: Avis #123456798K".
+- **A link to a Sprocket,** usually a setting, for things that stand on their
+  own. Each shopping item is a task Cog linked to its store's setting - "buy
+  cacao" can be done, carried or dropped by itself. A TRAVEL to MKE setting
+  anchors its car, dinner and hotel reservation task Cogs.
 
-- **Why:** paper keeps details beside the item; splitting them into
-  unattached items loses what they are for. A punctuation rule would repeat
-  the typographic setting detection the assumption audit refuted.
-- **Replaced:** nothing explicit; extract and classify had no rule for it.
-- **Code:** partly. Inline text survives as item text, and carry moves
-  indented detail lines with a Cog; linked note Cogs need Cogs in the graph.
-  Undecided: which form the system writes by default, and where a detail goes
-  when its Cog is not yet scheduled ("add flaxseed" with no Walmart trip).
+No Cog links to another Cog. Placement is the settings join: a task linked to
+WALMART appears on the next day with a WALMART occurrence, and waits if none is
+scheduled - so "add flaxseed to Walmart list" is an ordinary capture, a new
+task Cog linked to WALMART, not an edit to a list. **Capacity counts the trip,
+not its items**, and surfaces group a setting's tasks under its occurrence the
+way paper does.
+
+**Recognised by meaning, not punctuation.** A colon is a clue, but speech,
+photos and casual typing rarely carry one; headings are the same.
+
+- **Why:** one link type the design already has (the bridge), per-item done
+  and carry for free, and no list-matching for additions. Cosmo, 2026-10-04:
+  *"We just need a comprehensive set of settings."*
+- **Replaced:** a shopping list as a note Cog (2026-09-01), and the same day's
+  earlier version of this entry, which allowed a note Cog linked to a Cog.
+- **Code:** not yet. Cogs are not graph vertices, and nothing joins tasks to
+  setting occurrences.
 
 ## An Ambiguous Past Date Means The Next One
 
