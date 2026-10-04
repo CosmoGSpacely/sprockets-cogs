@@ -328,18 +328,24 @@ which task comes next.
 ## A Cog's Details Belong To It
 
 **2026-10-04.** Details for a Cog - a shopping list, a phone number, a
-reservation number, a coupon - belong to that Cog: either inline after a
-colon ("WALMART: magnesium, cacao, paprika", "call Carty's: 410-555-1212",
-"pickup car: Avis #123456798K") or as a note Cog linked to it. Both are
-correct. A colon *inside* a line marks details; a colon *ending* a line, with
-items below, is a heading that gives them context.
+reservation number, a coupon - belong to that Cog: either inline as its text
+("WALMART: magnesium, cacao, paprika", "call Carty's: 410-555-1212", "pickup
+car: Avis #123456798K") or as a note Cog linked to it. Both are correct.
+
+**Recognised by meaning, not punctuation.** A colon is one clue, but speech,
+photos and casual typing rarely carry one: "at Walmart get magnesium, cacao
+and paprika", or "add flaxseed to Walmart list", which adds a detail to a Cog
+that already exists. Headings are the same: context by meaning, whether or
+not a line ends in a colon.
 
 - **Why:** paper keeps details beside the item; splitting them into
-  unattached items loses what they are for.
+  unattached items loses what they are for. A punctuation rule would repeat
+  the typographic setting detection the assumption audit refuted.
 - **Replaced:** nothing explicit; extract and classify had no rule for it.
 - **Code:** partly. Inline text survives as item text, and carry moves
   indented detail lines with a Cog; linked note Cogs need Cogs in the graph.
-  Which form the system writes by default is undecided.
+  Undecided: which form the system writes by default, and where a detail goes
+  when its Cog is not yet scheduled ("add flaxseed" with no Walmart trip).
 
 ## An Ambiguous Past Date Means The Next One
 
