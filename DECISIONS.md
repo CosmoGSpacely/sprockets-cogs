@@ -325,6 +325,22 @@ which task comes next.
   which never placed any of it.
 - **Code:** not yet.
 
+## A Cog's Details Belong To It
+
+**2026-10-04.** Details for a Cog - a shopping list, a phone number, a
+reservation number, a coupon - belong to that Cog: either inline after a
+colon ("WALMART: magnesium, cacao, paprika", "call Carty's: 410-555-1212",
+"pickup car: Avis #123456798K") or as a note Cog linked to it. Both are
+correct. A colon *inside* a line marks details; a colon *ending* a line, with
+items below, is a heading that gives them context.
+
+- **Why:** paper keeps details beside the item; splitting them into
+  unattached items loses what they are for.
+- **Replaced:** nothing explicit; extract and classify had no rule for it.
+- **Code:** partly. Inline text survives as item text, and carry moves
+  indented detail lines with a Cog; linked note Cogs need Cogs in the graph.
+  Which form the system writes by default is undecided.
+
 ## An Ambiguous Past Date Means The Next One
 
 **2026-10-02.** A date given without a year that has already passed this year
