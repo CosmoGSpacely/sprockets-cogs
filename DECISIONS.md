@@ -182,6 +182,9 @@ both are occasions bounded in time. A note gives context that is not an
 action - an itinerary, a reference. *(Amended 2026-10-04: a shopping list is
 not a note but a set of task Cogs, and a reservation number is a task's text -
 see "Cogs Link To Sprockets, Never To Cogs".)*
+*(Amended 2026-10-05: **a setting is a recurring context you belong to; an
+appointment is a one-off occasion.** A time does not make an appointment -
+each YOGA class is a setting occurrence, "YOGA 5:30p 3 of 8".)*
 
 - **Why:** an open set ending in "or similar" cannot become a `node_type`.
 - **Replaced:** the open Cog kind list.
@@ -220,6 +223,9 @@ labels already in the graph supplied as context to limit drift.
 three outcomes: bridged, standalone by decision, and unresolved. Standalone is
 fine; silently standalone is not. An unresolved bridge is evidence that a
 Sprocket may be missing, and is the trigger for proposing structure.
+
+*(Amended 2026-10-05: standalone Cogs - "Relocate turtle" - are allowed, but
+once a stable set of settings exists they should be rare.)*
 
 - **Why:** an orphan and a correctly standalone Cog were indistinguishable, so
   the empty graph was invisible.
@@ -263,6 +269,24 @@ hosted fallback model is admissible for this job.
 - **Replaced:** "the model must never invent structure".
 - **Code:** not yet. Proposals stay review-first, per *Local First, Review
   First*.
+
+## Capture Proposes Structure Conservatively (Provisional)
+
+**2026-10-05, provisional.** Four rules bound *Capture May Propose
+Structure*, so new areas, goals and projects do not proliferate because the
+model could not find the right parent:
+
+1. Capture proposes structure only when the capture names it ("Garage Work
+   Project Tasks:"), never structure the model inferred.
+2. Code checks a proposed name against existing titles first; a near-match
+   becomes "attach to it?", not a new node.
+3. Inferred structure needs repeated evidence, and is proposed only by a
+   batch maintenance pass over accumulated unresolved Cogs.
+4. Capture may propose projects, never areas or goals.
+
+- **Why:** proliferation is a matching failure disguised as creation.
+- **Replaced:** an unbounded "may propose".
+- **Code:** not yet.
 
 ## One Parent, Plus Labelled Edges (Provisional)
 
@@ -355,6 +379,30 @@ photos and casual typing rarely carry one; headings are the same.
   earlier version of this entry, which allowed a note Cog linked to a Cog.
 - **Code:** not yet. Cogs are not graph vertices, and nothing joins tasks to
   setting occurrences.
+
+## Day Portions (Provisional)
+
+**2026-10-05, provisional.** Morning 7am-12pm, afternoon 12pm-5pm, evening
+5pm-10pm. Capacity is three per portion, so a weekday's daytime holds six.
+
+- **Code:** not yet. Clock times are not parsed at all, so no time can be
+  assigned a portion.
+
+## Weekday Phrases Count Days After Today
+
+**2026-10-05.** Counting starts *after* today:
+
+- "Friday" or "this Friday" is the **first** Friday after today - said on a
+  Friday, it means next week's.
+- "next Friday" or "a week from Friday" is the **second** Friday after today.
+- "this weekend" said on a Saturday means today or tomorrow.
+
+- **Code:** mostly. Bare weekdays and "next X" already count this way,
+  except two cases: a weekday named on that same day returns today, and "a
+  week from Friday" returns the first Friday, not the second. "This weekend"
+  returns Saturday only, not the span. `CLASSIFY_SYSTEM` teaches the opposite
+  rule ("next Monday when today is Tuesday means 6 days away"); the code is
+  right and the prompt wrong.
 
 ## An Ambiguous Past Date Means The Next One
 
