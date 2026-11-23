@@ -62,10 +62,26 @@ DENTIST setting creates:
 Appointment is therefore not a separate Cog kind. Creating a setting on first
 mention is routine, not a structural exception needing review.
 
+### Every Cog Has A Setting (2026-11-23)
+
+Every Cog belongs to a setting, so every Cog-to-Sprocket edge points at a
+setting. When no setting fits and a new one cannot be made, the Cog goes to one
+of two built-in settings:
+
+- **ANYWHERE:** doable in any context ("call Jon", "pay the propane bill
+  online").
+- **UNKNOWN:** the system could not tell. These are open questions for Cosmo
+  to resolve, not a resting place.
+
+Cogs therefore come in two kinds:
+
+- **an occurrence** of a setting;
+- **an item placed on an occurrence**.
+
 ## Open
 
-- **Cogs without a setting.** Does any Cog have no setting? Test cases: "call
-  Jon", "pay the propane bill".
+- **ANYWHERE placement.** How an ANYWHERE item is placed in time, given that it
+  has no occurrence of its own.
 - **The form of a setting's stored context.** Structured fields, prose, or
   both. A recommendation is due.
 - **Edge meanings.** A setting is linked *with* a person and *at* a place or
