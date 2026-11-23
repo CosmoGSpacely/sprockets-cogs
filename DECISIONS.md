@@ -42,12 +42,59 @@ What the system learns about a setting from use is written into the setting
 Sprocket as it is learned. Occurrences read the stored context. They never
 re-derive it from history.
 
-### A Setting Cog Is An Occurrence; Its Open Items Surface On It (2026-11-23)
+### Every Cog Is An Occurrence Of A Setting; No Cog Subtypes (2026-11-23)
 
-A setting Cog is one occurrence of its setting in time: Saturday's WALMART run,
-Tuesday's DENTIST visit. When a setting occurs, its open items surface on that
-occurrence. An undated item that belongs to a setting goes to the setting's next
-occurrence. That placement rule is restated from 2026-10-04.
+A Cog is one occurrence of a setting: Saturday's WALMART run, Tuesday's DENTIST
+visit. There is one Cog kind and **no subtypes**. What used to be subtypes are
+attributes and links:
+
+- **An appointment** is an occurrence with a `time`.
+- **A task** is an occurrence that links to a task Sprocket.
+- **A note** is details carried on an occurrence (the car and hotel
+  reservations on a trip), or a link to a note Sprocket.
+
+"WALMART: coffee, tea, yogurt" is **one** Cog with a list attribute, not four.
+Four Cogs would be a hidden hierarchy, and Cogs link to Sprockets, never to
+Cogs.
+
+**Calendar rule:** an occurrence shows its own attributes and the key details of
+what it links to, inline. The DENTIST occurrence shows the time, the dentist's
+number and "bring insurance card" without anything being opened.
+
+### Structure Lives In Each Setting's Attribute Schema (2026-11-23)
+
+Each setting defines the attributes its occurrences carry:
+
+- YOGA: a time.
+- TRAVEL: from, to, departure.
+- WALMART: a list.
+- ANYWHERE: an optional due date.
+
+This is the structure a small local model needs, moved from a global type list
+into the setting. Gemma picks a setting from a short list, then fills that
+setting's fields from the capture's own words. It never invents structure.
+
+### Code Expands Series And Trips (2026-11-23)
+
+"YOGA next eight Wednesdays at 5:30pm" is eight YOGA occurrences. A trip to
+Milwaukee is three occurrences of two settings: **TRAVEL** (to MKE), then
+**MILWAUKEE**, then **TRAVEL** (home). Gemma names the pattern and fills the
+fields; code expands it. Small models handle fan-out badly.
+
+### Recurring Dates And Deadlines (2026-11-23)
+
+- **BIRTHDAY** is a setting, linked to the person's contact.
+- **A deadline** ("registration renewal by March 3") is an ANYWHERE occurrence
+  with a due-date attribute.
+
+### Occurrences Without A Day Sit On Carry Surfaces (2026-11-23)
+
+As in the paper system, carry surfaces collect occurrences. An occurrence is
+always placed, at a horizon: a day, a week's carry, or a month's carry.
+"WALMART sometime this week" is a WALMART occurrence on this week's carry
+until it is given a day. A deadline is carried with its due date. No open list
+is kept on the setting Sprocket, and no occurrence is given a day it does not
+have.
 
 ### An Appointment Creates Its Setting (2026-11-23)
 
@@ -64,24 +111,25 @@ mention is routine, not a structural exception needing review.
 
 ### Every Cog Has A Setting (2026-11-23)
 
-Every Cog belongs to a setting, so every Cog-to-Sprocket edge points at a
-setting. When no setting fits and a new one cannot be made, the Cog goes to one
-of two built-in settings:
+Every Cog belongs to a setting. When no setting fits and a new one cannot be
+made, the Cog goes to one of two built-in settings:
 
 - **ANYWHERE:** doable in any context ("call Jon", "pay the propane bill
   online").
 - **UNKNOWN:** the system could not tell. These are open questions for Cosmo
   to resolve, not a resting place.
 
-Cogs therefore come in two kinds:
-
-- **an occurrence** of a setting;
-- **an item placed on an occurrence**.
-
 ## Open
 
-- **ANYWHERE placement.** How an ANYWHERE item is placed in time, given that it
-  has no occurrence of its own.
+- **Unfinished list entries.** When "tea" is not checked off, it either moves
+  to the next occurrence or goes to carry. To be decided in use.
+- **List entries that reference Sprockets.** Can a list entry link to a task
+  Sprocket (for example "patch the rear wall" on a GARAGE occurrence)? To be
+  decided in use.
+- **Watch:** the share of items landing in ANYWHERE. If it is most of them, the
+  setting model has quietly become the old task list.
+- **Settings beyond 16.** Code must shortlist candidates before the readout,
+  and duplicates (WALMART against WALMART RT 30) must be matched.
 - **The form of a setting's stored context.** Structured fields, prose, or
   both. A recommendation is due.
 - **Edge meanings.** A setting is linked *with* a person and *at* a place or
