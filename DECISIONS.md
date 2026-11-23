@@ -36,6 +36,57 @@ This is how the model "understands" a setting. To place an item, it reads each
 candidate setting's stored context as evidence, rather than knowing anything
 about Milwaukee itself.
 
+### Two Hierarchies, Joined At The Area (2026-11-23)
+
+Sprockets form two hierarchies under the same areas:
+
+- **Purpose (why):** area -> goal -> project -> task.
+- **Context (where):** area -> category -> setting.
+
+```text
+                HEALTH (area)
+               /             \
+  goal: Get fit               MEDICAL (category)   FITNESS (category)
+    project: Strength           DENTIST (setting)    YOGA (setting)
+      task: Book a trainer
+```
+
+They meet in two places:
+
+- **At the area.** An area shows its goals and projects alongside the settings
+  where that part of life happens, with their next occurrences.
+- **At placement.** A task is placed on an occurrence of a setting; that is
+  where why meets where.
+
+**Single parent down to the category; many-to-many below it.**
+
+- Area -> category has one parent: GROCERIES is under HOME, MEDICAL under
+  HEALTH.
+- Category -> setting is many-to-many, through **offers** edges. WALMART
+  offers GROCERIES and CLOTHES. MILWAUKEE sits under WORK and SOCIAL.
+
+Use a tree where the domain is a tree, and a graph where it is not.
+
+**Category is a Sprocket type.** Categories are what you need (GROCERIES,
+HARDWARE, MEDICAL); settings are where you go. Categories stay few and broad,
+and **a new category is Cosmo's decision**, never invented at capture.
+"Uncategorised" is always a valid answer, so a first-mention capture never
+stalls on taxonomy.
+
+**A category holds its own context,** as a setting does: GROCERIES holds
+"coffee, tea, yogurt". List entries are attributes, not vertices, so "yogurt
+belongs to GROCERIES" is stored on the category, not as an edge.
+
+**Placement is a traversal:** item -> its category -> the settings that offer
+it -> the next occurrence of one of them. "Batteries" reaches both WALMART and
+HARBOR FREIGHT, which is a real two-option question with evidence. Items with
+no category ("the floor plan for Dave") and settings that offer none (DENTIST,
+YOGA) match on the setting's stored people and places.
+
+**Where the idea comes from.** GTD's contexts (@errands, @phone): what you can
+do depends on where you are. The additions are structure, occurrences in time,
+stored and learned context, and the join to purpose through areas.
+
 ### Learning Is Stored In The Setting, Not Recomputed (2026-11-23)
 
 What the system learns about a setting from use is written into the setting
@@ -128,8 +179,11 @@ made, the Cog goes to one of two built-in settings:
   decided in use.
 - **Watch:** the share of items landing in ANYWHERE. If it is most of them, the
   setting model has quietly become the old task list.
-- **Settings beyond 16.** Code must shortlist candidates before the readout,
-  and duplicates (WALMART against WALMART RT 30) must be matched.
+- **Settings beyond 16.** Placement mostly uses the category traversal, which
+  returns a few settings. Matching on people and places still needs a
+  shortlist, and duplicates (WALMART against WALMART RT 30) must be matched.
+- **Compounding errors.** Area, then category, then setting is three steps.
+  Take the top two when the readout is unsure.
 - **The form of a setting's stored context.** Structured fields, prose, or
   both. A recommendation is due.
 - **Edge meanings.** A setting is linked *with* a person and *at* a place or
