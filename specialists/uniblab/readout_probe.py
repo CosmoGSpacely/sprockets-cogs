@@ -428,12 +428,326 @@ def q2_criterion() -> str:
     return f"{Q2_CRITERION}\n\n{tasks}"
 
 
+# ── Arms (GEMMA_REVIEW 4.4) ────────────────────────────────────────────────────
+
+
+def _labelled_items(labels: dict[str, Any]):
+    for fixture in labels["fixtures"]:
+        for item in fixture["items"]:
+            if item["status"] == "labelled":
+                yield fixture["fixture_id"], item
+
+
+def run_generated_arm(
+    frozen: dict[str, Any],
+    fixtures: Sequence[CaptureFixture],
+    repeats: int = 3,
+    classifier: ExtractClassifier | None = None,
+) -> list[dict[str, Any]]:
+    """Arm G: the shipped `classify_nodes` on the frozen items, repeated."""
+
+    classifier = classifier or ExtractClassifier()
+    by_id = {f.fixture_id: f for f in fixtures}
+    runs = []
+    for repeat in range(repeats):
+        for entry in frozen["fixtures"]:
+            if not entry["items"]:
+                continue
+            fixture = by_id[entry["fixture_id"]]
+            before = len(classifier.call_stats)
+            nodes = classifier.classify_nodes(entry["items"], fixture.context, now=fixture.now)
+            stats = classifier.call_stats[before:]
+            runs.append({
+                "repeat": repeat,
+                "fixture_id": fixture.fixture_id,
+                "nodes": nodes,
+                "seconds": sum(s.total_seconds or 0 for s in stats),
+            })
+    return runs
+
+
+def _readout_record(result: Readout) -> dict[str, Any]:
+    return {
+        "probs": result.probs,
+        "answer": result.answer,
+        "missing": list(result.missing),
+        "outside_mass": result.outside_mass,
+        "top_token": result.top_token,
+        "seconds": result.seconds,
+        "prompt_tokens": result.prompt_tokens,
+    }
+
+
+def run_readout_arms(
+    labels: dict[str, Any],
+    fixtures: Sequence[CaptureFixture],
+    chat_client: Any = None,
+) -> list[dict[str, Any]]:
+    """Arms R and R-perm: Q1 for every labelled item, Q2 for items labelled task.
+
+    Q2 is gated on the *label*, not on R's Q1 answer, so both arms answer Q2
+    on the same items. That is an oracle gate, stated in the report.
+    """
+
+    by_id = {f.fixture_id: f for f in fixtures}
+    records = []
+    for order in ("forward", "reverse"):
+        for fixture_id, item in _labelled_items(labels):
+            fixture = by_id[fixture_id]
+            evidence = readout_evidence(fixture, item["raw"])
+            questions = [("q1", q1_criterion(), q1_options(order))]
+            if item["q1"] == TASK:
+                questions.append(("q2", q2_criterion(), q2_options(order)))
+            for question, criterion, options in questions:
+                result = readout(evidence, criterion, options, chat_client=chat_client)
+                records.append({
+                    "order": order, "fixture_id": fixture_id, "index": item["index"],
+                    "question": question, **_readout_record(result),
+                })
+    return records
+
+
+# ── Report (GEMMA_REVIEW 4.5) ──────────────────────────────────────────────────
+
+
+def _tokens(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def assign_nodes(items: list[dict[str, Any]], nodes: list[dict[str, Any]]) -> tuple[list[list[dict]], list[dict]]:
+    """Assign each generated node to the frozen item its text overlaps most.
+
+    Overlap is the share of the item's word tokens found in the node's title
+    and item_text, ties broken by the count of shared tokens - so "Check and
+    charge Dale battery" goes to that item, not to a bare "Dale" item that it
+    also covers entirely. A node still tied between items, or overlapping none, is
+    returned unassigned. This is the step the label matcher cannot do for
+    fixtures 06 and 11 (every node there names the same person), so it uses
+    the item's own words instead of the fixture's terms.
+    """
+
+    assigned: list[list[dict]] = [[] for _ in items]
+    unassigned = []
+    item_tokens = [_tokens(item.get("raw", "")) for item in items]
+    for node in nodes:
+        text = _tokens(f"{node.get('title', '')} {node.get('item_text', '')}")
+        scores = [
+            (len(text & toks) / len(toks), len(text & toks)) if toks else (0.0, 0)
+            for toks in item_tokens
+        ]
+        best = max(scores, default=(0.0, 0))
+        winners = [i for i, score in enumerate(scores) if score == best]
+        if best[0] == 0.0 or len(winners) > 1:
+            unassigned.append(node)
+        else:
+            assigned[winners[0]].append(node)
+    return assigned, unassigned
+
+
+def generated_answers(nodes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Arm G's answers for one item, from the nodes assigned to it.
+
+    Q1 reduces the node types as the labels do (task + daily -> task); no
+    nodes is `none`, any other mix is `mixed` - both wrong for every label.
+    Q2 is whether any assigned node is a daily Cog. `task_dated` is whether
+    a task node carries a date: under the preserve-only chain that, not a
+    paired Cog, is finding 99's failure (Stage 143 GROK), so the D121 slice
+    reports both.
+    """
+
+    types = [n.get("node_type", "") for n in nodes]
+    if not types:
+        q1 = "none"
+    else:
+        q1, _, status = _label_from_types(types)
+        q1 = q1 if status == "labelled" else "mixed"
+    return {
+        "q1": q1,
+        "q2": "yes" if DAILY in types else "no",
+        "task_dated": any(n.get("node_type") == TASK and n.get("date") for n in nodes),
+        "low": any(n.get("confidence") == "low" for n in nodes),
+        "types": types,
+    }
+
+
+Q2_IDS = {"yes": "true", "no": "false"}
+
+
+def fit_temperature(prob_rows: list[dict[str, float]], targets: list[str]) -> float:
+    """NLL-minimising temperature, floored at 1 as in the paper (never sharpen)."""
+
+    def nll(t: float) -> float:
+        total = 0.0
+        for probs, target in zip(prob_rows, targets):
+            scaled = scale(probs, t)
+            total -= math.log(max(scaled[target], 1e-300))
+        return total
+
+    grid = [1.0 + 0.05 * k for k in range(0, 1981)]  # 1.0 .. 100.0
+    return min(grid, key=nll)
+
+
+def scale(probs: dict[str, float], t: float) -> dict[str, float]:
+    logs = {k: math.log(max(v, 1e-300)) / t for k, v in probs.items()}
+    peak = max(logs.values())
+    weights = {k: math.exp(v - peak) for k, v in logs.items()}
+    total = sum(weights.values())
+    return {k: w / total for k, w in weights.items()}
+
+
+def brier(probs: dict[str, float], target: str) -> float:
+    return sum((p - (1.0 if k == target else 0.0)) ** 2 for k, p in probs.items())
+
+
+def _halves(rows: list[tuple[float, bool]]) -> tuple[float | None, float | None, int]:
+    """Accuracy in the most and least confident halves (ties keep input order)."""
+
+    ranked = sorted(rows, key=lambda r: -r[0])
+    half = len(ranked) // 2
+    top, bottom = ranked[:half], ranked[half:]
+    acc = lambda part: sum(ok for _, ok in part) / len(part) if part else None
+    return acc(top), acc(bottom), len(ranked)
+
+
+def _score_readout(rows: list[dict[str, Any]], targets: dict[tuple, str]) -> dict[str, Any]:
+    keyed = [(r, targets[(r["fixture_id"], r["index"])]) for r in rows]
+    correct = [r["answer"] == t for r, t in keyed]
+    top, bottom, n = _halves([(max(r["probs"].values()), ok) for (r, _), ok in zip(keyed, correct)])
+    return {
+        "n": n,
+        "correct": sum(correct),
+        "brier": sum(brier(r["probs"], t) for r, t in keyed) / n if n else None,
+        "acc_confident_half": top,
+        "acc_unconfident_half": bottom,
+    }
+
+
+def build_report(labels: dict[str, Any], arms: dict[str, Any]) -> dict[str, Any]:
+    frozen_items = {f["fixture_id"]: f["items"] for f in arms["frozen"]["fixtures"]}
+    label_rows = {(fid, item["index"]): item for fid, item in _labelled_items(labels)}
+    report: dict[str, Any] = {"questions": {}, "items": [], "unassigned_g_nodes": []}
+
+    # G: per repeat, per item answers.
+    g_answers: dict[tuple, list[dict]] = {key: [] for key in label_rows}
+    g_seconds: dict[str, list[float]] = {}
+    for run in arms["generated"]:
+        items = frozen_items[run["fixture_id"]]
+        assigned, unassigned = assign_nodes(items, run["nodes"])
+        g_seconds.setdefault(run["fixture_id"], []).append(run["seconds"])
+        for node in unassigned:
+            report["unassigned_g_nodes"].append({"repeat": run["repeat"],
+                                                 "fixture_id": run["fixture_id"], "node": node})
+        for index, nodes in enumerate(assigned):
+            key = (run["fixture_id"], index)
+            if key in g_answers:
+                g_answers[key].append(generated_answers(nodes))
+
+    readouts = {(r["order"], r["question"], r["fixture_id"], r["index"]): r for r in arms["readout"]}
+
+    for question in ("q1", "q2"):
+        keys = [k for k, item in label_rows.items() if item[question]]
+        if question == "q1":
+            targets = {k: label_rows[k]["q1"] for k in keys}
+        else:
+            targets = {k: Q2_IDS[label_rows[k]["q2"]] for k in keys}
+        g_target = {k: label_rows[k][question] for k in keys}
+        section: dict[str, Any] = {}
+        for source in ("matcher", "all"):
+            subset = [k for k in keys if source == "all" or label_rows[k]["source"] == source]
+            if not subset:
+                continue
+            # G: accuracy per repeat; empirical distribution across repeats.
+            per_repeat = [
+                sum(g_answers[k][r][question] == g_target[k] for k in subset)
+                for r in range(min(len(g_answers[k]) for k in subset))
+            ]
+            g_rows, g_brier = [], 0.0
+            for k in subset:
+                answers = [a[question] for a in g_answers[k]]
+                dist = {a: answers.count(a) / len(answers) for a in set(answers)}
+                dist.setdefault(g_target[k], 0.0)
+                g_brier += brier(dist, g_target[k])
+                modal = max(dist, key=dist.get)
+                low = any(a["low"] for a in g_answers[k])
+                g_rows.append(((dist[modal], 0 if low else 1), modal == g_target[k]))
+            top, bottom, n = _halves([(conf[0] + 0.001 * conf[1], ok) for conf, ok in g_rows])
+            arm_g = {
+                "n": n, "correct_per_repeat": per_repeat, "brier_from_agreement": g_brier / n,
+                "acc_confident_half": top, "acc_unconfident_half": bottom,
+                "items_low_confidence": sum(1 for conf, _ in g_rows if conf[1] == 0),
+            }
+            fwd = [readouts[("forward", question, *k)] for k in subset]
+            rev = [readouts[("reverse", question, *k)] for k in subset]
+            arm_r = _score_readout(fwd, targets)
+            arm_rp = _score_readout(rev, targets)
+            flips = sum(f["answer"] != r["answer"] for f, r in zip(fwd, rev))
+            # R-T: leave-one-out temperature on R's probabilities.
+            temps, scaled_rows = [], []
+            for i, row in enumerate(fwd):
+                others = [r for j, r in enumerate(fwd) if j != i]
+                t = fit_temperature([r["probs"] for r in others],
+                                    [targets[(r["fixture_id"], r["index"])] for r in others])
+                temps.append(t)
+                scaled_rows.append({**row, "probs": scale(row["probs"], t)})
+            arm_rt = _score_readout(scaled_rows, targets)
+            arm_rt["temperature_all"] = fit_temperature(
+                [r["probs"] for r in fwd], [targets[(r["fixture_id"], r["index"])] for r in fwd])
+            arm_rt["temperature_loo_range"] = [min(temps), max(temps)]
+            # Order-averaged probabilities (computed, no calls).
+            averaged = [{**f, "probs": {k: (f["probs"][k] + r["probs"][k]) / 2 for k in f["probs"]}}
+                        for f, r in zip(fwd, rev)]
+            for row in averaged:
+                row["answer"] = max(row["probs"], key=row["probs"].get)
+            section[source] = {
+                "G": arm_g, "R": arm_r, "R-perm": arm_rp, "R-T": arm_rt,
+                "R-avg": _score_readout(averaged, targets),
+                "order_flips": flips,
+            }
+        report["questions"][question] = section
+
+    # Per-item listing (the D121 slice and every disagreement read from here).
+    for key, item in label_rows.items():
+        row = {
+            "fixture_id": key[0], "index": key[1], "raw": item["raw"], "source": item["source"],
+            "label_q1": item["q1"], "label_q2": item["q2"],
+            "G_q1": [a["q1"] for a in g_answers[key]], "G_q2": [a["q2"] for a in g_answers[key]],
+            "G_task_dated": [a["task_dated"] for a in g_answers[key]],
+        }
+        for question in ("q1", "q2"):
+            for order in ("forward", "reverse"):
+                r = readouts.get((order, question, *key))
+                if r:
+                    row[f"R_{question}_{order}"] = (r["answer"], round(r["probs"][r["answer"]], 3))
+        report["items"].append(row)
+
+    # Latency.
+    r_by_fixture: dict[str, list[float]] = {}
+    q_seconds: dict[str, list[float]] = {"q1": [], "q2": []}
+    for r in arms["readout"]:
+        if r["order"] == "forward":
+            r_by_fixture.setdefault(r["fixture_id"], []).append(r["seconds"])
+            q_seconds[r["question"]].append(r["seconds"])
+    report["latency"] = {
+        "readout_mean_seconds": {q: sum(v) / len(v) for q, v in q_seconds.items() if v},
+        "per_fixture": {
+            fid: {"readout_total": round(sum(v), 2),
+                  "readout_calls": len(v),
+                  "G_classify_mean": round(sum(g_seconds[fid]) / len(g_seconds[fid]), 2)}
+            for fid, v in r_by_fixture.items()
+        },
+    }
+    report["readout_missing_letters"] = sum(len(r["missing"]) for r in arms["readout"])
+    report["readout_max_outside_mass"] = max(r["outside_mass"] for r in arms["readout"])
+    return report
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Gemma letter-readout probe (read-only)")
-    parser.add_argument("command", choices=("freeze", "labels"))
+    parser.add_argument("command", choices=("freeze", "labels", "arms", "report"))
+    parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--only", nargs="*", default=(), help="fixture ids")
     return parser
@@ -452,10 +766,28 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(f"froze {len(frozen['fixtures'])} fixtures -> {frozen_path}")
         return
     frozen = json.loads(frozen_path.read_text())
+    labels_path = args.out / "labels.json"
+    arms_path = args.out / "arms.json"
+    if args.command == "arms":
+        labels = json.loads(labels_path.read_text())
+        started = datetime.now().isoformat(timespec="seconds")
+        readout_records = run_readout_arms(labels, fixtures)
+        generated = run_generated_arm(frozen, fixtures, repeats=args.repeats)
+        arms = {"started": started, "finished": datetime.now().isoformat(timespec="seconds"),
+                "frozen": frozen, "readout": readout_records, "generated": generated}
+        arms_path.write_text(json.dumps(arms, indent=1, ensure_ascii=False) + "\n")
+        print(f"{len(readout_records)} readouts, {len(generated)} classify calls -> {arms_path}")
+        return
+    if args.command == "report":
+        report = build_report(json.loads(labels_path.read_text()), json.loads(arms_path.read_text()))
+        report_path = args.out / "report.json"
+        report_path.write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n")
+        print(json.dumps({k: report[k] for k in report if k != "items"}, indent=1)[:20000])
+        print(f"-> {report_path}")
+        return
     hand_path = args.out / "hand-labels.json"
     hand = json.loads(hand_path.read_text())["labels"] if hand_path.exists() else []
     labels = label_frozen(frozen, fixtures, hand)
-    labels_path = args.out / "labels.json"
     labels_path.write_text(json.dumps(labels, indent=1, ensure_ascii=False) + "\n")
     print(json.dumps(labels["summary"], indent=1))
     if labels["unused_hand_labels"]:

@@ -130,3 +130,16 @@ class LabelDerivationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AssignNodesTest(unittest.TestCase):
+    def test_longer_item_wins_a_full_overlap_tie(self):
+        from specialists.uniblab.readout_probe import assign_nodes
+        items = [{"raw": "Text Jon about truck"}, {"raw": "Jon"}]
+        nodes = [{"title": "Text Jon about truck", "node_type": "sprockets/task"},
+                 {"title": "Jon", "node_type": "sprockets/contact"},
+                 {"title": "Sweep", "node_type": "cogs/daily"}]
+        assigned, unassigned = assign_nodes(items, nodes)
+        self.assertEqual([[n["title"] for n in a] for a in assigned],
+                         [["Text Jon about truck"], ["Jon"]])
+        self.assertEqual(unassigned, [nodes[2]])
