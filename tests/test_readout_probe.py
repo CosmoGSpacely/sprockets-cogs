@@ -1,7 +1,96 @@
+import json
+import math
 import unittest
 
 from specialists.uniblab.capture_fixtures import load_capture_fixtures
-from specialists.uniblab.readout_probe import derive_labels
+from specialists.uniblab.readout_probe import (
+    NODE_TYPES,
+    apply_hand_labels,
+    classify_rule_text,
+    derive_labels,
+    letter_probs,
+    q1_options,
+    readout,
+)
+
+
+class FakeChat:
+    """Returns scripted top-k logprobs for one generated token."""
+
+    def __init__(self, top):
+        self.top = top
+        self.calls = []
+
+    def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        top = [{"token": t, "logprob": v} for t, v in self.top]
+        return {"logprobs": [{"token": top[0]["token"], "logprob": top[0]["logprob"],
+                              "top_logprobs": top}],
+                "prompt_eval_count": 200}
+
+
+class LetterProbsTest(unittest.TestCase):
+    def test_renormalises_over_option_letters_only(self):
+        top = [{"token": "A", "logprob": math.log(0.6)},
+               {"token": "<|channel>", "logprob": math.log(0.2)},
+               {"token": "B", "logprob": math.log(0.2)}]
+        probs, missing, outside = letter_probs(top, ["A", "B"])
+        self.assertAlmostEqual(probs["A"], 0.75)
+        self.assertAlmostEqual(probs["B"], 0.25)
+        self.assertEqual(missing, ())
+        self.assertAlmostEqual(outside, 0.2)
+
+    def test_missing_letter_is_floored_and_flagged(self):
+        top = [{"token": "A", "logprob": -0.01}, {"token": "B", "logprob": -5.0},
+               {"token": "x", "logprob": -17.0}]
+        probs, missing, _ = letter_probs(top, ["A", "B", "C"])
+        self.assertEqual(missing, ("C",))
+        self.assertAlmostEqual(probs["C"] / probs["A"], math.exp(-17.0 + 0.01))
+        self.assertAlmostEqual(sum(probs.values()), 1.0)
+
+
+class ReadoutTest(unittest.TestCase):
+    def test_maps_letters_back_to_option_ids_in_reverse_order(self):
+        chat = FakeChat([("E", -0.1), ("A", -2.4), ("D", -9.0)])
+        result = readout("ev", "crit", q1_options("reverse"), chat_client=chat, model="m")
+        self.assertEqual(result.letters["cogs/daily"], "E")
+        self.assertEqual(result.answer, "cogs/daily")
+        self.assertEqual(set(result.missing), {"sprockets/entity", "sprockets/contact"})
+        call = chat.calls[0]
+        self.assertEqual((call["think"], call["top_logprobs"], call["options"]["num_predict"]),
+                         (False, 20, 1))
+        user = json.loads(call["messages"][1]["content"])
+        self.assertEqual(user["options"][0], {"letter": "A", "description":
+                         "sprockets/note: reference or idea, no action"})
+
+    def test_rejects_too_many_options(self):
+        with self.assertRaises(ValueError):
+            readout("ev", "crit", [(str(i), "x") for i in range(17)], chat_client=FakeChat([]))
+
+    def test_rule_text_is_lifted_from_classify_system(self):
+        types, tasks = classify_rule_text()
+        self.assertEqual(set(types), set(NODE_TYPES))
+        self.assertIn("Do not also put it on a day.", tasks)
+
+
+class HandLabelTest(unittest.TestCase):
+    def _labelled(self):
+        return [derive_labels(load_capture_fixtures(only=("contact-and-task",))[0],
+                              [{"raw": "Text Jon about truck"}, {"raw": "Jon"}])]
+
+    def test_applies_only_to_ambiguous_items_and_reports_unused(self):
+        labelled = self._labelled()
+        unused = apply_hand_labels(labelled, [
+            {"fixture_id": "contact-and-task", "raw": "Jon", "q1": "sprockets/contact",
+             "reason": "r"},
+            {"fixture_id": "contact-and-task", "raw": "Call Jon", "q1": "sprockets/task",
+             "reason": "r"},
+        ])
+        jon = labelled[0]["items"][1]
+        self.assertEqual((jon["status"], jon["source"], jon["q1"]),
+                         ("labelled", "hand", "sprockets/contact"))
+        self.assertEqual(labelled[0]["items"][0]["status"], "ambiguous")
+        self.assertEqual(unused, ["contact-and-task: 'Call Jon'"])
 
 
 def _fixture(fixture_id):
